@@ -13,13 +13,15 @@
  * attached file into the media store, recording its path.
  */
 
-import { loadConfig, redactConfig, type Config } from './config.js';
+import { loadAdminConfig, loadConfig, redactConfig, type Config } from './config.js';
 import { log, setLogLevel } from './log.js';
 import { startBot, type BotHandle } from './bot/client.js';
 import { registerCapture } from './capture/handler.js';
 import { makePersistenceHooks } from './capture/persist.js';
 import { makeConsentHandler } from './consent/commands.js';
 import { assertDbReachable, closePool, getPool } from './db/pool.js';
+import { startAdminServer } from './web/server.js';
+import { status } from './web/status.js';
 
 function runConfigCheck(cfg: Config): void {
   log.info('Configuration loaded:', redactConfig(cfg));
@@ -66,15 +68,46 @@ async function reportGroups(botHandle: BotHandle, cfg: Config): Promise<void> {
   }
 }
 
-async function runBot(cfg: Config): Promise<void> {
+/**
+ * Starts the capture worker. Failures are reported to the runtime status (so
+ * the admin dashboard shows them) instead of killing the whole process — the
+ * operator needs the console most when the bot is unhappy.
+ */
+async function startCaptureWorker(cfg: Config): Promise<BotHandle | null> {
+  try {
+    const botHandle = await startBot(cfg);
+    const hooks = makePersistenceHooks(cfg);
+    hooks.onCommand = makeConsentHandler(botHandle);
+    registerCapture(botHandle, cfg, hooks);
+    await reportGroups(botHandle, cfg);
+    try {
+      const groups = await botHandle.chat.apiListGroups(botHandle.user.userId);
+      status.botRunning(groups.map((g) => g.localDisplayName));
+    } catch {
+      status.botRunning([]);
+    }
+    return botHandle;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    status.botFailed(message);
+    status.error(`Capture worker failed to start: ${message}`);
+    log.error(`Capture worker failed to start: ${message}`);
+    return null;
+  }
+}
+
+async function runApp(cfg: Config): Promise<void> {
   await assertDbReady();
-  const botHandle = await startBot(cfg);
 
-  const hooks = makePersistenceHooks(cfg);
-  hooks.onCommand = makeConsentHandler(botHandle);
-  registerCapture(botHandle, cfg, hooks);
+  // One process (A2): the admin web server and the capture worker together.
+  const adminCfg = loadAdminConfig();
+  const adminServer = await startAdminServer({
+    db: getPool(),
+    adminCfg,
+    mediaRoot: cfg.mediaRoot,
+  });
 
-  await reportGroups(botHandle, cfg);
+  const botHandle = await startCaptureWorker(cfg);
   log.info('Cinderella is capturing to PostgreSQL (consent-gated). Press Ctrl+C to stop.');
 
   await new Promise<void>((resolve) => {
@@ -84,7 +117,8 @@ async function runBot(cfg: Config): Promise<void> {
       shuttingDown = true;
       log.info(`Received ${signal}, shutting down…`);
       void (async () => {
-        await botHandle.close().catch(() => undefined);
+        await adminServer.close().catch(() => undefined);
+        if (botHandle) await botHandle.close().catch(() => undefined);
         await closePool().catch(() => undefined);
         resolve();
       })();
@@ -104,7 +138,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  await runBot(cfg);
+  await runApp(cfg);
 }
 
 main()

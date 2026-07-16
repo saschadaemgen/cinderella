@@ -14,7 +14,7 @@ import { loadConfig } from '../config.js';
  * Postgres engine (e.g. an in-process one) without pulling in a live server.
  */
 export interface Queryable {
-  query<R extends Record<string, unknown> = Record<string, unknown>>(
+  query<R = Record<string, unknown>>(
     text: string,
     values?: readonly unknown[],
   ): Promise<{ rows: R[]; rowCount: number | null }>;

@@ -38,6 +38,24 @@ export interface Config {
   logLevel: LogLevel;
 }
 
+/**
+ * Admin console settings. Required only when the admin web server starts —
+ * loaded separately so the capture-only paths (`--check`, `connect`) don't
+ * demand them.
+ */
+export interface AdminConfig {
+  /** Port the admin server listens on. Bound to 127.0.0.1 ONLY — nginx proxies. */
+  adminPort: number;
+  /** Operator account name. */
+  adminUsername: string;
+  /** Argon2id hash of the operator password (generate: npm run hash-password). */
+  adminPasswordHash: string;
+  /** Secret for signing session cookies (>= 32 chars, random). */
+  sessionSecret: string;
+  /** Public origin of the admin/embed host, used by the embed snippet generator. */
+  publicOrigin: string;
+}
+
 class ConfigError extends Error {
   override name = 'ConfigError';
 }
@@ -78,6 +96,46 @@ export function loadConfig(): Config {
   };
 
   cached = cfg;
+  return cfg;
+}
+
+let cachedAdmin: AdminConfig | undefined;
+
+/**
+ * Loads and validates the admin console configuration. Throws ConfigError with
+ * an actionable message when something is missing or unsafe.
+ */
+export function loadAdminConfig(): AdminConfig {
+  if (cachedAdmin) return cachedAdmin;
+
+  const portRaw = optional('ADMIN_PORT', '8787');
+  const adminPort = Number.parseInt(portRaw, 10);
+  if (!Number.isInteger(adminPort) || adminPort < 1 || adminPort > 65535) {
+    throw new ConfigError(`ADMIN_PORT must be a valid port number (got "${portRaw}").`);
+  }
+
+  const adminPasswordHash = required('ADMIN_PASSWORD_HASH');
+  if (!adminPasswordHash.startsWith('$argon2id$')) {
+    throw new ConfigError(
+      'ADMIN_PASSWORD_HASH must be an Argon2id hash. Generate one with: npm run hash-password',
+    );
+  }
+
+  const sessionSecret = required('SESSION_SECRET');
+  if (sessionSecret.length < 32) {
+    throw new ConfigError(
+      'SESSION_SECRET must be at least 32 characters of random data (e.g. openssl rand -hex 32).',
+    );
+  }
+
+  const cfg: AdminConfig = {
+    adminPort,
+    adminUsername: required('ADMIN_USERNAME'),
+    adminPasswordHash,
+    sessionSecret,
+    publicOrigin: optional('PUBLIC_ORIGIN', 'https://cinderella.example.org'),
+  };
+  cachedAdmin = cfg;
   return cfg;
 }
 
