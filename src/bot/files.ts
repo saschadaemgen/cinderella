@@ -41,13 +41,16 @@ export function resolveFilePath(filePath: string, filesFolder: string): string {
   return isAbsolute(filePath) ? filePath : join(filesFolder, filePath);
 }
 
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+
 export class FileReceiver {
   private readonly pending = new Map<number, Pending>();
 
   constructor(
     private readonly chat: Chat,
     private readonly filesFolder: string,
-    private readonly timeoutMs = 5 * 60 * 1000,
+    /** Timeout provider — read per receive so live setting changes apply. */
+    private readonly getTimeoutMs: () => number = () => DEFAULT_TIMEOUT_MS,
   ) {}
 
   /**
@@ -83,13 +86,14 @@ export class FileReceiver {
       CC.ReceiveFile.cmdString({ fileId, userApprovedRelays: true, storeEncrypted: false }),
     );
 
+    const timeoutMs = this.getTimeoutMs();
     return new Promise<ReceivedFile>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(fileId);
         reject(
-          new Error(`file receive timed out after ${this.timeoutMs}ms (${fileName}, id=${fileId})`),
+          new Error(`file receive timed out after ${timeoutMs}ms (${fileName}, id=${fileId})`),
         );
-      }, this.timeoutMs);
+      }, timeoutMs);
       // Do not keep the process alive solely for this timer.
       if (typeof timer.unref === 'function') timer.unref();
       this.pending.set(fileId, { fileName, resolve, reject, timer });

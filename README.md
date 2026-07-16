@@ -18,8 +18,8 @@ gated on recorded, per-member consent.
 ## Status
 
 This repo currently covers **Season 0 — Foundation** (bootstrap + core capture
-pipeline). The public web front and the admin interface are later seasons and
-are intentionally out of scope here.
+pipeline + the private admin console, per Addendum 1). The public embeddable
+front is a later season.
 
 | Stage | What                                                 | State   |
 | ----- | ---------------------------------------------------- | ------- |
@@ -27,10 +27,13 @@ are intentionally out of scope here.
 | 1     | Core connect + receive + one file (proof of concept) | ✅ done |
 | 2     | Persist captured messages to PostgreSQL              | ✅ done |
 | 3     | Consent gating (`/publish` / `/unpublish`)           | ✅ done |
+| 4     | Admin web foundation + auth (Addendum 1)             | ✅ done |
+| 5     | Admin views + widget config (Addendum 1)             | ✅ done |
 
-Parked for later seasons: public web front, admin interface, AI moderation /
-CSAM scanning (separate track — schema leaves a `moderation_state` hook),
-self-hosted relay / super-peer capture.
+Parked for later seasons: the public embeddable widget (`/embed/<instance-id>`
+rendering — its **config model and admin UI exist already**), a Shadow-DOM web
+component, AI moderation / CSAM scanning (separate track — the `moderation_state`
+column is the hook), self-hosted relay / super-peer capture.
 
 ## Architecture (decided)
 
@@ -103,21 +106,30 @@ the full list. Secrets are never hardcoded.
 | `MEDIA_ROOT`           | Cinderella's own media store                        | `./media`                    |
 | `DATABASE_URL`         | PostgreSQL connection string                        | _(required)_                 |
 | `LOG_LEVEL`            | `error` \| `warn` \| `info` \| `debug`              | `info`                       |
+| `ADMIN_PORT`           | Admin console port (127.0.0.1 only, behind nginx)   | `8787`                       |
+| `ADMIN_USERNAME`       | Operator account name                               | _(required for admin)_       |
+| `ADMIN_PASSWORD_HASH`  | Argon2id hash (`npm run hash-password`)             | _(required for admin)_       |
+| `SESSION_SECRET`       | Session-cookie signing secret (≥ 32 random chars)   | _(required for admin)_       |
+| `PUBLIC_ORIGIN`        | Origin used by the embed snippet generator          | placeholder                  |
 
 ## Scripts
 
-| Script                   | What it does                            |
-| ------------------------ | --------------------------------------- |
-| `npm run dev`            | Run from source with `tsx` (watch mode) |
-| `npm run build`          | Type-check + compile to `dist/`         |
-| `npm run typecheck`      | Type-check only (no emit)               |
-| `npm run lint`           | ESLint                                  |
-| `npm run format`         | Prettier (write)                        |
-| `npm run migrate`        | Apply database migrations               |
-| `npm run connect`        | Join a group via a SimpleX link (once)  |
-| `npm run verify:db`      | Verify the schema + write-path (PGlite) |
-| `npm run verify:consent` | Verify consent gating (PGlite)          |
-| `npm start`              | Run the compiled bot from `dist/`       |
+| Script                       | What it does                            |
+| ---------------------------- | --------------------------------------- |
+| `npm run dev`                | Run from source with `tsx` (watch mode) |
+| `npm run build`              | Type-check + compile to `dist/`         |
+| `npm run typecheck`          | Type-check only (no emit)               |
+| `npm run lint`               | ESLint                                  |
+| `npm run format`             | Prettier (write)                        |
+| `npm run migrate`            | Apply database migrations               |
+| `npm run connect`            | Join a group via a SimpleX link (once)  |
+| `npm run assets`             | Build Tailwind CSS + vendor htmx        |
+| `npm run hash-password`      | Generate the Argon2id admin hash        |
+| `npm run verify:db`          | Verify the schema + write-path (PGlite) |
+| `npm run verify:consent`     | Verify consent gating (PGlite)          |
+| `npm run verify:admin`       | Verify admin auth hardening (PGlite)    |
+| `npm run verify:admin-views` | Verify admin views + widget config      |
+| `npm start`                  | Run the compiled app from `dist/`       |
 
 ## Repository layout
 
@@ -128,13 +140,17 @@ cinderella/
     log.ts               # minimal leveled logger
     bot/                 # SimpleX core wiring (client, files, connect)
     capture/             # message -> row mapping, media, links, persist hooks
-    db/                  # pool, migration runner, message + consent queries
+    db/                  # pool, migrations, message/consent/settings/audit/embed queries
     consent/             # /publish, /unpublish command handling
+    settings/            # live-editable settings service
+    web/                 # admin console: server, auth, sessions, views
     index.ts
-  migrations/            # 001_init.sql (messages/links), 002_consent.sql (consent + views)
-  scripts/               # verify-db.ts, verify-consent.ts (PGlite harnesses)
-  deploy/                # systemd unit + install notes (nginx/web front come later)
+  migrations/            # 001 messages/links, 002 consent+views, 003 admin, 004 moderation
+  scripts/               # PGlite verification harnesses + asset/password helpers
+  assets/                # Tailwind input CSS (compiled to public/)
+  deploy/                # systemd unit + nginx TLS snippet for the admin console
   media/                 # git-ignored media store
+  public/                # git-ignored compiled front-end assets
   state/                 # git-ignored SimpleX core DB + files folder
 ```
 
@@ -190,11 +206,47 @@ SimpleX's own channel webpage.
 
 ### On the VPS (systemd)
 
-A single unit runs the bot (which embeds the SimpleX core) — there is **no
-separate daemon unit**. See [deploy/cinderella.service](deploy/cinderella.service)
-for the unit and step-by-step install notes. Point `SIMPLEX_DB_PREFIX`,
-`SIMPLEX_FILES_FOLDER`, and `MEDIA_ROOT` at a protected runtime directory
-(`/var/lib/cinderella`), and keep the env file `chmod 600`.
+A single unit runs the whole app — capture worker **and** admin console in one
+process (Addendum 1 / A2); there is **no separate daemon unit**. See
+[deploy/cinderella.service](deploy/cinderella.service) for the unit and
+step-by-step install notes. Point `SIMPLEX_DB_PREFIX`, `SIMPLEX_FILES_FOLDER`,
+and `MEDIA_ROOT` at a protected runtime directory (`/var/lib/cinderella`), and
+keep the env file `chmod 600`.
+
+## Admin console (Addendum 1 / A3)
+
+The private operator console for administration and configuration. It is
+**hostile-facing** and hardened accordingly:
+
+- Binds to `127.0.0.1:ADMIN_PORT` only; [nginx](deploy/nginx-admin.conf)
+  terminates TLS (Let's Encrypt) and reverse-proxies. Optional Basic-auth /
+  IP-allowlist blocks are documented in the snippet (defense in depth).
+- Single operator account: `ADMIN_USERNAME` + Argon2id `ADMIN_PASSWORD_HASH`
+  from the environment (generate with `npm run hash-password`; never plaintext,
+  never in the DB).
+- Signed `HttpOnly; Secure; SameSite=Strict` session cookie; login rate limiting
+  with lockout; constant-time comparisons; generic failure messages; CSRF token
+  required on every state-changing request; strict CSP and security headers.
+- Every state-changing admin action is written to `audit_log` (who/what/when).
+
+**Views:** Dashboard (bot/group status, counts, a prominent failed-file-receipt
+indicator so the operator reacts before the ~48h XFTP expiry), Messages browser
+(type/published/deleted/time filters + thumbnails) with audited **manual
+takedown** (`moderation_state = 'rejected'` removes a message from the published
+set) and mark-deleted, read-only Consent viewer, Settings (live-editable
+settings applied without restart; boot/secret settings display-only — secrets
+are never rendered), and Embeds.
+
+**Embeds (A4):** the widget-config data model + admin UI ship now; the public
+widget renders in a later season. Each `embed_instances` record maps an
+instance-id to centrally-managed theme (mode/colors), layout, enabled filters,
+and visible media types. The Embed page generates the copy-paste host snippet
+(`<iframe src="PUBLIC_ORIGIN/embed/<instance-id>">` + a `postMessage`
+auto-height script). Changing the theme in the admin updates every embed
+instantly — nothing is ever configured on the host page.
+
+Everything is **responsive by default** (A5): usable at ~380 px, tablet, and
+desktop widths.
 
 ## Security & operational notes
 

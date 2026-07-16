@@ -20,8 +20,10 @@ import { registerCapture } from './capture/handler.js';
 import { makePersistenceHooks } from './capture/persist.js';
 import { makeConsentHandler } from './consent/commands.js';
 import { assertDbReachable, closePool, getPool } from './db/pool.js';
+import { SettingsService } from './settings/service.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
+import { registerAdminViews } from './web/views/index.js';
 
 function runConfigCheck(cfg: Config): void {
   log.info('Configuration loaded:', redactConfig(cfg));
@@ -73,9 +75,12 @@ async function reportGroups(botHandle: BotHandle, cfg: Config): Promise<void> {
  * the admin dashboard shows them) instead of killing the whole process — the
  * operator needs the console most when the bot is unhappy.
  */
-async function startCaptureWorker(cfg: Config): Promise<BotHandle | null> {
+async function startCaptureWorker(
+  cfg: Config,
+  settings: SettingsService,
+): Promise<BotHandle | null> {
   try {
-    const botHandle = await startBot(cfg);
+    const botHandle = await startBot(cfg, { getFileTimeoutMs: () => settings.fileTimeoutMs });
     const hooks = makePersistenceHooks(cfg);
     hooks.onCommand = makeConsentHandler(botHandle);
     registerCapture(botHandle, cfg, hooks);
@@ -98,6 +103,7 @@ async function startCaptureWorker(cfg: Config): Promise<BotHandle | null> {
 
 async function runApp(cfg: Config): Promise<void> {
   await assertDbReady();
+  const settings = await SettingsService.load(getPool(), cfg.logLevel);
 
   // One process (A2): the admin web server and the capture worker together.
   const adminCfg = loadAdminConfig();
@@ -105,9 +111,12 @@ async function runApp(cfg: Config): Promise<void> {
     db: getPool(),
     adminCfg,
     mediaRoot: cfg.mediaRoot,
+    settings,
+    cfg,
+    registerViews: registerAdminViews,
   });
 
-  const botHandle = await startCaptureWorker(cfg);
+  const botHandle = await startCaptureWorker(cfg, settings);
   log.info('Cinderella is capturing to PostgreSQL (consent-gated). Press Ctrl+C to stop.');
 
   await new Promise<void>((resolve) => {

@@ -145,6 +145,13 @@ async function main(): Promise<void> {
     JSON.stringify(full.rows[0]),
   );
 
+  // 6b) Moderation gate (Stage 5): takedown (moderation_state='rejected')
+  //     removes a consented, non-deleted message from the published set.
+  await pg.query(`UPDATE messages SET moderation_state = 'rejected' WHERE group_msg_id = 14`);
+  check('moderation takedown excludes from published set', !(await isPublished(14)));
+  await pg.query(`UPDATE messages SET moderation_state = 'none' WHERE group_msg_id = 14`);
+  check('moderation restore re-includes in published set', await isPublished(14));
+
   // 7) Command parser.
   check(
     'parseConsentCommand recognizes /publish, /unpublish (trim+case), rejects others',

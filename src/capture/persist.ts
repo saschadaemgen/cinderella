@@ -9,11 +9,13 @@ import { log } from '../log.js';
 import { getPool, withTransaction } from '../db/pool.js';
 import {
   markDeleted,
+  recordMediaError,
   replaceLinks,
   updateMedia,
   upsertMessage,
   type LinkInput,
 } from '../db/messages.js';
+import { status } from '../web/status.js';
 import type { CaptureHooks } from './handler.js';
 import { extractLinks, linksToSearchText } from './links.js';
 import { storeMedia } from './media.js';
@@ -46,6 +48,7 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
         return id;
       });
 
+      status.captured();
       log.info(
         `Saved message ${messageId} [${msg.type}] from ${msg.senderMemberId}` +
           `${links.length ? ` (+${links.length} link(s))` : ''}` +
@@ -62,11 +65,18 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
       );
     },
 
-    onFileFailed: (msg, error) => {
+    onFileFailed: async (msg, error) => {
       log.warn(
         `File receipt failed for item ${msg.itemId} (${msg.file?.fileName}); ` +
           `row saved without media: ${error.message}`,
       );
+      status.fileFailed({
+        itemId: msg.itemId,
+        groupId: msg.groupId,
+        fileName: msg.file?.fileName ?? '(unknown)',
+        reason: error.message,
+      });
+      await recordMediaError(getPool(), msg.groupId, msg.itemId, error.message);
     },
 
     onDeleted: async (groupId, groupMsgIds) => {

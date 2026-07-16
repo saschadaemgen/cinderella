@@ -119,8 +119,53 @@ export async function updateMedia(
 ): Promise<void> {
   await db.query(
     `UPDATE messages
-       SET media_path = $3, media_mime = $4, media_size = $5
+       SET media_path = $3, media_mime = $4, media_size = $5, media_error = NULL
      WHERE group_id = $1 AND group_msg_id = $2`,
     [groupId, groupMsgId, media.mediaPath, media.mediaMime, media.mediaSize],
   );
+}
+
+/** Records a failed file receipt so the dashboard can surface it (§10.2). */
+export async function recordMediaError(
+  db: Queryable,
+  groupId: number,
+  groupMsgId: number,
+  error: string,
+): Promise<void> {
+  await db.query(
+    `UPDATE messages SET media_error = $3
+     WHERE group_id = $1 AND group_msg_id = $2 AND media_path IS NULL`,
+    [groupId, groupMsgId, error.slice(0, 500)],
+  );
+}
+
+export type ModerationState = 'none' | 'pending' | 'approved' | 'rejected';
+
+/**
+ * Manual moderation (admin takedown/restore). 'rejected' removes the message
+ * from the published set via the publish views. Returns true if a row changed.
+ */
+export async function setModerationState(
+  db: Queryable,
+  messageId: number,
+  state: ModerationState,
+): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE messages SET moderation_state = $2::moderation_state WHERE id = $1`,
+    [messageId, state],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/** Admin "mark deleted" by message row id. Returns true if a row changed. */
+export async function setDeletedById(
+  db: Queryable,
+  messageId: number,
+  deleted: boolean,
+): Promise<boolean> {
+  const { rowCount } = await db.query(`UPDATE messages SET deleted = $2 WHERE id = $1`, [
+    messageId,
+    deleted,
+  ]);
+  return (rowCount ?? 0) > 0;
 }

@@ -15,8 +15,9 @@ import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyStatic from '@fastify/static';
-import type { AdminConfig } from '../config.js';
+import type { AdminConfig, Config } from '../config.js';
 import type { Queryable } from '../db/pool.js';
+import type { SettingsService } from '../settings/service.js';
 import { log } from '../log.js';
 import { LoginRateLimiter, verifyCredentials } from './auth.js';
 import { html, page, setNavItems, type SafeHtml } from './html.js';
@@ -41,6 +42,10 @@ export interface ServerDeps {
   adminCfg: AdminConfig;
   /** Absolute path to the media store (thumbnails). */
   mediaRoot: string;
+  /** Live settings service (required for the Stage 5 views). */
+  settings?: SettingsService;
+  /** Boot config, for the display-only settings section. */
+  cfg?: Config;
   /**
    * Registers the admin views (dashboard, messages, …). Kept injectable so the
    * foundation is testable stand-alone.
@@ -51,6 +56,8 @@ export interface ServerDeps {
 export interface ViewContext {
   db: Queryable;
   adminCfg: AdminConfig;
+  settings: SettingsService;
+  cfg: Config;
 }
 
 const LOGIN_CSRF_COOKIE = 'cinderella_login_csrf';
@@ -258,8 +265,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/healthz', () => ({ ok: true }));
 
   // --- Views ---
-  if (deps.registerViews) {
-    deps.registerViews(app, { db, adminCfg });
+  if (deps.registerViews && deps.settings && deps.cfg) {
+    deps.registerViews(app, { db, adminCfg, settings: deps.settings, cfg: deps.cfg });
   } else {
     app.get('/', async (req, reply) => {
       reply.type('text/html');

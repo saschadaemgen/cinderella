@@ -22,7 +22,8 @@
     "migrate": "tsx src/db/migrate.ts",
     "verify:db": "tsx scripts/verify-db.ts",
     "verify:consent": "tsx scripts/verify-consent.ts",
-    "verify:admin": "tsx scripts/verify-admin.ts"
+    "verify:admin": "tsx scripts/verify-admin.ts",
+    "verify:admin-views": "tsx scripts/verify-admin-views.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

@@ -45,11 +45,16 @@ async function configureFilesFolder(chat: Chat, filesFolder: string): Promise<vo
   }
 }
 
+export interface StartBotOptions {
+  /** Live file-receive timeout provider (admin-configurable). */
+  getFileTimeoutMs?: () => number;
+}
+
 /**
  * Starts the bot. Registers the file-transfer event handlers (which drive the
  * FileReceiver); the caller registers message/deletion handlers on `chat`.
  */
-export async function startBot(cfg: Config): Promise<BotHandle> {
+export async function startBot(cfg: Config, opts: StartBotOptions = {}): Promise<BotHandle> {
   await ensureDirs(cfg);
 
   log.info('Starting embedded SimpleX chat core…');
@@ -70,7 +75,7 @@ export async function startBot(cfg: Config): Promise<BotHandle> {
 
   await configureFilesFolder(chat, cfg.simplexFilesFolder);
 
-  const fileReceiver = new FileReceiver(chat, cfg.simplexFilesFolder);
+  const fileReceiver = new FileReceiver(chat, cfg.simplexFilesFolder, opts.getFileTimeoutMs);
   chat.on('rcvFileComplete', (ev) => fileReceiver.handleComplete(ev));
   chat.on('rcvFileError', (ev) => fileReceiver.handleError(ev));
   chat.on('rcvFileWarning', (ev) => fileReceiver.handleError(ev));
