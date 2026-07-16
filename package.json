@@ -18,7 +18,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "migrate": "tsx src/db/migrate.ts",
-    "verify:db": "tsx scripts/verify-db.ts"
+    "verify:db": "tsx scripts/verify-db.ts",
+    "verify:consent": "tsx scripts/verify-consent.ts"
   },
   "dependencies": {
     "@simplex-chat/types": "^0.8.0",

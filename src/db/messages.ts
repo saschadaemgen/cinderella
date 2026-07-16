@@ -90,6 +90,26 @@ export async function replaceLinks(
   }
 }
 
+/**
+ * Marks messages deleted (in-group deletion). Deleted messages are excluded from
+ * the published set, mirroring SimpleX's own channel webpage (briefing §5/§10).
+ * Idempotent. Returns the number of rows flipped.
+ */
+export async function markDeleted(
+  db: Queryable,
+  groupId: number,
+  groupMsgIds: readonly number[],
+): Promise<number> {
+  if (groupMsgIds.length === 0) return 0;
+  const { rowCount } = await db.query(
+    `UPDATE messages
+       SET deleted = TRUE
+     WHERE group_id = $1 AND group_msg_id = ANY($2::bigint[])`,
+    [groupId, [...groupMsgIds]],
+  );
+  return rowCount ?? 0;
+}
+
 /** Records the media path/mime/size once a file has been received and stored. */
 export async function updateMedia(
   db: Queryable,

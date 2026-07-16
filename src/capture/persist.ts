@@ -7,7 +7,13 @@
 import type { Config } from '../config.js';
 import { log } from '../log.js';
 import { getPool, withTransaction } from '../db/pool.js';
-import { replaceLinks, updateMedia, upsertMessage, type LinkInput } from '../db/messages.js';
+import {
+  markDeleted,
+  replaceLinks,
+  updateMedia,
+  upsertMessage,
+  type LinkInput,
+} from '../db/messages.js';
 import type { CaptureHooks } from './handler.js';
 import { extractLinks, linksToSearchText } from './links.js';
 import { storeMedia } from './media.js';
@@ -61,6 +67,15 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
         `File receipt failed for item ${msg.itemId} (${msg.file?.fileName}); ` +
           `row saved without media: ${error.message}`,
       );
+    },
+
+    onDeleted: async (groupId, groupMsgIds) => {
+      const n = await markDeleted(getPool(), groupId, groupMsgIds);
+      if (n > 0) {
+        log.info(
+          `Marked ${n} message(s) deleted in group ${groupId} (excluded from published set).`,
+        );
+      }
     },
   };
 }

@@ -21,12 +21,12 @@ This repo currently covers **Season 0 — Foundation** (bootstrap + core capture
 pipeline). The public web front and the admin interface are later seasons and
 are intentionally out of scope here.
 
-| Stage | What                                                 | State      |
-| ----- | ---------------------------------------------------- | ---------- |
-| 0     | Repo scaffold + tooling + env-driven config          | ✅ done    |
-| 1     | Core connect + receive + one file (proof of concept) | ✅ done    |
-| 2     | Persist captured messages to PostgreSQL              | ⏳ next    |
-| 3     | Consent gating (`/publish` / `/unpublish`)           | ⏳ planned |
+| Stage | What                                                 | State   |
+| ----- | ---------------------------------------------------- | ------- |
+| 0     | Repo scaffold + tooling + env-driven config          | ✅ done |
+| 1     | Core connect + receive + one file (proof of concept) | ✅ done |
+| 2     | Persist captured messages to PostgreSQL              | ✅ done |
+| 3     | Consent gating (`/publish` / `/unpublish`)           | ✅ done |
 
 Parked for later seasons: public web front, admin interface, AI moderation /
 CSAM scanning (separate track — schema leaves a `moderation_state` hook),
@@ -72,14 +72,20 @@ self-hosted relay / super-peer capture.
 npm install
 cp .env.example .env      # then edit .env with your local values
 npm run build             # type-checks and compiles to dist/
+npm run migrate           # create the archive schema in PostgreSQL
 ```
 
-Run the config check (Stage 0 acceptance — boots, validates config, exits 0):
+Validate config without connecting to anything (boots, validates, exits 0):
 
 ```bash
-npm run build && node dist/index.js
-# or, without a build step:
-npm run dev
+node dist/index.js --check
+```
+
+Verify the DB layer end-to-end without a live Postgres (uses PGlite, an
+in-process Postgres):
+
+```bash
+npm run verify:db && npm run verify:consent
 ```
 
 ## Configuration
@@ -100,15 +106,18 @@ the full list. Secrets are never hardcoded.
 
 ## Scripts
 
-| Script              | What it does                            |
-| ------------------- | --------------------------------------- |
-| `npm run dev`       | Run from source with `tsx` (watch mode) |
-| `npm run build`     | Type-check + compile to `dist/`         |
-| `npm run typecheck` | Type-check only (no emit)               |
-| `npm run lint`      | ESLint                                  |
-| `npm run format`    | Prettier (write)                        |
-| `npm run migrate`   | Apply database migrations               |
-| `npm start`         | Run the compiled bot from `dist/`       |
+| Script                   | What it does                            |
+| ------------------------ | --------------------------------------- |
+| `npm run dev`            | Run from source with `tsx` (watch mode) |
+| `npm run build`          | Type-check + compile to `dist/`         |
+| `npm run typecheck`      | Type-check only (no emit)               |
+| `npm run lint`           | ESLint                                  |
+| `npm run format`         | Prettier (write)                        |
+| `npm run migrate`        | Apply database migrations               |
+| `npm run connect`        | Join a group via a SimpleX link (once)  |
+| `npm run verify:db`      | Verify the schema + write-path (PGlite) |
+| `npm run verify:consent` | Verify consent gating (PGlite)          |
+| `npm start`              | Run the compiled bot from `dist/`       |
 
 ## Repository layout
 
@@ -117,13 +126,14 @@ cinderella/
   src/
     config.ts            # env-driven config
     log.ts               # minimal leveled logger
-    bot/                 # simplex-chat SDK wiring, event handlers, commands
-    capture/             # message -> row mapping, media handling, link extraction
-    db/                  # pool, migrations, queries
-    consent/             # opt-in/opt-out logic, published-flag derivation
+    bot/                 # SimpleX core wiring (client, files, connect)
+    capture/             # message -> row mapping, media, links, persist hooks
+    db/                  # pool, migration runner, message + consent queries
+    consent/             # /publish, /unpublish command handling
     index.ts
-  migrations/            # SQL migrations (applied by src/db/migrate.ts)
-  deploy/                # systemd units, docs (nginx/web front come later)
+  migrations/            # 001_init.sql (messages/links), 002_consent.sql (consent + views)
+  scripts/               # verify-db.ts, verify-consent.ts (PGlite harnesses)
+  deploy/                # systemd unit + install notes (nginx/web front come later)
   media/                 # git-ignored media store
   state/                 # git-ignored SimpleX core DB + files folder
 ```
@@ -154,6 +164,29 @@ You should see `SimpleX core started …`, the files folder confirmation, the
 group(s) the bot is in, and `Cinderella is capturing.`. Each received group
 message logs the sender's stable member id, type, and text; each attached file
 is downloaded and its on-disk path confirmed.
+
+### Consent: `/publish` and `/unpublish`
+
+Members control publication themselves, in the group, with two plain-text
+commands (ASCII):
+
+- **`/publish`** — opt in. From that moment onward, the member's messages become
+  eligible for the public archive. Publishing is **forward-only**: messages sent
+  _before_ opting in are never published.
+- **`/unpublish`** — opt out. The member's messages are immediately removed from
+  the published set (they no longer appear on the archive).
+
+Consent binds to the member's **stable group member id**, never the display name
+(display names are not unique). A member who leaves and rejoins gets a new member
+id, so consent does not carry over — fresh consent is required on rejoin. Command
+messages are treated as control messages and are not themselves archived. The bot
+replies to each command explaining what publishing means and how to revoke.
+
+Whether a stored message is published is **derived** (never a stale flag): the
+`published_messages` / `message_publish_state` views compute it from the consent
+table, the message timestamp, and the deleted flag. In-group **deletions** are
+honoured — a deleted message is excluded from the published set, mirroring
+SimpleX's own channel webpage.
 
 ### On the VPS (systemd)
 

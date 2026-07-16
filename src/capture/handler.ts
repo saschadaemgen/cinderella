@@ -12,6 +12,7 @@ import type { Config } from '../config.js';
 import { log } from '../log.js';
 import type { BotHandle } from '../bot/client.js';
 import type { ReceivedFile } from '../bot/files.js';
+import { parseConsentCommand, type ConsentCommand } from '../consent/commands.js';
 import { parseGroupMessage, type CapturedMessage } from './message.js';
 
 export interface CaptureHooks {
@@ -21,6 +22,14 @@ export interface CaptureHooks {
   onFileReceived?: (msg: CapturedMessage, file: ReceivedFile) => Promise<void> | void;
   /** Called if an attached file fails to download (timeout, XFTP error, …). */
   onFileFailed?: (msg: CapturedMessage, error: Error) => Promise<void> | void;
+  /**
+   * Called for a recognised consent command instead of onMessage — command
+   * messages are control messages, not archive content, so they are not
+   * persisted.
+   */
+  onCommand?: (msg: CapturedMessage, command: ConsentCommand) => Promise<void> | void;
+  /** Called when messages are deleted in-group (by SimpleX group_msg_id). */
+  onDeleted?: (groupId: number, groupMsgIds: number[]) => Promise<void> | void;
 }
 
 async function receiveAndReport(
@@ -42,8 +51,20 @@ async function receiveAndReport(
   }
 }
 
+async function runDeleted(hooks: CaptureHooks, groupId: number, ids: number[]): Promise<void> {
+  if (ids.length === 0 || !hooks.onDeleted) return;
+  try {
+    await hooks.onDeleted(groupId, ids);
+  } catch (err) {
+    log.error(
+      `onDeleted hook failed for group ${groupId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 /**
- * Registers the capture handler on the bot. Idempotent per BotHandle — call once.
+ * Registers the capture handlers on the bot. Idempotent per BotHandle — call once.
+ * Handles new messages (persist), consent commands, and in-group deletions.
  */
 export function registerCapture(botHandle: BotHandle, cfg: Config, hooks: CaptureHooks): void {
   botHandle.chat.on('newChatItems', async ({ chatItems }) => {
@@ -51,6 +72,23 @@ export function registerCapture(botHandle: BotHandle, cfg: Config, hooks: Captur
       const msg = parseGroupMessage(aChatItem);
       if (!msg) continue;
       if (cfg.groupName && msg.groupName !== cfg.groupName) continue;
+
+      // Consent commands are control messages — handle and do NOT persist.
+      const command = parseConsentCommand(msg.text);
+      if (command) {
+        if (hooks.onCommand) {
+          try {
+            await hooks.onCommand(msg, command);
+          } catch (err) {
+            log.error(
+              `onCommand hook failed for item ${msg.itemId}: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+          }
+        }
+        continue;
+      }
 
       try {
         await hooks.onMessage(msg);
@@ -66,6 +104,30 @@ export function registerCapture(botHandle: BotHandle, cfg: Config, hooks: Captur
       if (msg.file) {
         void receiveAndReport(msg, botHandle, hooks);
       }
+    }
+  });
+
+  // In-group deletions: mirror SimpleX's channel webpage — deleted messages are
+  // never published. Both events can fire for one deletion; markDeleted is
+  // idempotent.
+  botHandle.chat.on('groupChatItemsDeleted', async (ev) => {
+    if (cfg.groupName && ev.groupInfo.localDisplayName !== cfg.groupName) return;
+    await runDeleted(hooks, ev.groupInfo.groupId, ev.chatItemIDs);
+  });
+
+  botHandle.chat.on('chatItemsDeleted', async (ev) => {
+    const byGroup = new Map<number, number[]>();
+    for (const deletion of ev.chatItemDeletions) {
+      const aci = deletion.deletedChatItem;
+      if (aci.chatInfo.type !== 'group') continue;
+      const groupInfo = aci.chatInfo.groupInfo;
+      if (cfg.groupName && groupInfo.localDisplayName !== cfg.groupName) continue;
+      const ids = byGroup.get(groupInfo.groupId) ?? [];
+      ids.push(aci.chatItem.meta.itemId);
+      byGroup.set(groupInfo.groupId, ids);
+    }
+    for (const [groupId, ids] of byGroup) {
+      await runDeleted(hooks, groupId, ids);
     }
   });
 }

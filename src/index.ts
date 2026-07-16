@@ -18,6 +18,7 @@ import { log, setLogLevel } from './log.js';
 import { startBot, type BotHandle } from './bot/client.js';
 import { registerCapture } from './capture/handler.js';
 import { makePersistenceHooks } from './capture/persist.js';
+import { makeConsentHandler } from './consent/commands.js';
 import { assertDbReachable, closePool, getPool } from './db/pool.js';
 
 function runConfigCheck(cfg: Config): void {
@@ -69,10 +70,12 @@ async function runBot(cfg: Config): Promise<void> {
   await assertDbReady();
   const botHandle = await startBot(cfg);
 
-  registerCapture(botHandle, cfg, makePersistenceHooks(cfg));
+  const hooks = makePersistenceHooks(cfg);
+  hooks.onCommand = makeConsentHandler(botHandle);
+  registerCapture(botHandle, cfg, hooks);
 
   await reportGroups(botHandle, cfg);
-  log.info('Cinderella is capturing to PostgreSQL. Press Ctrl+C to stop.');
+  log.info('Cinderella is capturing to PostgreSQL (consent-gated). Press Ctrl+C to stop.');
 
   await new Promise<void>((resolve) => {
     let shuttingDown = false;
