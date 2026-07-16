@@ -21,12 +21,12 @@ This repo currently covers **Season 0 — Foundation** (bootstrap + core capture
 pipeline). The public web front and the admin interface are later seasons and
 are intentionally out of scope here.
 
-| Stage | What                                                   | State      |
-| ----- | ------------------------------------------------------ | ---------- |
-| 0     | Repo scaffold + tooling + env-driven config            | ✅ done    |
-| 1     | Daemon connect + receive + one file (proof of concept) | ⏳ next    |
-| 2     | Persist captured messages to PostgreSQL                | ⏳ planned |
-| 3     | Consent gating (`/publish` / `/unpublish`)             | ⏳ planned |
+| Stage | What                                                 | State      |
+| ----- | ---------------------------------------------------- | ---------- |
+| 0     | Repo scaffold + tooling + env-driven config          | ✅ done    |
+| 1     | Core connect + receive + one file (proof of concept) | ✅ done    |
+| 2     | Persist captured messages to PostgreSQL              | ⏳ next    |
+| 3     | Consent gating (`/publish` / `/unpublish`)           | ⏳ planned |
 
 Parked for later seasons: public web front, admin interface, AI moderation /
 CSAM scanning (separate track — schema leaves a `moderation_state` hook),
@@ -128,10 +128,40 @@ cinderella/
   state/                 # git-ignored SimpleX core DB + files folder
 ```
 
-## Running on the VPS (systemd)
+## Running the bot
 
-<!-- Filled in during Stage 1: a single systemd unit for the bot (which embeds
-     the SimpleX core). No separate daemon unit. -->
+### Join the archive group (one-time)
+
+The bot only captures from groups it belongs to, and **history is not
+backfillable** — introduce the bot at group inception. Join the operator's group
+via its SimpleX link:
+
+```bash
+npm run connect -- "<simplex group link>"
+# wait for "✓ Joined group: …", then Ctrl+C
+```
+
+The bot and this helper share one SimpleX DB, so membership persists. Do **not**
+run `connect` and the bot at the same time (single-writer DB).
+
+### Run the capture bot
+
+```bash
+npm run build && npm start      # or: npm run dev
+```
+
+You should see `SimpleX core started …`, the files folder confirmation, the
+group(s) the bot is in, and `Cinderella is capturing.`. Each received group
+message logs the sender's stable member id, type, and text; each attached file
+is downloaded and its on-disk path confirmed.
+
+### On the VPS (systemd)
+
+A single unit runs the bot (which embeds the SimpleX core) — there is **no
+separate daemon unit**. See [deploy/cinderella.service](deploy/cinderella.service)
+for the unit and step-by-step install notes. Point `SIMPLEX_DB_PREFIX`,
+`SIMPLEX_FILES_FOLDER`, and `MEDIA_ROOT` at a protected runtime directory
+(`/var/lib/cinderella`), and keep the env file `chmod 600`.
 
 ## Security & operational notes
 

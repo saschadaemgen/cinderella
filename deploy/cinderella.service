@@ -1,0 +1,54 @@
+# Cinderella — the consent-based SimpleX archive bot.
+#
+# ONE long-lived process. The SimpleX chat core is embedded in-process (native
+# addon), so there is NO separate simplex-chat daemon unit and NO network port.
+#
+# Install (as root):
+#   useradd --system --home-dir /opt/cinderella --shell /usr/sbin/nologin cinderella
+#   # deploy the built app to /opt/cinderella (package.json, dist/, node_modules/)
+#   install -d -m 750 -o cinderella -g cinderella /var/lib/cinderella
+#   install -D -m 600 -o cinderella -g cinderella cinderella.env /etc/cinderella/cinderella.env
+#   cp deploy/cinderella.service /etc/systemd/system/cinderella.service
+#   systemctl daemon-reload && systemctl enable --now cinderella
+#
+# The env file holds DATABASE_URL etc. — chmod 600, owned by cinderella. In it,
+# point runtime data outside the code dir, e.g.:
+#   SIMPLEX_DB_PREFIX=/var/lib/cinderella/simplex/cinderella
+#   SIMPLEX_FILES_FOLDER=/var/lib/cinderella/files
+#   MEDIA_ROOT=/var/lib/cinderella/media
+
+[Unit]
+Description=Cinderella — consent-based SimpleX-to-web archive bot
+Documentation=https://github.com/saschadaemgen/cinderella
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cinderella
+Group=cinderella
+WorkingDirectory=/opt/cinderella
+EnvironmentFile=/etc/cinderella/cinderella.env
+ExecStart=/usr/bin/node /opt/cinderella/dist/index.js
+Restart=always
+RestartSec=5
+# The SimpleX core sends SIGTERM-clean; give it a moment to close the DB.
+TimeoutStopSec=20
+
+# --- Hardening ---
+# The bot only needs to write its runtime data directory. Everything else is RO.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/cinderella
+# The SimpleX identity DB and captured media live here — treat as sensitive.
+StateDirectory=cinderella
+
+[Install]
+WantedBy=multi-user.target
