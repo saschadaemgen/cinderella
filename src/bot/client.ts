@@ -78,9 +78,16 @@ export async function startBot(cfg: Config, opts: StartBotOptions = {}): Promise
   const fileReceiver = new FileReceiver(chat, cfg.simplexFilesFolder, opts.getFileTimeoutMs);
   chat.on('rcvFileComplete', (ev) => fileReceiver.handleComplete(ev));
   chat.on('rcvFileError', (ev) => fileReceiver.handleError(ev));
-  chat.on('rcvFileWarning', (ev) => fileReceiver.handleError(ev));
+  // rcvFileWarning is transient (the XFTP agent keeps retrying) — do NOT treat it
+  // as terminal, or media that later completes would be dropped.
+  chat.on('rcvFileWarning', (ev) => fileReceiver.handleWarning(ev));
 
   const close = async (): Promise<void> => {
+    // Reject in-flight receipts so their failure handlers record a media_error
+    // (best-effort — the pool is still open at this point in the shutdown order).
+    fileReceiver.abortAll('bot shutting down before file receipt completed');
+    // Give the detached failure handlers a tick to flush their DB writes.
+    await new Promise((r) => setTimeout(r, 250));
     try {
       await chat.stopChat();
       await chat.close();

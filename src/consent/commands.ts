@@ -9,6 +9,7 @@
 import { log } from '../log.js';
 import { getPool } from '../db/pool.js';
 import { recordOptIn, recordOptOut } from '../db/consent.js';
+import { status } from '../web/status.js';
 import type { BotHandle } from '../bot/client.js';
 import type { CapturedMessage } from '../capture/message.js';
 
@@ -34,6 +35,10 @@ const UNPUBLISH_REPLY =
   'in again at any time by sending /publish (only messages you send after opting ' +
   'in will be published).';
 
+const FAILURE_REPLY =
+  'Sorry - I could not process your command right now due to a temporary error. ' +
+  'Please send it again in a moment.';
+
 async function reply(botHandle: BotHandle, msg: CapturedMessage, text: string): Promise<void> {
   try {
     await botHandle.chat.apiSendTextReply(msg.raw, text);
@@ -54,16 +59,27 @@ export function makeConsentHandler(
 ): (msg: CapturedMessage, command: ConsentCommand) => Promise<void> {
   return async (msg, command) => {
     const db = getPool();
-    if (command === 'publish') {
-      await recordOptIn(db, msg.senderMemberId, msg.sentAt);
-      log.info(`Consent: opt-in recorded for member ${msg.senderMemberId}.`);
-      await reply(botHandle, msg, PUBLISH_REPLY);
-    } else {
-      const hadActive = await recordOptOut(db, msg.senderMemberId, msg.sentAt);
-      log.info(
-        `Consent: opt-out recorded for member ${msg.senderMemberId} (had active consent: ${hadActive}).`,
+    try {
+      if (command === 'publish') {
+        await recordOptIn(db, msg.senderMemberId, msg.sentAt);
+        log.info(`Consent: opt-in recorded for member ${msg.senderMemberId}.`);
+        await reply(botHandle, msg, PUBLISH_REPLY);
+      } else {
+        const hadActive = await recordOptOut(db, msg.senderMemberId, msg.sentAt);
+        log.info(
+          `Consent: opt-out recorded for member ${msg.senderMemberId} (had active consent: ${hadActive}).`,
+        );
+        await reply(botHandle, msg, UNPUBLISH_REPLY);
+      }
+    } catch (err) {
+      // Fail loudly toward the member and the operator — never silently drop a
+      // consent decision (it is the product's legal backbone).
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(`Consent command /${command} failed for member ${msg.senderMemberId}: ${message}`);
+      status.error(
+        `Consent command /${command} failed for member ${msg.senderMemberId}: ${message}`,
       );
-      await reply(botHandle, msg, UNPUBLISH_REPLY);
+      await reply(botHandle, msg, FAILURE_REPLY);
     }
   };
 }

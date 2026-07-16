@@ -131,6 +131,41 @@ async function main(): Promise<void> {
   const lockedGood = await tryLogin(PASSWORD, '198.51.100.7');
   check('lockout also blocks correct password from that client', lockedGood === 429);
 
+  // --- 3b) X-Forwarded-For spoofing must NOT bypass the rate limiter ---
+  // trustProxy:'loopback' means only nginx (127.0.0.1) is trusted; nginx appends
+  // the real peer, so the rightmost XFF entry is the stable real client. An
+  // attacker rotating the LEFTMOST value cannot dodge the per-client lockout.
+  async function tryLoginXff(leftmost: string): Promise<number> {
+    // Simulate what nginx forwards: attacker-supplied entry + real peer appended.
+    const xff = `${leftmost}, 203.0.113.77`;
+    const pageRes = await app.inject({
+      method: 'GET',
+      url: '/login',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-for': xff },
+    });
+    const tokenM = /name="_csrf" value="([a-f0-9]{64})"/.exec(pageRes.body);
+    const cookiePair = cookieOf(pageRes.headers['set-cookie'], 'cinderella_login_csrf') ?? '';
+    const res = await app.inject({
+      method: 'POST',
+      url: '/login',
+      payload: { username: 'operator', password: 'wrong-password', _csrf: tokenM?.[1] ?? '' },
+      headers: { cookie: cookiePair, 'x-forwarded-for': xff },
+      remoteAddress: '127.0.0.1',
+    });
+    return res.statusCode;
+  }
+  let xffLockout = false;
+  for (let i = 0; i < 8; i++) {
+    // Rotate the spoofable leftmost value on every attempt.
+    const code = await tryLoginXff(`10.9.8.${i}`);
+    if (code === 429) {
+      xffLockout = true;
+      break;
+    }
+  }
+  check('rotating X-Forwarded-For does NOT bypass lockout (keyed on real peer)', xffLockout);
+
   // --- 4) Successful login from a clean client ---
   const pageRes = await app.inject({ method: 'GET', url: '/login', remoteAddress: '203.0.113.9' });
   const tokenM = /name="_csrf" value="([a-f0-9]{64})"/.exec(pageRes.body);

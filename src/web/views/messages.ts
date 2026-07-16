@@ -17,7 +17,18 @@ import type { ViewContext } from '../server.js';
 import { badge, fmtDate, pageHeader, truncate } from './ui.js';
 
 const PAGE_SIZE = 25;
+const MAX_PAGE = 1_000_000;
 const DATETIME_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/;
+
+/** True when the value matches the shape AND is a real calendar date/time. */
+function validDateTime(v: string): boolean {
+  if (!DATETIME_RE.test(v)) return false;
+  // Parse as UTC and require the components to round-trip (rejects 2026-02-30 etc.).
+  const iso = v.length === 10 ? `${v}T00:00:00Z` : `${v.length === 16 ? `${v}:00` : v}Z`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toISOString().slice(0, v.length) === v;
+}
 /** Sanitized filter query string (only ever built from validated parts). */
 const BACK_RE = /^\?[A-Za-z0-9=&%_.:-]*$/;
 
@@ -31,15 +42,15 @@ interface MessagesQuery {
 }
 
 function parseFilters(q: MessagesQuery): MessageFilters {
-  const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1);
+  const page = Math.min(MAX_PAGE, Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1));
   const f: MessageFilters = { page, pageSize: PAGE_SIZE };
   if (q.type && ['text', 'image', 'video', 'voice', 'link', 'file'].includes(q.type)) {
     f.type = q.type;
   }
   if (q.published === 'yes' || q.published === 'no') f.published = q.published;
   if (q.deleted === 'yes' || q.deleted === 'no') f.deleted = q.deleted;
-  if (q.since && DATETIME_RE.test(q.since)) f.since = q.since;
-  if (q.until && DATETIME_RE.test(q.until)) f.until = q.until;
+  if (q.since && validDateTime(q.since)) f.since = q.since;
+  if (q.until && validDateTime(q.until)) f.until = q.until;
   return f;
 }
 
@@ -189,7 +200,11 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
       } else {
         actions.push(actionButton('Unpublish', `/messages/${m.id}/takedown`, csrf, back, 'red'));
       }
-      if (m.deleted) {
+      // In-group deletions cannot be undone (a member deleted it); only
+      // admin-initiated deletions offer Undelete.
+      if (m.groupDeleted) {
+        // no delete/undelete control — it stays excluded from publishing
+      } else if (m.deleted) {
         actions.push(actionButton('Undelete', `/messages/${m.id}/undelete`, csrf, back, 'slate'));
       } else {
         actions.push(actionButton('Mark deleted', `/messages/${m.id}/delete`, csrf, back, 'red'));
@@ -221,6 +236,7 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
         <td class="px-3 py-2">
           <div class="flex flex-wrap gap-1">
             ${m.published ? badge('published', 'green') : badge('not published', 'slate')}
+            ${m.groupDeleted ? badge('removed in group', 'red') : null}
             ${m.deleted ? badge('deleted', 'red') : null}
             ${m.moderationState !== 'none' ? badge(m.moderationState, 'amber') : null}
           </div>
@@ -306,6 +322,12 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
 
     const message = await getAdminMessage(ctx.db, id);
     if (!message) return reply.code(404).send({ error: 'message not found' });
+
+    // An in-group deletion is the member's decision and can never be undone into
+    // publication (briefing §5) — the admin console must not be able to restore it.
+    if (action === 'undelete' && message.groupDeleted) {
+      return reply.code(409).send({ error: 'message was deleted in-group; cannot be restored' });
+    }
 
     let changed = false;
     switch (action) {

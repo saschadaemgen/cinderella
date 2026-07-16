@@ -23,10 +23,10 @@ export async function dashboardStats(db: Queryable, alertHours: number): Promise
   const [totals, byType, consent, media] = await Promise.all([
     db.query<{ total: string; published: string; deleted: string; last_sent: string | null }>(
       `SELECT
-         (SELECT count(*) FROM messages)                    AS total,
-         (SELECT count(*) FROM published_messages)          AS published,
-         (SELECT count(*) FROM messages WHERE deleted)      AS deleted,
-         (SELECT max(sent_at) FROM messages)                AS last_sent`,
+         (SELECT count(*) FROM messages)                                 AS total,
+         (SELECT count(*) FROM published_messages)                       AS published,
+         (SELECT count(*) FROM messages WHERE deleted OR group_deleted)  AS deleted,
+         (SELECT max(sent_at) FROM messages)                             AS last_sent`,
     ),
     db.query<{ type: string; count: string }>(
       `SELECT type::text AS type, count(*) AS count FROM messages GROUP BY type ORDER BY count DESC`,
@@ -92,6 +92,8 @@ export interface AdminMessage {
   mediaMime: string | null;
   mediaError: string | null;
   deleted: boolean;
+  /** Set by an in-group deletion event; never clearable from the admin console. */
+  groupDeleted: boolean;
   moderationState: string;
   published: boolean;
 }
@@ -113,10 +115,13 @@ export async function browseMessages(
   if (f.type && VALID_TYPES.has(f.type)) add('m.type = ?::message_type', f.type);
   if (f.published === 'yes') add('s.published = ?', true);
   if (f.published === 'no') add('s.published = ?', false);
-  if (f.deleted === 'yes') add('m.deleted = ?', true);
-  if (f.deleted === 'no') add('m.deleted = ?', false);
-  if (f.since) add('m.sent_at >= ?', f.since);
-  if (f.until) add('m.sent_at <= ?', f.until);
+  // "deleted" in the UI means removed by anyone (admin or in-group).
+  if (f.deleted === 'yes') add('(m.deleted OR m.group_deleted) = ?', true);
+  if (f.deleted === 'no') add('(m.deleted OR m.group_deleted) = ?', false);
+  // The datetime-local inputs are timezone-naive and the UI shows UTC, so
+  // interpret them explicitly as UTC (not the DB session timezone).
+  if (f.since) add("m.sent_at >= (?::timestamp AT TIME ZONE 'UTC')", f.since);
+  if (f.until) add("m.sent_at <= (?::timestamp AT TIME ZONE 'UTC')", f.until);
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   const baseSql = `
@@ -126,7 +131,11 @@ export async function browseMessages(
 
   const countRes = await db.query<{ n: string }>(`SELECT count(*) AS n ${baseSql}`, params);
 
-  const offset = (f.page - 1) * f.pageSize;
+  // LIMIT/OFFSET as bind parameters, with the offset clamped to a safe integer
+  // so an oversized ?page can't build an out-of-range bigint literal that 500s.
+  const offset = Math.min((f.page - 1) * f.pageSize, Number.MAX_SAFE_INTEGER);
+  const limitParam = `$${params.length + 1}`;
+  const offsetParam = `$${params.length + 2}`;
   const rows = await db.query<{
     id: string;
     group_id: string;
@@ -140,17 +149,18 @@ export async function browseMessages(
     media_mime: string | null;
     media_error: string | null;
     deleted: boolean;
+    group_deleted: boolean;
     moderation_state: string;
     published: boolean;
   }>(
     `SELECT m.id, m.group_id, m.group_msg_id, m.sender_member_id, m.sender_display_name,
             m.sent_at, m.type::text AS type, m.text_body, m.media_path, m.media_mime,
-            m.media_error, m.deleted, m.moderation_state::text AS moderation_state,
-            s.published
+            m.media_error, m.deleted, m.group_deleted,
+            m.moderation_state::text AS moderation_state, s.published
      ${baseSql}
      ORDER BY m.sent_at DESC, m.id DESC
-     LIMIT ${f.pageSize} OFFSET ${offset}`,
-    params,
+     LIMIT ${limitParam} OFFSET ${offsetParam}`,
+    [...params, f.pageSize, offset],
   );
 
   return {
@@ -168,6 +178,7 @@ export async function browseMessages(
       mediaMime: r.media_mime,
       mediaError: r.media_error,
       deleted: r.deleted,
+      groupDeleted: r.group_deleted,
       moderationState: r.moderation_state,
       published: r.published,
     })),
@@ -186,8 +197,8 @@ async function browseMessagesById(
   const rows = await db.query<Record<string, unknown>>(
     `SELECT m.id, m.group_id, m.group_msg_id, m.sender_member_id, m.sender_display_name,
             m.sent_at, m.type::text AS type, m.text_body, m.media_path, m.media_mime,
-            m.media_error, m.deleted, m.moderation_state::text AS moderation_state,
-            s.published
+            m.media_error, m.deleted, m.group_deleted,
+            m.moderation_state::text AS moderation_state, s.published
      FROM messages m
      JOIN message_publish_state s ON s.id = m.id
      WHERE m.id = $1`,
@@ -207,6 +218,7 @@ async function browseMessagesById(
       mediaMime: (r['media_mime'] as string | null) ?? null,
       mediaError: (r['media_error'] as string | null) ?? null,
       deleted: Boolean(r['deleted']),
+      groupDeleted: Boolean(r['group_deleted']),
       moderationState: String(r['moderation_state']),
       published: Boolean(r['published']),
     })),

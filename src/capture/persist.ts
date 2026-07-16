@@ -31,22 +31,33 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
         description: l.description ?? null,
       }));
 
-      const messageId = await withTransaction(async (db) => {
-        const id = await upsertMessage(db, {
-          groupId: msg.groupId,
-          groupMsgId: msg.itemId,
-          sharedMsgId: msg.sharedMsgId ?? null,
-          senderMemberId: msg.senderMemberId,
-          senderDisplayName: msg.senderDisplayName,
-          sentAt: msg.sentAt,
-          type: msg.type,
-          textBody: msg.text.length > 0 ? msg.text : null,
-          linksText,
-          rawJson: msg.raw,
+      let messageId: number;
+      try {
+        messageId = await withTransaction(async (db) => {
+          const id = await upsertMessage(db, {
+            groupId: msg.groupId,
+            groupMsgId: msg.itemId,
+            sharedMsgId: msg.sharedMsgId ?? null,
+            senderMemberId: msg.senderMemberId,
+            senderDisplayName: msg.senderDisplayName,
+            sentAt: msg.sentAt,
+            type: msg.type,
+            textBody: msg.text.length > 0 ? msg.text : null,
+            linksText,
+            rawJson: msg.raw,
+          });
+          await replaceLinks(db, id, links);
+          return id;
         });
-        await replaceLinks(db, id, links);
-        return id;
-      });
+      } catch (err) {
+        // Surface on the dashboard and rethrow so the handler skips the file
+        // receive (avoids moving media into the store with no row to point at).
+        const message = err instanceof Error ? err.message : String(err);
+        status.error(
+          `Failed to persist message ${msg.itemId} from ${msg.senderMemberId}: ${message}`,
+        );
+        throw err;
+      }
 
       status.captured();
       log.info(
@@ -58,7 +69,17 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
 
     onFileReceived: async (msg, file) => {
       const media = await storeMedia(file, msg, cfg.mediaRoot);
-      await updateMedia(getPool(), msg.groupId, msg.itemId, media);
+      const updated = await updateMedia(getPool(), msg.groupId, msg.itemId, media);
+      if (updated === 0) {
+        status.error(
+          `Downloaded media for (group ${msg.groupId}, item ${msg.itemId}) but no message row ` +
+            `exists — orphaned at ${media.mediaPath}. Persist likely failed earlier.`,
+        );
+        log.warn(
+          `Orphaned media (no row): ${media.mediaPath} (group ${msg.groupId}, item ${msg.itemId})`,
+        );
+        return;
+      }
       log.info(
         `Stored media for (group ${msg.groupId}, item ${msg.itemId}): ` +
           `${media.mediaPath} (${media.mediaSize} bytes, ${media.mediaMime}) ✓`,

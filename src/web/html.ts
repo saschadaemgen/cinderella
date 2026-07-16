@@ -112,7 +112,18 @@ export function page(opts: PageOptions): string {
               <span class="text-base font-semibold tracking-tight">🕯️ Cinderella Admin</span>
               <span class="text-slate-500 group-open:rotate-90 transition-transform">☰</span>
             </summary>
-            <nav class="flex flex-col gap-1 border-t border-slate-100 p-3">${nav}</nav>
+            <nav class="flex flex-col gap-1 border-t border-slate-100 p-3">
+              ${nav}
+              <form method="post" action="/logout" class="mt-1 border-t border-slate-100 pt-2">
+                <input type="hidden" name="_csrf" value="${opts.csrfToken ?? ''}" />
+                <button
+                  type="submit"
+                  class="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                >
+                  Sign out
+                </button>
+              </form>
+            </nav>
           </details>
         </header>
         <aside

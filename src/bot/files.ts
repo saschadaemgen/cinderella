@@ -7,15 +7,18 @@
  * expire files after ~48h, so failed/late receipts are logged and surfaced
  * (briefing §10.2).
  *
- * Flow: on a message with a file we issue the receive-file command (storing the
+ * Flow: register a pending entry, issue the receive-file command (storing the
  * file UNENCRYPTED so Cinderella can serve it later), then resolve when the
- * matching `rcvFileComplete` event arrives. Errors and timeouts reject.
+ * matching `rcvFileComplete` event arrives. The pending entry is registered
+ * BEFORE the command is sent so a fast completion event is never missed. Errors,
+ * a rejecting command response, and timeouts reject.
  */
 
 import { isAbsolute, join } from 'node:path';
 import { CC } from '@simplex-chat/types';
 import type { CEvt } from '@simplex-chat/types';
 import type { api } from 'simplex-chat';
+import { log } from '../log.js';
 import type { CapturedFile } from '../capture/message.js';
 
 /** The embedded chat controller instance returned by the SDK. */
@@ -29,19 +32,23 @@ export interface ReceivedFile {
   fileName: string;
 }
 
-interface Pending {
-  fileName: string;
+interface Waiter {
   resolve: (r: ReceivedFile) => void;
   reject: (e: Error) => void;
-  timer: NodeJS.Timeout;
 }
+
+interface Pending {
+  fileName: string;
+  timer: NodeJS.Timeout | undefined;
+  waiters: Waiter[];
+}
+
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Resolves a core-reported file path against the files folder if it is relative. */
 export function resolveFilePath(filePath: string, filesFolder: string): string {
   return isAbsolute(filePath) ? filePath : join(filesFolder, filePath);
 }
-
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 export class FileReceiver {
   private readonly pending = new Map<number, Pending>();
@@ -60,61 +67,82 @@ export class FileReceiver {
    */
   async receive(file: CapturedFile): Promise<ReceivedFile> {
     const { fileId, fileName } = file;
-    if (this.pending.has(fileId)) {
-      // Already receiving — reuse the in-flight promise rather than double-accept.
+
+    // Already receiving this file — attach to the in-flight receipt.
+    const existing = this.pending.get(fileId);
+    if (existing) {
       return new Promise<ReceivedFile>((resolve, reject) => {
-        const existing = this.pending.get(fileId);
-        if (!existing) {
-          reject(new Error(`file receipt state lost (fileId=${fileId})`));
-          return;
-        }
-        // Chain onto the existing pending entry.
-        const priorResolve = existing.resolve;
-        const priorReject = existing.reject;
-        existing.resolve = (r) => {
-          priorResolve(r);
-          resolve(r);
-        };
-        existing.reject = (e) => {
-          priorReject(e);
-          reject(e);
-        };
+        existing.waiters.push({ resolve, reject });
       });
     }
 
-    await this.chat.sendChatCmd(
-      CC.ReceiveFile.cmdString({ fileId, userApprovedRelays: true, storeEncrypted: false }),
-    );
-
-    const timeoutMs = this.getTimeoutMs();
-    return new Promise<ReceivedFile>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(fileId);
-        reject(
-          new Error(`file receive timed out after ${timeoutMs}ms (${fileName}, id=${fileId})`),
-        );
-      }, timeoutMs);
-      // Do not keep the process alive solely for this timer.
-      if (typeof timer.unref === 'function') timer.unref();
-      this.pending.set(fileId, { fileName, resolve, reject, timer });
+    // Register BEFORE sending, so a completion event that arrives during the
+    // await below is not lost.
+    const entry: Pending = { fileName, timer: undefined, waiters: [] };
+    this.pending.set(fileId, entry);
+    const result = new Promise<ReceivedFile>((resolve, reject) => {
+      entry.waiters.push({ resolve, reject });
     });
+    entry.timer = setTimeout(() => {
+      this.reject(
+        fileId,
+        new Error(
+          `file receive timed out after ${this.getTimeoutMs()}ms (${fileName}, id=${fileId})`,
+        ),
+      );
+    }, this.getTimeoutMs());
+    if (typeof entry.timer.unref === 'function') entry.timer.unref();
+
+    try {
+      const r = await this.chat.sendChatCmd(
+        CC.ReceiveFile.cmdString({ fileId, userApprovedRelays: true, storeEncrypted: false }),
+      );
+      if (r.type === 'chatCmdError') {
+        this.reject(
+          fileId,
+          new Error(`receive-file command rejected for ${fileName} (id=${fileId})`),
+        );
+      } else if (r.type === 'rcvFileAcceptedSndCancelled') {
+        this.reject(fileId, new Error(`sender cancelled file ${fileName} (id=${fileId})`));
+      }
+      // rcvFileAccepted => wait for the rcvFileComplete event.
+    } catch (err) {
+      this.reject(fileId, err instanceof Error ? err : new Error(String(err)));
+    }
+
+    return result;
+  }
+
+  private settleResolve(fileId: number, value: ReceivedFile): void {
+    const entry = this.pending.get(fileId);
+    if (!entry) return;
+    this.pending.delete(fileId);
+    if (entry.timer) clearTimeout(entry.timer);
+    for (const w of entry.waiters) w.resolve(value);
+  }
+
+  private reject(fileId: number, error: Error): void {
+    const entry = this.pending.get(fileId);
+    if (!entry) return;
+    this.pending.delete(fileId);
+    if (entry.timer) clearTimeout(entry.timer);
+    for (const w of entry.waiters) w.reject(error);
   }
 
   /** Wire to the `rcvFileComplete` event. */
   handleComplete(ev: CEvt.RcvFileComplete): void {
     const file = ev.chatItem.chatItem.file;
     if (!file) return;
-    const p = this.pending.get(file.fileId);
-    if (!p) return;
-    this.pending.delete(file.fileId);
-    clearTimeout(p.timer);
-
+    if (!this.pending.has(file.fileId)) return;
     const rawPath = file.fileSource?.filePath;
     if (!rawPath) {
-      p.reject(new Error(`rcvFileComplete without a file path (${p.fileName}, id=${file.fileId})`));
+      this.reject(
+        file.fileId,
+        new Error(`rcvFileComplete without a file path (${file.fileName}, id=${file.fileId})`),
+      );
       return;
     }
-    p.resolve({
+    this.settleResolve(file.fileId, {
       fileId: file.fileId,
       path: resolveFilePath(rawPath, this.filesFolder),
       size: file.fileSize,
@@ -122,14 +150,32 @@ export class FileReceiver {
     });
   }
 
-  /** Wire to `rcvFileError` and `rcvFileWarning`. */
-  handleError(ev: CEvt.RcvFileError | CEvt.RcvFileWarning): void {
+  /** Wire to `rcvFileError` (a terminal failure). */
+  handleError(ev: CEvt.RcvFileError): void {
     const { fileId } = ev.rcvFileTransfer;
-    const p = this.pending.get(fileId);
-    if (!p) return;
-    this.pending.delete(fileId);
-    clearTimeout(p.timer);
-    p.reject(new Error(`file receive failed (${p.fileName}, id=${fileId}): ${ev.agentError.type}`));
+    const entry = this.pending.get(fileId);
+    if (!entry) return;
+    this.reject(
+      fileId,
+      new Error(`file receive failed (${entry.fileName}, id=${fileId}): ${ev.agentError.type}`),
+    );
+  }
+
+  /** Wire to `rcvFileWarning` — a TRANSIENT XFTP warning; the transfer continues. */
+  handleWarning(ev: CEvt.RcvFileWarning): void {
+    const { fileId } = ev.rcvFileTransfer;
+    const entry = this.pending.get(fileId);
+    if (!entry) return;
+    log.warn(
+      `Transient file-receive warning (${entry.fileName}, id=${fileId}): ${ev.agentError.type} — still trying.`,
+    );
+  }
+
+  /** Rejects all in-flight receipts (used on shutdown so failures are recorded). */
+  abortAll(reason: string): void {
+    for (const fileId of [...this.pending.keys()]) {
+      this.reject(fileId, new Error(reason));
+    }
   }
 
   /** Number of in-flight receipts (for diagnostics). */

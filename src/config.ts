@@ -147,6 +147,13 @@ export function redactConfig(cfg: Config): Record<string, string> {
   try {
     const url = new URL(cfg.databaseUrl);
     if (url.password) url.password = '***';
+    // Also scrub credential-bearing query parameters — some drivers accept the
+    // password (and other secrets) as ?password=… rather than in the userinfo.
+    for (const key of ['password', 'pgpassword', 'sslpassword', 'sslcert', 'sslkey']) {
+      for (const actual of [...url.searchParams.keys()]) {
+        if (actual.toLowerCase() === key) url.searchParams.set(actual, '***');
+      }
+    }
     safeDbUrl = url.toString();
   } catch {
     // Non-URL connection string; redact defensively rather than leak it.

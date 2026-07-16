@@ -18,7 +18,7 @@ import argon2 from 'argon2';
 import { buildServer, registerNav } from '../src/web/server.js';
 import { registerAdminViews } from '../src/web/views/index.js';
 import { loadMigrationFiles } from '../src/db/migrate.js';
-import { upsertMessage, recordMediaError, updateMedia } from '../src/db/messages.js';
+import { upsertMessage, recordMediaError, updateMedia, markDeleted } from '../src/db/messages.js';
 import { recordOptIn } from '../src/db/consent.js';
 import { SettingsService } from '../src/settings/service.js';
 import type { Queryable } from '../src/db/pool.js';
@@ -246,6 +246,40 @@ async function main(): Promise<void> {
     headers: authed,
   });
   check('takedown without CSRF is refused', takedownNoCsrf.statusCode === 403);
+
+  // --- 3c) In-group deletion cannot be admin-undeleted into publication ---
+  // Simulate a SimpleX in-group deletion on the (published) text message.
+  await markDeleted(db, 1, [1]);
+  const afterGroupDelete = await pg.query<{ n: number }>(
+    'SELECT count(*)::int AS n FROM published_messages WHERE id = $1',
+    [textId],
+  );
+  check(
+    'in-group deletion removes the message from the published set',
+    afterGroupDelete.rows[0]?.n === 0,
+  );
+  const undelete = await app.inject({
+    method: 'POST',
+    url: `/messages/${textId}/undelete`,
+    payload: { _csrf: csrf },
+    headers: authed,
+  });
+  check('admin undelete of an in-group deletion is refused (409)', undelete.statusCode === 409);
+  const stillGone = await pg.query<{ n: number }>(
+    'SELECT count(*)::int AS n FROM published_messages WHERE id = $1',
+    [textId],
+  );
+  check(
+    'in-group-deleted message stays unpublished after refused undelete',
+    stillGone.rows[0]?.n === 0,
+  );
+  // The messages browser must not even offer an Undelete control for it.
+  const browseAfter = await getPage('/messages?deleted=yes');
+  check(
+    'in-group-deleted message shows "removed in group" and no undelete control',
+    browseAfter.body.includes('removed in group') &&
+      !browseAfter.body.includes(`/messages/${textId}/undelete`),
+  );
 
   // --- 4) Consent viewer ---
   const consentPage = await getPage('/consent');

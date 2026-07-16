@@ -91,8 +91,9 @@ export async function replaceLinks(
 }
 
 /**
- * Marks messages deleted (in-group deletion). Deleted messages are excluded from
- * the published set, mirroring SimpleX's own channel webpage (briefing §5/§10).
+ * Marks messages deleted IN-GROUP (a SimpleX deletion event). Sets the
+ * `group_deleted` flag, which the admin console can never clear — so a member's
+ * in-group deletion can never be undone into publication (briefing §5/§10).
  * Idempotent. Returns the number of rows flipped.
  */
 export async function markDeleted(
@@ -103,26 +104,51 @@ export async function markDeleted(
   if (groupMsgIds.length === 0) return 0;
   const { rowCount } = await db.query(
     `UPDATE messages
-       SET deleted = TRUE
+       SET group_deleted = TRUE
      WHERE group_id = $1 AND group_msg_id = ANY($2::bigint[])`,
     [groupId, [...groupMsgIds]],
   );
   return rowCount ?? 0;
 }
 
-/** Records the media path/mime/size once a file has been received and stored. */
+/**
+ * Records the media path/mime/size once a file has been received and stored.
+ * Returns the number of rows updated (0 => the message row is missing, i.e. the
+ * stored media would be orphaned).
+ */
 export async function updateMedia(
   db: Queryable,
   groupId: number,
   groupMsgId: number,
   media: MediaInput,
-): Promise<void> {
-  await db.query(
+): Promise<number> {
+  const { rowCount } = await db.query(
     `UPDATE messages
        SET media_path = $3, media_mime = $4, media_size = $5, media_error = NULL
      WHERE group_id = $1 AND group_msg_id = $2`,
     [groupId, groupMsgId, media.mediaPath, media.mediaMime, media.mediaSize],
   );
+  return rowCount ?? 0;
+}
+
+/**
+ * On startup, flags media-type messages whose file was never received (no path,
+ * no recorded error) as interrupted, so the dashboard surfaces them. Any receipt
+ * in-flight when the process last stopped is gone; XFTP relays may still have the
+ * file (~48h), but the operator needs to know it wasn't captured. Returns the
+ * number of rows flagged.
+ */
+export async function markInterruptedMediaReceipts(db: Queryable): Promise<number> {
+  const { rowCount } = await db.query(
+    `UPDATE messages
+       SET media_error = 'receipt interrupted (process restart) — not captured'
+     WHERE type IN ('image', 'video', 'voice', 'file')
+       AND media_path IS NULL
+       AND media_error IS NULL
+       AND deleted = FALSE
+       AND group_deleted = FALSE`,
+  );
+  return rowCount ?? 0;
 }
 
 /** Records a failed file receipt so the dashboard can surface it (§10.2). */

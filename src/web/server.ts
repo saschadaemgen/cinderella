@@ -66,6 +66,20 @@ function isMutating(method: string): boolean {
   return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 }
 
+/** Mints a fresh login-CSRF token, sets the signed cookie, and returns it. */
+function setFreshLoginToken(reply: FastifyReply): string {
+  const token = randomBytes(32).toString('hex');
+  reply.setCookie(LOGIN_CSRF_COOKIE, token, {
+    path: '/login',
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    signed: true,
+    maxAge: 600,
+  });
+  return token;
+}
+
 function securityHeaders(reply: FastifyReply): void {
   reply.header(
     'content-security-policy',
@@ -129,7 +143,11 @@ function loginPage(csrfToken: string, error?: string): string {
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const { db, adminCfg } = deps;
-  const app = Fastify({ trustProxy: true, logger: false });
+  // Trust ONLY the loopback proxy (nginx runs on 127.0.0.1). With trustProxy:true
+  // the client-supplied leftmost X-Forwarded-For entry would become req.ip, letting
+  // an attacker rotate it to defeat the login rate limiter. 'loopback' makes req.ip
+  // resolve to the real client as nginx sees it (the entry nginx appends).
+  const app = Fastify({ trustProxy: 'loopback', logger: false });
   const sessions = new SessionStore();
   const limiter = new LoginRateLimiter();
 
@@ -188,26 +206,19 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/login', async (req, reply) => {
     if (req.session) return reply.redirect('/');
     // Pre-session CSRF: double-submit via a signed cookie.
-    const token = randomBytes(32).toString('hex');
-    reply.setCookie(LOGIN_CSRF_COOKIE, token, {
-      path: '/login',
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      signed: true,
-      maxAge: 600,
-    });
     reply.type('text/html');
-    return loginPage(token);
+    return loginPage(setFreshLoginToken(reply));
   });
 
   app.post('/login', async (req, reply) => {
     reply.type('text/html');
     const client = req.ip;
 
+    // Every error branch mints a FRESH login-CSRF token+cookie so the rendered
+    // retry form is usable (an empty token would make the next submit fail).
     if (limiter.isLocked(client)) {
       reply.code(429);
-      return loginPage('', 'Too many attempts. Try again later.');
+      return loginPage(setFreshLoginToken(reply), 'Too many attempts. Try again later.');
     }
 
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -227,7 +238,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       timingSafeEqual(Buffer.from(formToken), Buffer.from(cookieToken));
     if (!tokenOk) {
       reply.code(403);
-      return loginPage('', 'Session expired. Please try again.');
+      return loginPage(setFreshLoginToken(reply), 'Session expired. Please try again.');
     }
 
     const ok = await verifyCredentials(adminCfg, username, password);
@@ -235,17 +246,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       limiter.recordFailure(client);
       log.warn(`Failed admin login attempt from ${client}.`);
       reply.code(401);
-      // Fresh token for the retry form.
-      const retryToken = randomBytes(32).toString('hex');
-      reply.setCookie(LOGIN_CSRF_COOKIE, retryToken, {
-        path: '/login',
-        httpOnly: true,
-        secure: true,
-        sameSite: 'strict',
-        signed: true,
-        maxAge: 600,
-      });
-      return loginPage(retryToken, 'Invalid credentials.');
+      return loginPage(setFreshLoginToken(reply), 'Invalid credentials.');
     }
 
     limiter.recordSuccess(client);

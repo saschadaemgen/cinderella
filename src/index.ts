@@ -20,6 +20,7 @@ import { registerCapture } from './capture/handler.js';
 import { makePersistenceHooks } from './capture/persist.js';
 import { makeConsentHandler } from './consent/commands.js';
 import { assertDbReachable, closePool, getPool } from './db/pool.js';
+import { markInterruptedMediaReceipts } from './db/messages.js';
 import { SettingsService } from './settings/service.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
@@ -83,14 +84,25 @@ async function startCaptureWorker(
     const botHandle = await startBot(cfg, { getFileTimeoutMs: () => settings.fileTimeoutMs });
     const hooks = makePersistenceHooks(cfg);
     hooks.onCommand = makeConsentHandler(botHandle);
-    registerCapture(botHandle, cfg, hooks);
-    await reportGroups(botHandle, cfg);
+
+    // Resolve the configured group to its STABLE numeric id, so capture keeps
+    // working if a group admin renames the group (display names are mutable).
+    let targetGroupId: number | undefined;
+    let groupNames: string[] = [];
     try {
       const groups = await botHandle.chat.apiListGroups(botHandle.user.userId);
-      status.botRunning(groups.map((g) => g.localDisplayName));
+      groupNames = groups.map((g) => g.localDisplayName);
+      if (cfg.groupName) {
+        const match = groups.find((g) => g.localDisplayName === cfg.groupName);
+        if (match) targetGroupId = match.groupId;
+      }
     } catch {
-      status.botRunning([]);
+      // Non-fatal; fall back to name-based scoping.
     }
+
+    registerCapture(botHandle, cfg, hooks, { targetGroupId });
+    await reportGroups(botHandle, cfg);
+    status.botRunning(groupNames);
     return botHandle;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -104,6 +116,13 @@ async function startCaptureWorker(
 async function runApp(cfg: Config): Promise<void> {
   await assertDbReady();
   const settings = await SettingsService.load(getPool(), cfg.logLevel);
+
+  // Any file receipt that was in-flight when the process last stopped is gone —
+  // flag those messages so the operator sees them (before the ~48h XFTP expiry).
+  const interrupted = await markInterruptedMediaReceipts(getPool());
+  if (interrupted > 0) {
+    log.warn(`${interrupted} media receipt(s) were interrupted by a previous restart — flagged.`);
+  }
 
   // One process (A2): the admin web server and the capture worker together.
   const adminCfg = loadAdminConfig();
