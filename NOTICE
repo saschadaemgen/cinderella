@@ -1,0 +1,14 @@
+Cinderella
+Copyright (c) 2026 Sascha Daemgen.
+
+This product is a consent-based archive bot for SimpleX groups. Nothing a
+group member contributes is republished on the public archive unless that
+member has explicitly opted in via a bot command (consent-first).
+
+Third-party components:
+  - simplex-chat (npm SDK) — talks to the simplex-chat CLI daemon (SimpleX Chat,
+    https://github.com/simplex-chat/simplex-chat). See its own license.
+  - PostgreSQL client (pg), dotenv, and the TypeScript/ESLint/Prettier
+    toolchain — see their respective licenses under node_modules.
+
+TODO(notice): expand third-party attributions as dependencies are finalized.

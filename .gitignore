@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment / secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# Cinderella runtime data (never commit member data or media)
+media/
+state/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

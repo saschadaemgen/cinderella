@@ -1,0 +1,13 @@
+# Normalize line endings: store text as LF in the repo (we deploy to Linux),
+# regardless of the developer's OS. Prevents CRLF/LF churn and Prettier conflicts.
+* text=auto eol=lf
+
+# Explicitly binary (never normalize).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp4 binary
+*.webm binary
+*.node binary
