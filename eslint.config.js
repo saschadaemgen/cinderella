@@ -7,7 +7,7 @@ export default tseslint.config(
   {
     // Lint only src/ TypeScript. Config files and build output are excluded so
     // the type-checked rules don't try to type-check files outside the TS project.
-    ignores: ['dist/**', 'node_modules/**', 'media/**', 'state/**', '*.js', '*.mjs'],
+    ignores: ['dist/**', 'node_modules/**', 'media/**', 'state/**', 'scripts/**', '*.js', '*.mjs'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

@@ -17,7 +17,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "migrate": "tsx src/db/migrate.ts"
+    "migrate": "tsx src/db/migrate.ts",
+    "verify:db": "tsx scripts/verify-db.ts"
   },
   "dependencies": {
     "@simplex-chat/types": "^0.8.0",
@@ -26,6 +27,7 @@
     "simplex-chat": "^6.5.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",

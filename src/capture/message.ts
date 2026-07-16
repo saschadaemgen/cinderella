@@ -24,6 +24,12 @@ export interface CapturedFile {
   sourcePath: string | undefined;
 }
 
+export interface LinkPreview {
+  url: string;
+  title: string | undefined;
+  description: string | undefined;
+}
+
 export interface CapturedMessage {
   /** Local numeric group id (SimpleX DB). */
   groupId: number;
@@ -47,6 +53,8 @@ export interface CapturedMessage {
   type: CapturedType;
   /** Text body (may be empty for pure-media messages). */
   text: string;
+  /** Link preview, present only for `link`-type messages. */
+  linkPreview: LinkPreview | undefined;
   /** Attached media/file, if any. */
   file: CapturedFile | undefined;
   /** The raw AChatItem, for the `raw_json` column and debugging. */
@@ -82,6 +90,16 @@ function buildCapturedFile(file: T.CIFile | undefined): CapturedFile | undefined
     fileName: file.fileName,
     fileSize: file.fileSize,
     sourcePath: file.fileSource?.filePath,
+  };
+}
+
+function buildLinkPreview(msgContent: T.MsgContent): LinkPreview | undefined {
+  if (msgContent.type !== 'link') return undefined;
+  const { preview } = msgContent;
+  return {
+    url: preview.uri,
+    title: preview.title || undefined,
+    description: preview.description || undefined,
   };
 }
 
@@ -121,6 +139,7 @@ export function parseGroupMessage(aChatItem: T.AChatItem): CapturedMessage | nul
     sentAt: chatItem.meta.itemTs,
     type: classifyType(msgContent, file !== undefined),
     text: msgContent.text ?? '',
+    linkPreview: buildLinkPreview(msgContent),
     file,
     raw: aChatItem,
   };
