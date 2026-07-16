@@ -39,6 +39,18 @@ const FAILURE_REPLY =
   'Sorry - I could not process your command right now due to a temporary error. ' +
   'Please send it again in a moment.';
 
+/**
+ * Consent-first welcome message posted to the group on join (briefing §9,
+ * Addendum 2 A2.7). Explains that publication is opt-in and how to revoke.
+ */
+export const WELCOME_MESSAGE =
+  "Hi! I'm Cinderella, an archive bot for this group. I can republish messages " +
+  'on a public web archive - but ONLY from members who explicitly opt in. ' +
+  'Nothing you post is published unless you choose to. ' +
+  'To opt in, send /publish. To opt out at any time (which also removes your ' +
+  'already-published messages), send /unpublish. Publishing is forward-only: ' +
+  'only messages you send after opting in are ever published.';
+
 async function reply(botHandle: BotHandle, msg: CapturedMessage, text: string): Promise<void> {
   try {
     await botHandle.chat.apiSendTextReply(msg.raw, text);

@@ -12,8 +12,10 @@
  * captured — briefing §10.1).
  */
 
+import type { T } from '@simplex-chat/types';
 import { loadConfig } from '../config.js';
 import { log, setLogLevel } from '../log.js';
+import { WELCOME_MESSAGE } from '../consent/commands.js';
 import { startBot } from './client.js';
 
 async function main(): Promise<void> {
@@ -29,10 +31,22 @@ async function main(): Promise<void> {
 
   const botHandle = await startBot(cfg);
 
+  const welcomed = new Set<number>();
   botHandle.chat.on('userJoinedGroup', ({ groupInfo }) => {
-    log.info(
-      `✓ Joined group: ${groupInfo.localDisplayName}. You can Ctrl+C and start the bot now.`,
-    );
+    log.info(`✓ Joined group: ${groupInfo.localDisplayName}.`);
+    if (welcomed.has(groupInfo.groupId)) return;
+    welcomed.add(groupInfo.groupId);
+    // Post the consent-first welcome message (A2.7 / §9).
+    const chatInfo: T.ChatInfo = { type: 'group', groupInfo };
+    void botHandle.chat
+      .apiSendTextMessage(chatInfo, WELCOME_MESSAGE)
+      .then(() => log.info('Posted the consent-first welcome message to the group.'))
+      .catch((err: unknown) =>
+        log.warn(
+          `Could not post welcome message: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    log.info('You can Ctrl+C and start the bot service now.');
   });
   botHandle.chat.on('groupUpdated', ({ toGroup }) => {
     log.info(`Group updated: ${toGroup.localDisplayName}`);

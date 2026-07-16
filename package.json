@@ -12,6 +12,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "connect": "tsx src/bot/connect.ts",
+    "avatar": "tsx src/bot/set-avatar.ts",
     "build": "tsc --build && npm run assets",
     "assets": "tailwindcss -i assets/app.css -o public/assets/app.css --minify && node scripts/copy-assets.mjs",
     "hash-password": "tsx scripts/hash-password.ts",

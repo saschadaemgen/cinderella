@@ -1,21 +1,16 @@
 # Cinderella — the consent-based SimpleX archive bot.
 #
-# ONE long-lived process. The SimpleX chat core is embedded in-process (native
-# addon), so there is NO separate simplex-chat daemon unit and NO network port.
+# ONE long-lived process (Addendum 1 A2): the SimpleX chat core is embedded
+# in-process (native addon) alongside the Fastify admin console. There is NO
+# separate simplex-chat daemon and NO exposed network port — the admin console
+# binds to 127.0.0.1 and nginx terminates TLS in front of it.
 #
-# Install (as root):
-#   useradd --system --home-dir /opt/cinderella --shell /usr/sbin/nologin cinderella
-#   # deploy the built app to /opt/cinderella (package.json, dist/, node_modules/)
-#   install -d -m 750 -o cinderella -g cinderella /var/lib/cinderella
-#   install -D -m 600 -o cinderella -g cinderella cinderella.env /etc/cinderella/cinderella.env
-#   cp deploy/cinderella.service /etc/systemd/system/cinderella.service
-#   systemctl daemon-reload && systemctl enable --now cinderella
+# See deploy/RUNBOOK.md for the full install/update/backup procedure.
 #
-# The env file holds DATABASE_URL etc. — chmod 600, owned by cinderella. In it,
-# point runtime data outside the code dir, e.g.:
-#   SIMPLEX_DB_PREFIX=/var/lib/cinderella/simplex/cinderella
-#   SIMPLEX_FILES_FOLDER=/var/lib/cinderella/files
-#   MEDIA_ROOT=/var/lib/cinderella/media
+# Runtime identity (Addendum 2 A2.2): runs as the non-root `cinderella` user,
+# which owns /var/lib/cinderella (bot chat DB, files, media). Secrets are read by
+# systemd as root from the EnvironmentFile (0600 root:root) before privileges are
+# dropped, so they never sit in a file the service user can read.
 
 [Unit]
 Description=Cinderella — consent-based SimpleX-to-web archive bot
@@ -30,25 +25,45 @@ Group=cinderella
 WorkingDirectory=/opt/cinderella
 EnvironmentFile=/etc/cinderella/cinderella.env
 ExecStart=/usr/bin/node /opt/cinderella/dist/index.js
-Restart=always
+Restart=on-failure
 RestartSec=5
-# The SimpleX core sends SIGTERM-clean; give it a moment to close the DB.
-TimeoutStopSec=20
+# The SimpleX core closes its DB on SIGTERM; give it time before SIGKILL.
+TimeoutStopSec=30
 
-# --- Hardening ---
-# The bot only needs to write its runtime data directory. Everything else is RO.
+# --- Runtime data (created + owned by systemd as the service user, 0750) ---
+StateDirectory=cinderella
+StateDirectoryMode=0750
+ReadWritePaths=/var/lib/cinderella
+
+# --- Hardening (Addendum 2 A2.4) ---
 NoNewPrivileges=true
+# The process needs no capabilities (binds an unprivileged localhost port).
+CapabilityBoundingSet=
+AmbientCapabilities=
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
 RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
 LockPersonality=true
-ReadWritePaths=/var/lib/cinderella
-# The SimpleX identity DB and captured media live here — treat as sensitive.
-StateDirectory=cinderella
+RemoveIPC=true
+UMask=0077
+# TCP to SMP/XFTP relays + PostgreSQL, plus DNS (netlink) and local sockets.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# Baseline syscall allowlist for a network service. (V8's JIT needs W|X, so
+# MemoryDenyWriteExecute is intentionally NOT set.)
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target
