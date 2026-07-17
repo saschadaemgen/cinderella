@@ -64,7 +64,9 @@ Shared production host. Be **additive**: never touch neighbouring services,
 DBs, or nginx configs. App in `/opt/cinderella` (git), runtime data in
 `/var/lib/cinderella` (owned by the non-root `cinderella` user). One systemd
 unit. Update = `git pull && npm ci && npm run build && node dist/db/migrate.js &&
-systemctl restart cinderella`.
+systemctl restart cinderella`. Admin console is **WireGuard-only** (nginx binds
+the WG interface `10.8.0.1:9443` → Fastify `127.0.0.1:8787`; never public) — see
+[deploy/wireguard.md](deploy/wireguard.md).
 
 ## Parked (do not build now)
 

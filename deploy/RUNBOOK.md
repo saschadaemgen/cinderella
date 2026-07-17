@@ -72,21 +72,17 @@ systemctl status cinderella --no-pager
 curl -fsS http://127.0.0.1:8787/healthz     # -> {"ok":true}
 ```
 
-## nginx + TLS (admin console)
+## Admin access — WireGuard only (Addendum 3)
 
-Bind stays on `127.0.0.1:8787`; nginx terminates TLS. Point a dedicated,
-non-obvious subdomain's DNS at the VPS first, then:
+The console is **not** exposed publicly. It is reachable only over a WireGuard
+tunnel: nginx binds the WG interface (`10.8.0.1:9443`) and terminates TLS in front
+of Fastify (`127.0.0.1:8787`). Full setup — WireGuard server, peer configs, the
+Secure-cookie TLS options (self-signed now / DNS-01 upgrade), and the nginx vhost
+— is in **[deploy/wireguard.md](wireguard.md)**. Connect the tunnel, then browse
+`https://10.8.0.1:9443` and log in as `operator`.
 
-```bash
-# Edit deploy/nginx-admin.conf: set server_name to the admin hostname.
-cp deploy/nginx-admin.conf /etc/nginx/sites-available/cinderella-admin
-ln -s ../sites-available/cinderella-admin /etc/nginx/sites-enabled/
-certbot --nginx -d <admin-hostname>
-nginx -t && systemctl reload nginx        # reload, not restart (don't disrupt neighbours)
-```
-
-Enable the documented defense-in-depth block in the vhost (IP allowlist and/or
-HTTP Basic-auth) plus HSTS.
+> Addendum 2's public nginx + Let's Encrypt vhost + IP-allowlist is superseded by
+> this. Public `80/443` stay reserved for the future public embed front.
 
 ## Group onboarding
 
