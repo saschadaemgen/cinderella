@@ -1,7 +1,13 @@
-# Cinderella admin access over WireGuard (Addendum 3)
+# Cinderella admin access over WireGuard (Addendum 3 — RETIRED as the admin path)
 
-The admin console is reachable **only over a WireGuard tunnel** — no public HTTP(S)
-exposure. This supersedes Addendum 2's public nginx + Let's Encrypt vhost.
+> **Superseded by Addendum 4.** The admin console is now public + passkey-secured
+> (see [RUNBOOK.md](RUNBOOK.md)). WireGuard stays installed but is no longer
+> required to reach the console; it remains available as optional defense-in-depth
+> (e.g. re-add a WG-interface bind in front). The rest of this file documents that
+> optional setup.
+
+The steps below make the admin console reachable **only over a WireGuard tunnel** —
+kept for reference / optional layering.
 
 **Placeholders only in this file.** Real keys, preshared keys, and the VPS public
 IP are never committed — they live only on the VPS (`/etc/wireguard/`, `0600`)

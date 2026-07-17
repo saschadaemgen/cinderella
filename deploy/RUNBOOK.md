@@ -72,17 +72,38 @@ systemctl status cinderella --no-pager
 curl -fsS http://127.0.0.1:8787/healthz     # -> {"ok":true}
 ```
 
-## Admin access — WireGuard only (Addendum 3)
+## Admin access — public, appless, passkeys (Addendum 4)
 
-The console is **not** exposed publicly. It is reachable only over a WireGuard
-tunnel: nginx binds the WG interface (`10.8.0.1:9443`) and terminates TLS in front
-of Fastify (`127.0.0.1:8787`). Full setup — WireGuard server, peer configs, the
-Secure-cookie TLS options (self-signed now / DNS-01 upgrade), and the nginx vhost
-— is in **[deploy/wireguard.md](wireguard.md)**. Connect the tunnel, then browse
-`https://10.8.0.1:9443` and log in as `operator`.
+The console is public at the admin hostname over real Let's Encrypt TLS, secured
+by **passkeys** (WebAuthn) — not by network location. nginx terminates TLS and
+proxies to Fastify on `127.0.0.1:8787`.
 
-> Addendum 2's public nginx + Let's Encrypt vhost + IP-allowlist is superseded by
-> this. Public `80/443` stay reserved for the future public embed front.
+```bash
+# DNS A-record for the admin hostname must already point at the VPS.
+certbot certonly --nginx -d <admin-hostname>          # reuses the existing ACME account
+# Set the real hostname in the vhost, then enable it:
+sed -i "s/cinderella.example.org/<admin-hostname>/g" deploy/nginx-admin.conf   # or edit by hand
+cp deploy/nginx-admin.conf /etc/nginx/sites-available/cinderella-admin
+ln -sf ../sites-available/cinderella-admin /etc/nginx/sites-enabled/cinderella-admin
+nginx -t && systemctl reload nginx                    # reload, never restart (shared host)
+```
+
+Set the WebAuthn env (RP id/origin derive from `PUBLIC_ORIGIN`, so usually just):
+
+```
+PUBLIC_ORIGIN=https://<admin-hostname>
+```
+
+**First login (bootstrap):** break-glass is enabled by default. Log in with the
+Argon2id password, open **Security → Passkeys**, register passkeys on **≥2
+devices** (phone + desktop, ideally a hardware key too), then disable break-glass
+if you wish. Every A4.5 control (session, rate-limit, step-up, IP access, headers,
+etc.) is configured on the Security page.
+
+> Retires Addendum 3's WireGuard-interface vhost — remove
+> `/etc/nginx/sites-enabled/cinderella-admin`'s WG version before installing this.
+> WireGuard stays installed but is no longer on the admin path. See
+> [deploy/wireguard.md](wireguard.md) (now optional defense-in-depth).
 
 ## Group onboarding
 

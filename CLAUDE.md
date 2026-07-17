@@ -35,10 +35,13 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   consent, settings, audit, embeds).
 - **Media on disk** (`MEDIA_ROOT`); the DB stores the path, never the bytes.
 - **Search:** Postgres FTS (generated `tsvector` + GIN) + a `links` table.
-- **Admin console** is hostile-facing: 127.0.0.1 only, nginx TLS in front;
-  single Argon2id operator; signed HttpOnly/Secure/SameSite=Strict session;
-  login rate-limit (trustProxy `loopback`); CSRF on all mutations; strict CSP;
-  every state change audited. Responsive by default (A5).
+- **Admin console** is hostile-facing: Fastify on 127.0.0.1, public nginx TLS in
+  front at the admin hostname. **Passkeys (WebAuthn) are the primary auth**
+  (native `@simplewebauthn`), with an admin-toggleable Argon2id break-glass path
+  (+ optional TOTP). Signed HttpOnly/Secure/SameSite=Strict session; CSRF on all
+  mutations; every A4.5 hardening control (session/step-up/rate-limit/IP/CSP/
+  headers/attestation/alerting) is configured on the **Security** page, persisted
+  in `settings`, audited. `trustProxy` pinned to `loopback`. Responsive (A5).
 
 ## Layout
 
@@ -46,7 +49,8 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   `capture/` (parse, media, links, persist), `consent/`, `settings/`, `db/`,
   `web/` (server, auth, session, views), `index.ts`.
 - `migrations/` — 001 messages/links · 002 consent+views · 003 admin · 004
-  moderation gate · 005 deletion provenance. Runner: `node dist/db/migrate.js`.
+  moderation gate · 005 deletion provenance · 006 webauthn + TOTP. Runner:
+  `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.
 - Git-ignored: `.env`, `state/`, `media/`, `public/` (built assets), `dist/`.
@@ -64,9 +68,11 @@ Shared production host. Be **additive**: never touch neighbouring services,
 DBs, or nginx configs. App in `/opt/cinderella` (git), runtime data in
 `/var/lib/cinderella` (owned by the non-root `cinderella` user). One systemd
 unit. Update = `git pull && npm ci && npm run build && node dist/db/migrate.js &&
-systemctl restart cinderella`. Admin console is **WireGuard-only** (nginx binds
-the WG interface `10.8.0.1:9443` → Fastify `127.0.0.1:8787`; never public) — see
-[deploy/wireguard.md](deploy/wireguard.md).
+systemctl restart cinderella`. Admin console is **public + passkey-secured**
+(Addendum 4): nginx TLS at the admin hostname → Fastify `127.0.0.1:8787`. See
+[deploy/RUNBOOK.md](deploy/RUNBOOK.md). WireGuard (Addendum 3) is retired from the
+admin path but stays installed for optional defense-in-depth
+([deploy/wireguard.md](deploy/wireguard.md)).
 
 ## Parked (do not build now)
 
