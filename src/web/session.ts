@@ -1,16 +1,11 @@
 /**
- * Session + CSRF handling for the admin console (A3 §2/§4).
+ * Session + CSRF handling for the admin console (A3 §2/§4, extended in A4.5).
  *
- * Design: server-side in-memory session store keyed by a random 256-bit id,
- * carried in a SIGNED cookie (@fastify/cookie, HMAC with SESSION_SECRET).
- * Cookie flags: HttpOnly, Secure, SameSite=Strict, Path=/.
- *
- * A single operator account means an in-memory store is appropriate: sessions
- * simply require a fresh login after a process restart.
- *
- * CSRF: a per-session random token, embedded in every form (`_csrf` field) and
- * exposed to htmx via a request header. Every state-changing request must carry
- * a token matching the session's (constant-time comparison).
+ * Server-side session store keyed by a random 256-bit id carried in a SIGNED
+ * cookie (HMAC with SESSION_SECRET); cookie flags HttpOnly, Secure,
+ * SameSite=Strict, Path=/. Idle + absolute lifetimes are admin-configurable.
+ * Tracks the auth method (passkey/password) and the last passkey step-up, and
+ * supports a single-session (log-out-others) policy.
  */
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -18,33 +13,50 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 export const SESSION_COOKIE = 'cinderella_session';
 
-/** Idle timeout: sessions expire after this long without a request. */
-const SESSION_IDLE_MS = 12 * 60 * 60 * 1000; // 12h
+export type AuthMethod = 'passkey' | 'password';
+
+export interface SessionLifetimes {
+  idleMs: number;
+  absoluteMs: number;
+}
 
 interface SessionData {
   username: string;
   csrfToken: string;
+  authMethod: AuthMethod;
   createdAt: number;
   lastSeenAt: number;
+  /** Last time a passkey step-up succeeded (passkey login counts). */
+  lastStepUpAt: number;
 }
 
 export class SessionStore {
   private readonly sessions = new Map<string, SessionData>();
 
-  create(username: string): { id: string; csrfToken: string } {
+  constructor(private readonly lifetimes: () => SessionLifetimes) {}
+
+  create(username: string, authMethod: AuthMethod): { id: string; csrfToken: string } {
     const id = randomBytes(32).toString('hex');
     const csrfToken = randomBytes(32).toString('hex');
     const now = Date.now();
-    this.sessions.set(id, { username, csrfToken, createdAt: now, lastSeenAt: now });
+    this.sessions.set(id, {
+      username,
+      csrfToken,
+      authMethod,
+      createdAt: now,
+      lastSeenAt: now,
+      // A passkey login is itself a fresh step-up; a password login is not.
+      lastStepUpAt: authMethod === 'passkey' ? now : 0,
+    });
     return { id, csrfToken };
   }
 
-  /** Returns the session for an id, refreshing its idle timer; null if invalid/expired. */
   get(id: string): SessionData | null {
     const s = this.sessions.get(id);
     if (!s) return null;
     const now = Date.now();
-    if (now - s.lastSeenAt > SESSION_IDLE_MS) {
+    const { idleMs, absoluteMs } = this.lifetimes();
+    if (now - s.lastSeenAt > idleMs || now - s.createdAt > absoluteMs) {
       this.sessions.delete(id);
       return null;
     }
@@ -52,15 +64,36 @@ export class SessionStore {
     return s;
   }
 
+  markStepUp(id: string): void {
+    const s = this.sessions.get(id);
+    if (s) s.lastStepUpAt = Date.now();
+  }
+
   destroy(id: string): void {
     this.sessions.delete(id);
   }
 
-  /** Removes expired sessions (called opportunistically). */
+  /** Single-session policy: drop every session except the given one. */
+  destroyOthers(exceptId: string): number {
+    let n = 0;
+    for (const id of [...this.sessions.keys()]) {
+      if (id !== exceptId) {
+        this.sessions.delete(id);
+        n++;
+      }
+    }
+    return n;
+  }
+
+  count(): number {
+    return this.sessions.size;
+  }
+
   prune(): void {
     const now = Date.now();
+    const { idleMs, absoluteMs } = this.lifetimes();
     for (const [id, s] of this.sessions) {
-      if (now - s.lastSeenAt > SESSION_IDLE_MS) this.sessions.delete(id);
+      if (now - s.lastSeenAt > idleMs || now - s.createdAt > absoluteMs) this.sessions.delete(id);
     }
   }
 }
@@ -69,9 +102,10 @@ export interface AuthedSession {
   sessionId: string;
   username: string;
   csrfToken: string;
+  authMethod: AuthMethod;
+  lastStepUpAt: number;
 }
 
-/** Reads and validates the signed session cookie. Null when not authenticated. */
 export function readSession(req: FastifyRequest, store: SessionStore): AuthedSession | null {
   const rawCookie = req.cookies[SESSION_COOKIE];
   if (!rawCookie) return null;
@@ -79,17 +113,23 @@ export function readSession(req: FastifyRequest, store: SessionStore): AuthedSes
   if (!unsigned.valid || !unsigned.value) return null;
   const session = store.get(unsigned.value);
   if (!session) return null;
-  return { sessionId: unsigned.value, username: session.username, csrfToken: session.csrfToken };
+  return {
+    sessionId: unsigned.value,
+    username: session.username,
+    csrfToken: session.csrfToken,
+    authMethod: session.authMethod,
+    lastStepUpAt: session.lastStepUpAt,
+  };
 }
 
-export function setSessionCookie(reply: FastifyReply, sessionId: string): void {
+export function setSessionCookie(reply: FastifyReply, sessionId: string, maxAgeMs: number): void {
   reply.setCookie(SESSION_COOKIE, sessionId, {
     path: '/',
     httpOnly: true,
     secure: true,
     sameSite: 'strict',
     signed: true,
-    maxAge: SESSION_IDLE_MS / 1000,
+    maxAge: Math.floor(maxAgeMs / 1000),
   });
 }
 
@@ -104,10 +144,6 @@ function constantTimeEquals(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
-/**
- * Extracts the CSRF token from a request: the `_csrf` form field or the
- * `x-csrf-token` header (used by htmx via hx-headers).
- */
 function requestCsrfToken(req: FastifyRequest): string | null {
   const header = req.headers['x-csrf-token'];
   if (typeof header === 'string' && header.length > 0) return header;
@@ -119,7 +155,6 @@ function requestCsrfToken(req: FastifyRequest): string | null {
   return null;
 }
 
-/** True when the request carries a CSRF token matching the session's. */
 export function csrfOk(req: FastifyRequest, session: AuthedSession): boolean {
   const token = requestCsrfToken(req);
   if (!token) return false;

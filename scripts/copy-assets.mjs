@@ -11,4 +11,20 @@ mkdirSync(outDir, { recursive: true });
 
 const htmxSrc = join(root, 'node_modules', 'htmx.org', 'dist', 'htmx.min.js');
 copyFileSync(htmxSrc, join(outDir, 'htmx.min.js'));
-console.log('copied htmx.min.js -> public/assets/');
+
+// WebAuthn browser helper (UMD global: SimpleWebAuthnBrowser).
+const webauthnSrc = join(
+  root,
+  'node_modules',
+  '@simplewebauthn',
+  'browser',
+  'dist',
+  'bundle',
+  'index.umd.min.js',
+);
+copyFileSync(webauthnSrc, join(outDir, 'webauthn-browser.js'));
+
+// Our own auth glue.
+copyFileSync(join(root, 'assets', 'auth.js'), join(outDir, 'auth.js'));
+
+console.log('copied htmx.min.js, webauthn-browser.js, auth.js -> public/assets/');

@@ -1,60 +1,95 @@
 /**
- * Operator authentication (A3 §2/§3): single account, username from env,
- * Argon2id-hashed password from env. Login attempts are rate-limited per client
- * with a lockout window; failures return a generic message; comparisons are
- * constant-time (username) / Argon2 verification (password).
+ * Break-glass password authentication + rate limiting (A3 §2/§3, A4.5).
+ *
+ * The password path is a configurable break-glass fallback (A4.4). Passkeys are
+ * the primary factor. Login attempts are rate-limited per client with a lockout;
+ * thresholds are admin-configurable. Optional TOTP second factor on the password
+ * path. A separate global request-rate limiter can be enabled.
  */
 
 import { timingSafeEqual } from 'node:crypto';
 import argon2 from 'argon2';
+import { authenticator } from 'otplib';
 import type { AdminConfig } from '../config.js';
 import { log } from '../log.js';
 
-/** Max failed attempts per client within the window before lockout. */
-const MAX_FAILURES = 5;
-const FAILURE_WINDOW_MS = 15 * 60 * 1000; // 15 min
-const LOCKOUT_MS = 15 * 60 * 1000; // 15 min
+export interface RateLimitConfig {
+  maxAttempts: number;
+  windowMs: number;
+  lockoutMs: number;
+}
 
 interface FailureState {
   failures: number[];
   lockedUntil: number;
 }
 
+/** Per-client login failure tracker with configurable lockout. */
 export class LoginRateLimiter {
   private readonly byClient = new Map<string, FailureState>();
 
-  /** True when this client is currently locked out. */
+  constructor(private readonly cfg: () => RateLimitConfig) {}
+
   isLocked(client: string): boolean {
     const s = this.byClient.get(client);
-    if (!s) return false;
-    if (s.lockedUntil > Date.now()) return true;
-    return false;
+    return s ? s.lockedUntil > Date.now() : false;
   }
 
-  recordFailure(client: string): void {
+  recordFailure(client: string): boolean {
+    const { maxAttempts, windowMs, lockoutMs } = this.cfg();
     const now = Date.now();
     const s = this.byClient.get(client) ?? { failures: [], lockedUntil: 0 };
-    s.failures = s.failures.filter((t) => now - t < FAILURE_WINDOW_MS);
+    s.failures = s.failures.filter((t) => now - t < windowMs);
     s.failures.push(now);
-    if (s.failures.length >= MAX_FAILURES) {
-      s.lockedUntil = now + LOCKOUT_MS;
+    let lockedNow = false;
+    if (s.failures.length >= maxAttempts) {
+      s.lockedUntil = now + lockoutMs;
       s.failures = [];
+      lockedNow = true;
       log.warn(`Admin login locked out for client ${client} (too many failures).`);
     }
     this.byClient.set(client, s);
+    return lockedNow;
   }
 
   recordSuccess(client: string): void {
     this.byClient.delete(client);
   }
 
-  /** Prunes stale entries (called opportunistically). */
   prune(): void {
     const now = Date.now();
+    const { windowMs } = this.cfg();
     for (const [client, s] of this.byClient) {
-      if (s.lockedUntil < now && s.failures.every((t) => now - t >= FAILURE_WINDOW_MS)) {
+      if (s.lockedUntil < now && s.failures.every((t) => now - t >= windowMs)) {
         this.byClient.delete(client);
       }
+    }
+  }
+}
+
+/** Optional global per-client request-rate limiter (fixed 60s window). */
+export class GlobalRateLimiter {
+  private readonly hits = new Map<string, number[]>();
+
+  constructor(private readonly perMinute: () => number) {}
+
+  /** Returns true if the request is allowed. `0` per-minute disables the limiter. */
+  allow(client: string): boolean {
+    const limit = this.perMinute();
+    if (limit <= 0) return true;
+    const now = Date.now();
+    const arr = (this.hits.get(client) ?? []).filter((t) => now - t < 60000);
+    arr.push(now);
+    this.hits.set(client, arr);
+    return arr.length <= limit;
+  }
+
+  prune(): void {
+    const now = Date.now();
+    for (const [client, arr] of this.hits) {
+      const kept = arr.filter((t) => now - t < 60000);
+      if (kept.length === 0) this.hits.delete(client);
+      else this.hits.set(client, kept);
     }
   }
 }
@@ -62,9 +97,7 @@ export class LoginRateLimiter {
 function constantTimeEquals(a: string, b: string): boolean {
   const ab = Buffer.from(a);
   const bb = Buffer.from(b);
-  // Length leak is acceptable for usernames; pad to avoid throwing.
   if (ab.length !== bb.length) {
-    // Still burn a comparison so the timing profile stays flat.
     timingSafeEqual(Buffer.alloc(32), Buffer.alloc(32));
     return false;
   }
@@ -72,9 +105,9 @@ function constantTimeEquals(a: string, b: string): boolean {
 }
 
 /**
- * Verifies operator credentials. Always runs the Argon2 verification (against a
- * dummy hash when the username is wrong) so response timing does not reveal
- * whether the username exists.
+ * Verifies operator password credentials. Always runs Argon2 verification (even
+ * for a wrong username, against the real hash) so timing does not reveal whether
+ * the username exists.
  */
 export async function verifyCredentials(
   cfg: Pick<AdminConfig, 'adminUsername' | 'adminPasswordHash'>,
@@ -89,4 +122,22 @@ export async function verifyCredentials(
     passwordOk = false;
   }
   return usernameOk && passwordOk;
+}
+
+/** Verifies a TOTP token against a base32 secret (±1 step tolerance). */
+export function verifyTotp(secret: string, token: string): boolean {
+  try {
+    authenticator.options = { window: 1 };
+    return authenticator.verify({ token: token.replace(/\s+/g, ''), secret });
+  } catch {
+    return false;
+  }
+}
+
+export function newTotpSecret(): string {
+  return authenticator.generateSecret();
+}
+
+export function totpKeyUri(secret: string, account: string, issuer: string): string {
+  return authenticator.keyuri(account, issuer, secret);
 }

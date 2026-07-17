@@ -65,6 +65,8 @@ export interface PageOptions {
   chrome?: boolean;
   /** CSRF token to expose to htmx requests. */
   csrfToken?: string;
+  /** When true, sensitive form submits trigger a passkey step-up (A4.5). */
+  stepUpRequired?: boolean;
 }
 
 export interface NavItem {
@@ -153,10 +155,18 @@ export function page(opts: PageOptions): string {
         <title>${opts.title} — Cinderella Admin</title>
         <link rel="stylesheet" href="/assets/app.css" />
         <script src="/assets/htmx.min.js" defer></script>
+        ${
+          chrome
+            ? html`<script src="/assets/webauthn-browser.js" defer></script>
+                <script src="/assets/auth.js" defer></script>`
+            : html``
+        }
         ${opts.head ?? html``}
       </head>
       <body
         class="h-full bg-slate-100 text-slate-900 antialiased"
+        data-csrf="${opts.csrfToken ?? ''}"
+        ${opts.stepUpRequired ? raw('data-stepup-required="1"') : ''}
         ${
           opts.csrfToken ? raw(`hx-headers='{"x-csrf-token":"${escapeHtml(opts.csrfToken)}"}'`) : ''
         }

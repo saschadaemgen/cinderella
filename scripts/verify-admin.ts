@@ -17,8 +17,10 @@ import { PGlite } from '@electric-sql/pglite';
 import argon2 from 'argon2';
 import { buildServer, registerNav } from '../src/web/server.js';
 import { loadMigrationFiles } from '../src/db/migrate.js';
+import { SettingsService } from '../src/settings/service.js';
+import { SecurityService } from '../src/security/settings.js';
 import type { Queryable } from '../src/db/pool.js';
-import type { AdminConfig } from '../src/config.js';
+import type { AdminConfig, Config } from '../src/config.js';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = ''): void {
@@ -63,10 +65,24 @@ async function main(): Promise<void> {
     adminPasswordHash: await argon2.hash(PASSWORD, { type: argon2.argon2id }),
     sessionSecret: 'a'.repeat(48),
     publicOrigin: 'https://cinderella.example.org',
+    rpId: 'cinderella.example.org',
+    webauthnOrigin: 'https://cinderella.example.org',
+    rpName: 'Cinderella Admin',
   };
+  const cfg: Config = {
+    botDisplayName: 'Cinderella',
+    simplexDbPrefix: './state/simplex/cinderella',
+    simplexFilesFolder: './state/files',
+    groupName: '',
+    mediaRoot: process.cwd(),
+    databaseUrl: 'postgres://cinderella:pw@127.0.0.1:5432/cinderella',
+    logLevel: 'info',
+  };
+  const settings = await SettingsService.load(db, 'info');
+  const security = await SecurityService.load(db);
 
   registerNav();
-  const app = buildServer({ db, adminCfg, mediaRoot: process.cwd() });
+  const app = buildServer({ db, adminCfg, cfg, settings, security, mediaRoot: process.cwd() });
   await app.ready();
 
   // --- 1) Unauthenticated access ---

@@ -14,6 +14,7 @@ export default tseslint.config(
       'state/**',
       'scripts/**',
       'public/**',
+      'assets/**',
       '*.js',
       '*.mjs',
     ],

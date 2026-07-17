@@ -22,6 +22,7 @@ import { makeConsentHandler } from './consent/commands.js';
 import { assertDbReachable, closePool, getPool } from './db/pool.js';
 import { markInterruptedMediaReceipts } from './db/messages.js';
 import { SettingsService } from './settings/service.js';
+import { SecurityService } from './security/settings.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
 import { registerAdminViews } from './web/views/index.js';
@@ -124,6 +125,8 @@ async function runApp(cfg: Config): Promise<void> {
     log.warn(`${interrupted} media receipt(s) were interrupted by a previous restart — flagged.`);
   }
 
+  const security = await SecurityService.load(getPool());
+
   // One process (A2): the admin web server and the capture worker together.
   const adminCfg = loadAdminConfig();
   const adminServer = await startAdminServer({
@@ -131,6 +134,7 @@ async function runApp(cfg: Config): Promise<void> {
     adminCfg,
     mediaRoot: cfg.mediaRoot,
     settings,
+    security,
     cfg,
     registerViews: registerAdminViews,
   });

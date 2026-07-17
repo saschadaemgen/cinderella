@@ -54,6 +54,12 @@ export interface AdminConfig {
   sessionSecret: string;
   /** Public origin of the admin/embed host, used by the embed snippet generator. */
   publicOrigin: string;
+  /** WebAuthn Relying Party ID — the console's registrable domain (A4.3). */
+  rpId: string;
+  /** WebAuthn expected origin (scheme + host), i.e. the public origin. */
+  webauthnOrigin: string;
+  /** Human-friendly RP name shown by authenticators. */
+  rpName: string;
 }
 
 class ConfigError extends Error {
@@ -128,12 +134,29 @@ export function loadAdminConfig(): AdminConfig {
     );
   }
 
+  const publicOrigin = optional('PUBLIC_ORIGIN', 'https://cinderella.example.org');
+  // WebAuthn RP ID is the host of the public origin (no scheme/port). The
+  // public-hostname + real-TLS design (A4.2) is what makes WebAuthn work — it
+  // requires a secure context and a domain-based RP ID, not a bare IP.
+  let rpId: string;
+  let webauthnOrigin: string;
+  try {
+    const u = new URL(publicOrigin);
+    rpId = u.hostname;
+    webauthnOrigin = u.origin;
+  } catch {
+    throw new ConfigError(`PUBLIC_ORIGIN must be a valid URL (got "${publicOrigin}").`);
+  }
+
   const cfg: AdminConfig = {
     adminPort,
     adminUsername: required('ADMIN_USERNAME'),
     adminPasswordHash,
     sessionSecret,
-    publicOrigin: optional('PUBLIC_ORIGIN', 'https://cinderella.example.org'),
+    publicOrigin,
+    rpId: optional('WEBAUTHN_RP_ID', rpId),
+    webauthnOrigin: optional('WEBAUTHN_ORIGIN', webauthnOrigin),
+    rpName: optional('WEBAUTHN_RP_NAME', 'Cinderella Admin'),
   };
   cachedAdmin = cfg;
   return cfg;

@@ -1,35 +1,32 @@
 /**
- * Cinderella admin console server (A3).
+ * Cinderella admin console server (A3, hardened per A4).
  *
- * Binds to 127.0.0.1 ONLY — nginx terminates TLS and reverse-proxies to this
- * port (deploy/nginx-admin.conf). Treats the network as hostile: single
- * Argon2id-verified operator account, signed HttpOnly/Secure/SameSite=Strict
- * session cookie, login rate limiting, CSRF on every state-changing request,
- * strict security headers, and no secrets ever rendered.
+ * Public, appless: served at the configured hostname over real TLS (nginx →
+ * Fastify on 127.0.0.1). Primary auth is passkeys (WebAuthn); an admin-toggleable
+ * Argon2id break-glass path remains. Every A4.5 control is enforced here and
+ * configured in the console. Fastify never binds a public interface.
  */
 
-import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyStatic from '@fastify/static';
 import type { AdminConfig, Config } from '../config.js';
 import type { Queryable } from '../db/pool.js';
 import type { SettingsService } from '../settings/service.js';
+import type { SecurityService } from '../security/settings.js';
 import { log } from '../log.js';
-import { LoginRateLimiter, verifyCredentials } from './auth.js';
+import { GlobalRateLimiter, LoginRateLimiter } from './auth.js';
 import { html, page, setNavItems, type SafeHtml } from './html.js';
 import { icon } from './icons.js';
-import {
-  SessionStore,
-  clearSessionCookie,
-  csrfOk,
-  readSession,
-  setSessionCookie,
-  type AuthedSession,
-} from './session.js';
+import { applySecurityHeaders } from './security/headers.js';
+import { ipAllowed } from './security/access.js';
+import { ChallengeStore } from './security/webauthn.js';
+import { registerAuthRoutes, STEP_UP_WINDOW_MS } from './security/routes.js';
+import { countCredentials } from '../db/webauthn.js';
+import { SessionStore, csrfOk, readSession, type AuthedSession } from './session.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -37,131 +34,88 @@ declare module 'fastify' {
   }
 }
 
-export interface ServerDeps {
+/** Everything routes/views need. Built once in buildServer. */
+export interface AdminContext {
   db: Queryable;
   adminCfg: AdminConfig;
-  /** Absolute path to the media store (thumbnails). */
-  mediaRoot: string;
-  /** Live settings service (required for the Stage 5 views). */
-  settings?: SettingsService;
-  /** Boot config, for the display-only settings section. */
-  cfg?: Config;
-  /**
-   * Registers the admin views (dashboard, messages, …). Kept injectable so the
-   * foundation is testable stand-alone.
-   */
-  registerViews?: (app: FastifyInstance, ctx: ViewContext) => void;
+  cfg: Config;
+  settings: SettingsService;
+  security: SecurityService;
+  sessions: SessionStore;
+  loginLimiter: LoginRateLimiter;
+  challenges: ChallengeStore;
 }
 
 export interface ViewContext {
   db: Queryable;
   adminCfg: AdminConfig;
-  settings: SettingsService;
   cfg: Config;
+  settings: SettingsService;
+  security: SecurityService;
+  sessions: SessionStore;
 }
 
-const LOGIN_CSRF_COOKIE = 'cinderella_login_csrf';
+export interface ServerDeps {
+  db: Queryable;
+  adminCfg: AdminConfig;
+  cfg: Config;
+  settings: SettingsService;
+  security: SecurityService;
+  mediaRoot: string;
+  registerViews?: (app: FastifyInstance, ctx: ViewContext) => void;
+}
 
 function isMutating(method: string): boolean {
   return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 }
 
-/** Mints a fresh login-CSRF token, sets the signed cookie, and returns it. */
-function setFreshLoginToken(reply: FastifyReply): string {
-  const token = randomBytes(32).toString('hex');
-  reply.setCookie(LOGIN_CSRF_COOKIE, token, {
-    path: '/login',
-    httpOnly: true,
-    secure: true,
-    sameSite: 'strict',
-    signed: true,
-    maxAge: 600,
-  });
-  return token;
-}
-
-function securityHeaders(reply: FastifyReply): void {
-  reply.header(
-    'content-security-policy',
-    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
-      "script-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'",
-  );
-  reply.header('x-content-type-options', 'nosniff');
-  reply.header('x-frame-options', 'DENY');
-  reply.header('referrer-policy', 'no-referrer');
-  reply.header('cache-control', 'no-store');
-}
-
-function loginPage(csrfToken: string, error?: string): string {
-  const body: SafeHtml = html`
-    <div class="mx-auto mt-12 w-full max-w-sm sm:mt-24">
-      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <h1 class="mb-1 text-xl font-semibold tracking-tight">🕯️ Cinderella</h1>
-        <p class="mb-6 text-sm text-slate-500">Operator console — sign in</p>
-        ${
-          error
-            ? html`<p
-                class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-              >
-                ${error}
-              </p>`
-            : html``
-        }
-        <form method="post" action="/login" class="flex flex-col gap-4">
-          <input type="hidden" name="_csrf" value="${csrfToken}" />
-          <label class="flex flex-col gap-1">
-            <span class="text-sm font-medium text-slate-700">Username</span>
-            <input
-              name="username"
-              autocomplete="username"
-              required
-              class="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm font-medium text-slate-700">Password</span>
-            <input
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              required
-              class="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-            />
-          </label>
-          <button
-            type="submit"
-            class="mt-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            Sign in
-          </button>
-        </form>
-      </div>
-    </div>
-  `;
-  return page({ title: 'Sign in', body, chrome: false });
+/** Sensitive = any state change except logout and the WebAuthn ceremonies. */
+function isSensitive(method: string, path: string): boolean {
+  if (!isMutating(method)) return false;
+  if (path === '/logout') return false;
+  if (path.startsWith('/webauthn/')) return false;
+  return true;
 }
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
-  const { db, adminCfg } = deps;
-  // Trust ONLY the loopback proxy (nginx runs on 127.0.0.1). With trustProxy:true
-  // the client-supplied leftmost X-Forwarded-For entry would become req.ip, letting
-  // an attacker rotate it to defeat the login rate limiter. 'loopback' makes req.ip
-  // resolve to the real client as nginx sees it (the entry nginx appends).
+  const { db, adminCfg, cfg, settings, security } = deps;
   const app = Fastify({ trustProxy: 'loopback', logger: false });
-  const sessions = new SessionStore();
-  const limiter = new LoginRateLimiter();
+
+  const sessions = new SessionStore(() => {
+    const s = security.get().session;
+    return { idleMs: s.idleTimeoutMinutes * 60000, absoluteMs: s.absoluteMaxHours * 3600000 };
+  });
+  const loginLimiter = new LoginRateLimiter(() => {
+    const r = security.get().rateLimit;
+    return {
+      maxAttempts: r.loginMaxAttempts,
+      windowMs: r.loginWindowMinutes * 60000,
+      lockoutMs: r.lockoutMinutes * 60000,
+    };
+  });
+  const globalLimiter = new GlobalRateLimiter(() => security.get().rateLimit.globalPerMinute);
+  const challenges = new ChallengeStore();
+
+  const ctx: AdminContext = {
+    db,
+    adminCfg,
+    cfg,
+    settings,
+    security,
+    sessions,
+    loginLimiter,
+    challenges,
+  };
 
   void app.register(fastifyCookie, { secret: adminCfg.sessionSecret });
   void app.register(fastifyFormbody);
 
-  // Static assets (Tailwind CSS + htmx), built by `npm run assets`.
   const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
   void app.register(fastifyStatic, {
     root: join(projectRoot, 'public', 'assets'),
     prefix: '/assets/',
     index: false,
   });
-  // Media thumbnails — served ONLY behind the auth guard below.
   void app.register(fastifyStatic, {
     root: deps.mediaRoot,
     prefix: '/media/',
@@ -171,19 +125,41 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.decorateRequest('session', null);
 
-  // --- Security headers on every response ---
+  // Security headers (configurable) on every response.
   app.addHook('onSend', async (_req, reply) => {
-    securityHeaders(reply);
+    applySecurityHeaders(reply, security.get());
   });
 
-  // --- Auth guard ---
+  // Global rate limit + IP access policy + session read + auth guard.
   app.addHook('onRequest', async (req, reply) => {
     sessions.prune();
-    limiter.prune();
-    req.session = readSession(req, sessions);
+    loginLimiter.prune();
+    globalLimiter.prune();
+    challenges.prune();
 
     const path = req.url.split('?')[0] ?? req.url;
-    const isPublic = path === '/login' || path === '/healthz' || path.startsWith('/assets/');
+
+    // Global request-rate limit (assets excluded so the UI still loads).
+    if (!path.startsWith('/assets/') && !globalLimiter.allow(req.ip)) {
+      return reply.code(429).send({ error: 'rate limit exceeded' });
+    }
+
+    // Optional IP allow/deny for the admin surface (health + assets exempt).
+    if (path !== '/healthz' && !path.startsWith('/assets/')) {
+      const { mode, list } = security.get().ipAccess;
+      if (!ipAllowed(req.ip, mode, list)) {
+        log.warn(`Blocked admin request from ${req.ip} by IP ${mode}list.`);
+        return reply.code(403).send({ error: 'forbidden' });
+      }
+    }
+
+    req.session = readSession(req, sessions);
+
+    const isPublic =
+      path === '/login' ||
+      path === '/healthz' ||
+      path.startsWith('/assets/') ||
+      path.startsWith('/webauthn/login/');
     if (isPublic || req.session) return;
 
     if (req.method === 'GET' && !req.headers['hx-request']) {
@@ -192,84 +168,36 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return reply.code(401).send({ error: 'unauthorized' });
   });
 
-  // --- CSRF guard on every state-changing request (except login itself) ---
+  // CSRF + step-up guard on state-changing requests.
   app.addHook('preHandler', async (req, reply) => {
     if (!isMutating(req.method)) return;
     const path = req.url.split('?')[0] ?? req.url;
-    if (path === '/login') return; // guarded by the login-CSRF cookie below
+    if (path === '/login' || path.startsWith('/webauthn/login/')) return; // own guards
     if (!req.session || !csrfOk(req, req.session)) {
       return reply.code(403).send({ error: 'invalid csrf token' });
     }
-  });
-
-  // --- Login / logout ---
-  app.get('/login', async (req, reply) => {
-    if (req.session) return reply.redirect('/');
-    // Pre-session CSRF: double-submit via a signed cookie.
-    reply.type('text/html');
-    return loginPage(setFreshLoginToken(reply));
-  });
-
-  app.post('/login', async (req, reply) => {
-    reply.type('text/html');
-    const client = req.ip;
-
-    // Every error branch mints a FRESH login-CSRF token+cookie so the rendered
-    // retry form is usable (an empty token would make the next submit fail).
-    if (limiter.isLocked(client)) {
-      reply.code(429);
-      return loginPage(setFreshLoginToken(reply), 'Too many attempts. Try again later.');
+    // Step-up: sensitive mutations require a fresh passkey re-verification when
+    // enabled AND at least one passkey exists (else it would lock out bootstrap).
+    if (isSensitive(req.method, path) && security.get().session.stepUpForSensitive) {
+      const fresh = Date.now() - req.session.lastStepUpAt <= STEP_UP_WINDOW_MS;
+      if (!fresh && (await countCredentials(db)) > 0) {
+        reply.header('x-step-up-required', '1');
+        return reply.code(403).send({ error: 'step-up required' });
+      }
     }
-
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const username = typeof body['username'] === 'string' ? body['username'] : '';
-    const password = typeof body['password'] === 'string' ? body['password'] : '';
-    const formToken = typeof body['_csrf'] === 'string' ? body['_csrf'] : '';
-
-    // Login CSRF (double-submit): form token must match the signed cookie.
-    const cookieRaw = req.cookies[LOGIN_CSRF_COOKIE];
-    const unsigned = cookieRaw
-      ? req.unsignCookie(cookieRaw)
-      : { valid: false as const, value: null };
-    const cookieToken = unsigned.valid && unsigned.value ? unsigned.value : '';
-    const tokenOk =
-      formToken.length > 0 &&
-      cookieToken.length === formToken.length &&
-      timingSafeEqual(Buffer.from(formToken), Buffer.from(cookieToken));
-    if (!tokenOk) {
-      reply.code(403);
-      return loginPage(setFreshLoginToken(reply), 'Session expired. Please try again.');
-    }
-
-    const ok = await verifyCredentials(adminCfg, username, password);
-    if (!ok) {
-      limiter.recordFailure(client);
-      log.warn(`Failed admin login attempt from ${client}.`);
-      reply.code(401);
-      return loginPage(setFreshLoginToken(reply), 'Invalid credentials.');
-    }
-
-    limiter.recordSuccess(client);
-    reply.clearCookie(LOGIN_CSRF_COOKIE, { path: '/login' });
-    const { id } = sessions.create(username);
-    setSessionCookie(reply, id);
-    log.info(`Admin login: ${username} from ${client}.`);
-    return reply.redirect('/');
-  });
-
-  app.post('/logout', async (req, reply) => {
-    if (req.session) sessions.destroy(req.session.sessionId);
-    clearSessionCookie(reply);
-    return reply.redirect('/login');
   });
 
   app.get('/healthz', () => ({ ok: true }));
 
-  // --- Views ---
-  if (deps.registerViews && deps.settings && deps.cfg) {
-    deps.registerViews(app, { db, adminCfg, settings: deps.settings, cfg: deps.cfg });
+  // Auth routes (login page, WebAuthn ceremonies, break-glass, logout, step-up).
+  registerAuthRoutes(app, ctx);
+
+  if (deps.registerViews) {
+    deps.registerViews(app, { db, adminCfg, cfg, settings, security, sessions });
   } else {
-    app.get('/', async (req, reply) => {
+    // Minimal authed landing (used by the foundation harness; production always
+    // registers the full views).
+    app.get('/', (req, reply) => {
       reply.type('text/html');
       return page({
         title: 'Home',
@@ -283,24 +211,27 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   return app;
 }
 
-/** Registers the standard nav (called once before building pages). */
 export function registerNav(): void {
   setNavItems([
     { key: 'dashboard', href: '/', label: 'Dashboard', icon: icon('dashboard') },
     { key: 'messages', href: '/messages', label: 'Messages', icon: icon('messages') },
     { key: 'consent', href: '/consent', label: 'Consent', icon: icon('consent') },
     { key: 'settings', href: '/settings', label: 'Settings', icon: icon('settings') },
+    { key: 'security', href: '/security', label: 'Security', icon: icon('shield') },
     { key: 'embeds', href: '/embeds', label: 'Embeds', icon: icon('embed') },
   ]);
 }
 
-/** Starts the admin server on 127.0.0.1 (never a public interface — A3 §1). */
+/** Convenience re-export for callers that render inside the shell. */
+export type { SafeHtml };
+export type SecurityHeaderFn = (reply: FastifyReply, req: FastifyRequest) => void;
+
 export async function startAdminServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerNav();
   const app = buildServer(deps);
   await app.listen({ host: '127.0.0.1', port: deps.adminCfg.adminPort });
   log.info(
-    `Admin console listening on 127.0.0.1:${deps.adminCfg.adminPort} (proxy via nginx TLS).`,
+    `Admin console listening on 127.0.0.1:${deps.adminCfg.adminPort} (public via nginx TLS).`,
   );
   return app;
 }

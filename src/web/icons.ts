@@ -21,6 +21,10 @@ import {
   EyeOff,
   RotateCcw,
   Activity,
+  ShieldCheck,
+  KeyRound,
+  Smartphone,
+  Trash,
 } from 'lucide-static';
 import { raw, type SafeHtml } from './html.js';
 
@@ -55,6 +59,10 @@ const ICONS = {
   unpublish: EyeOff,
   restore: RotateCcw,
   activity: Activity,
+  shield: ShieldCheck,
+  passkey: KeyRound,
+  device: Smartphone,
+  trash: Trash,
 } as const;
 
 /** Icon for a message type. */

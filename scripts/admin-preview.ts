@@ -18,6 +18,7 @@ import { loadMigrationFiles } from '../src/db/migrate.js';
 import { recordMediaError, updateMedia, upsertMessage } from '../src/db/messages.js';
 import { recordOptIn } from '../src/db/consent.js';
 import { SettingsService } from '../src/settings/service.js';
+import { SecurityService } from '../src/security/settings.js';
 import type { Queryable } from '../src/db/pool.js';
 import type { AdminConfig, Config } from '../src/config.js';
 
@@ -92,6 +93,9 @@ async function main(): Promise<void> {
     adminPasswordHash: await argon2.hash(PASSWORD, { type: argon2.argon2id }),
     sessionSecret: 'preview-session-secret-0123456789abcdef0123456789',
     publicOrigin: 'https://cinderella.example.org',
+    rpId: 'cinderella.example.org',
+    webauthnOrigin: 'https://cinderella.example.org',
+    rpName: 'Cinderella Admin',
   };
   const cfg: Config = {
     botDisplayName: 'Cinderella',
@@ -103,6 +107,7 @@ async function main(): Promise<void> {
     logLevel: 'info',
   };
   const settings = await SettingsService.load(db, cfg.logLevel);
+  const security = await SecurityService.load(db);
 
   registerNav();
   const app = buildServer({
@@ -110,6 +115,7 @@ async function main(): Promise<void> {
     adminCfg,
     mediaRoot: cfg.mediaRoot,
     settings,
+    security,
     cfg,
     registerViews: registerAdminViews,
   });
