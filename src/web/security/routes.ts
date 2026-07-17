@@ -172,7 +172,16 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AdminContext): voi
   app.get('/login', async (req, reply) => {
     if (req.session) return reply.redirect('/');
     reply.type('text/html');
-    return loginPage(ctx, setFreshLoginToken(reply));
+    // Reuse an existing valid login-CSRF token rather than always minting a new
+    // one. Otherwise a concurrent/background GET /login — e.g. the browser's
+    // /favicon.ico fetch, which the auth guard 302s here — would rotate the
+    // cookie out from under the already-rendered form, so the eventual submit
+    // fails with "Session expired". (The token stays per-browser, HttpOnly,
+    // signed — reuse does not weaken the double-submit guarantee.)
+    const existing = req.cookies[LOGIN_CSRF_COOKIE];
+    const unsigned = existing ? req.unsignCookie(existing) : { valid: false as const, value: null };
+    const token = unsigned.valid && unsigned.value ? unsigned.value : setFreshLoginToken(reply);
+    return loginPage(ctx, token);
   });
 
   // --- WebAuthn: login ceremony (usernameless, discoverable) ---

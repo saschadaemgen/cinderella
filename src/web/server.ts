@@ -158,6 +158,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const isPublic =
       path === '/login' ||
       path === '/healthz' ||
+      path === '/favicon.ico' ||
       path.startsWith('/assets/') ||
       path.startsWith('/webauthn/login/');
     if (isPublic || req.session) return;
@@ -188,6 +189,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   app.get('/healthz', () => ({ ok: true }));
+  // Answer the browser's favicon probe directly so it never 302s through /login
+  // (which would rotate the login-CSRF cookie mid-login).
+  app.get('/favicon.ico', (_req, reply) => reply.code(204).send());
 
   // Auth routes (login page, WebAuthn ceremonies, break-glass, logout, step-up).
   registerAuthRoutes(app, ctx);

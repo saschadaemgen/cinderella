@@ -108,6 +108,33 @@ async function main(): Promise<void> {
   let session = await login();
   check('break-glass password login works by default (bootstrap)', session !== '');
   const authed = { cookie: session };
+
+  // --- Regression (login "Session expired" hotfix): a background 2nd GET /login
+  // (e.g. the browser's favicon fetch, 302'd here) must NOT rotate the login-CSRF
+  // cookie out from under the rendered form. ---
+  {
+    const g1 = await app.inject({ method: 'GET', url: '/login' });
+    const tokA = /name="_csrf" value="([a-f0-9]{64})"/.exec(g1.body)?.[1] ?? '';
+    const cookie1 = cookieOf(g1.headers['set-cookie'], 'cinderella_login_csrf') ?? '';
+    const g2 = await app.inject({ method: 'GET', url: '/login', headers: { cookie: cookie1 } });
+    check(
+      '2nd GET /login does NOT rotate the login-CSRF cookie',
+      cookieOf(g2.headers['set-cookie'], 'cinderella_login_csrf') === null,
+    );
+    const post = await app.inject({
+      method: 'POST',
+      url: '/login',
+      payload: { username: 'operator', password: PASSWORD, _csrf: tokA },
+      headers: { cookie: cookie1 },
+    });
+    check(
+      'login succeeds after a background 2nd GET /login (no "Session expired")',
+      post.statusCode === 302,
+      `status=${post.statusCode}`,
+    );
+    const fav = await app.inject({ method: 'GET', url: '/favicon.ico' });
+    check('favicon returns 204 (no 302 to /login)', fav.statusCode === 204);
+  }
   async function csrf(): Promise<string> {
     const p = await app.inject({ method: 'GET', url: '/security', headers: authed });
     return /data-csrf="([a-f0-9]{64})"/.exec(p.body)?.[1] ?? '';
