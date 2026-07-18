@@ -39,6 +39,10 @@ async function main(): Promise<void> {
       log.error('Avatar was not applied (file missing/unreadable or update did not stick).');
       process.exit(1);
     }
+    // The profile update transmits to group members asynchronously; keep the core
+    // alive briefly so the broadcast actually goes out before we close.
+    log.info('Broadcasting profile update to group members…');
+    await new Promise((r) => setTimeout(r, 15000));
     log.info('✓ Avatar applied, broadcast, and verified. Start the service again.');
   } finally {
     await chat.stopChat().catch(() => undefined);
