@@ -5,7 +5,7 @@
  */
 
 import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { bot } from 'simplex-chat';
 import type { api } from 'simplex-chat';
 import type { T } from '@simplex-chat/types';
@@ -22,11 +22,25 @@ export interface BotHandle {
   close: () => Promise<void>;
 }
 
-/** Creates the directories the core and media store need. */
+/**
+ * Creates the directories the core and media store need, and pins the process
+ * temp dir to the files-folder filesystem.
+ *
+ * XFTP downloads are staged + decrypted in a temp dir, then `rename()`d into the
+ * files folder. If temp is on a different device (the default OS temp is `/tmp`,
+ * a tmpfs — and the systemd unit's PrivateTmp isolates it further) that rename
+ * fails with EXDEV ("Invalid cross-device link") and the file never lands, so
+ * every receive stalls. Putting temp on the same filesystem as the files folder
+ * makes the move a cheap same-device rename.
+ */
 async function ensureDirs(cfg: Config): Promise<void> {
   await mkdir(dirname(cfg.simplexDbPrefix), { recursive: true });
   await mkdir(cfg.simplexFilesFolder, { recursive: true });
   await mkdir(cfg.mediaRoot, { recursive: true });
+  const tmpDir = join(dirname(cfg.simplexFilesFolder), 'xftp-tmp');
+  await mkdir(tmpDir, { recursive: true });
+  // The Haskell core reads TMPDIR at each temp operation; set it before startup.
+  process.env['TMPDIR'] = tmpDir;
 }
 
 /**

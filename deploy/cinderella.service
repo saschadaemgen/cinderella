@@ -24,6 +24,10 @@ User=cinderella
 Group=cinderella
 WorkingDirectory=/opt/cinderella
 EnvironmentFile=/etc/cinderella/cinderella.env
+# XFTP stages downloads in TMPDIR then rename()s them into the files folder; keep
+# temp on the SAME filesystem as /var/lib/cinderella or the move fails with EXDEV
+# (the default /tmp is a separate tmpfs, isolated further by PrivateTmp below).
+Environment=TMPDIR=/var/lib/cinderella/xftp-tmp
 ExecStart=/usr/bin/node /opt/cinderella/dist/index.js
 Restart=on-failure
 RestartSec=5
