@@ -47,29 +47,24 @@ export async function buildAvatarDataUri(source: Buffer): Promise<string> {
 }
 
 /**
- * Ensures the bot's SimpleX profile carries the avatar. Safe to call on every
- * startup — no-op if the avatar file is absent. Returns true if the image is
- * present after the call.
+ * Ensures the bot's SimpleX profile carries an avatar.
  *
- * `apiUpdateProfile` always BROADCASTS the profile (to contacts + groups), so by
- * default we skip the update when the stored image already matches, to avoid
- * needless per-boot broadcasts. Pass `force` to broadcast unconditionally — used
- * by the `set-avatar` CLI to (re)push the avatar to existing group members.
+ * IMPORTANT — non-destructive on boot: `apiUpdateProfile` only propagates a
+ * profile change to direct CONTACTS, not to already-joined group members (the
+ * core exposes no member-profile broadcast command), so it cannot push an avatar
+ * to the group. The reliable way to set the group avatar is the SimpleX desktop
+ * app run against this DB. Therefore, when called WITHOUT `force` (i.e. on every
+ * startup), this only sets the image if one is MISSING — it never overwrites or
+ * re-encodes an image already on the profile (which would clobber what the
+ * desktop app set). Pass `force` (the `set-avatar` CLI) to set it deliberately.
+ *
+ * Returns true if the image is present after the call.
  */
 export async function ensureAvatar(
   chat: Chat,
   avatarPath: string,
   force = false,
 ): Promise<boolean> {
-  let source: Buffer;
-  try {
-    source = await readFile(avatarPath);
-  } catch {
-    log.debug(`No avatar file at ${avatarPath}; leaving profile image as-is.`);
-    return false;
-  }
-
-  const dataUri = await buildAvatarDataUri(source);
   const user = await chat.apiGetActiveUser();
   if (!user) {
     log.warn('Cannot apply avatar: no active SimpleX user.');
@@ -77,6 +72,20 @@ export async function ensureAvatar(
   }
   const profile = util.fromLocalProfile(user.profile);
 
+  if (!force && profile.image && profile.image.length > 0) {
+    // An image is already set (possibly by the desktop app) — leave it untouched.
+    log.debug('Avatar already present on profile; leaving it as-is (non-destructive).');
+    return true;
+  }
+
+  let source: Buffer;
+  try {
+    source = await readFile(avatarPath);
+  } catch {
+    log.debug(`No avatar file at ${avatarPath}; leaving profile image as-is.`);
+    return false;
+  }
+  const dataUri = await buildAvatarDataUri(source);
   if (!force && profile.image === dataUri) {
     log.debug('Avatar already up to date.');
     return true;
