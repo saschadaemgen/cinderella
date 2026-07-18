@@ -82,6 +82,12 @@ export async function startBot(cfg: Config, opts: StartBotOptions = {}): Promise
       createAddress: false,
       updateAddress: false,
       allowFiles: true,
+      // Do NOT let bot.run reconcile the profile: it passes an image-less profile
+      // and would broadcast a BLANK-avatar update to the group on every restart
+      // (then ensureAvatar re-broadcasts the image). That blank-then-image churn
+      // can leave members rendering no avatar. We manage the profile/avatar
+      // ourselves via ensureAvatar below.
+      updateProfile: false,
       logContacts: true,
       logNetwork: false,
     },

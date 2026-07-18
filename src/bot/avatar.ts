@@ -47,11 +47,20 @@ export async function buildAvatarDataUri(source: Buffer): Promise<string> {
 }
 
 /**
- * Ensures the bot's SimpleX profile carries the avatar. Idempotent: only updates
- * when the stored image differs. Safe to call on every startup. No-op if the
- * avatar file is absent. Returns true if the image is present after the call.
+ * Ensures the bot's SimpleX profile carries the avatar. Safe to call on every
+ * startup — no-op if the avatar file is absent. Returns true if the image is
+ * present after the call.
+ *
+ * `apiUpdateProfile` always BROADCASTS the profile (to contacts + groups), so by
+ * default we skip the update when the stored image already matches, to avoid
+ * needless per-boot broadcasts. Pass `force` to broadcast unconditionally — used
+ * by the `set-avatar` CLI to (re)push the avatar to existing group members.
  */
-export async function ensureAvatar(chat: Chat, avatarPath: string): Promise<boolean> {
+export async function ensureAvatar(
+  chat: Chat,
+  avatarPath: string,
+  force = false,
+): Promise<boolean> {
   let source: Buffer;
   try {
     source = await readFile(avatarPath);
@@ -68,7 +77,7 @@ export async function ensureAvatar(chat: Chat, avatarPath: string): Promise<bool
   }
   const profile = util.fromLocalProfile(user.profile);
 
-  if (profile.image === dataUri) {
+  if (!force && profile.image === dataUri) {
     log.debug('Avatar already up to date.');
     return true;
   }

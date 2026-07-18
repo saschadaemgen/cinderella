@@ -32,12 +32,14 @@ async function main(): Promise<void> {
   );
   await chat.startChat();
   try {
-    const ok = await ensureAvatar(chat, file);
+    // force: always broadcast the profile update so existing group members
+    // receive the avatar (not just a local DB write).
+    const ok = await ensureAvatar(chat, file, true);
     if (!ok) {
       log.error('Avatar was not applied (file missing/unreadable or update did not stick).');
       process.exit(1);
     }
-    log.info('✓ Avatar applied and verified. Start the service again.');
+    log.info('✓ Avatar applied, broadcast, and verified. Start the service again.');
   } finally {
     await chat.stopChat().catch(() => undefined);
     await chat.close().catch(() => undefined);
