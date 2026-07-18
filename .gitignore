@@ -13,6 +13,9 @@ dist/
 media/
 state/
 
+# Operator-supplied avatar image (applied via `npm run avatar` — not repo content)
+avatar.*
+
 # Generated front-end assets (built by `npm run assets`)
 public/
 

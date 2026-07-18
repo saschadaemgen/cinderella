@@ -41,15 +41,22 @@ const FAILURE_REPLY =
 
 /**
  * Consent-first welcome message posted to the group on join (briefing §9,
- * Addendum 2 A2.7). Explains that publication is opt-in and how to revoke.
+ * Addendum 2 A2.7, Connect & Go-Live C.2). Cinderella's own voice; it is the
+ * consent notice that does the legal work — plain text, posted verbatim (SimpleX
+ * renders no markdown). Do not paraphrase.
  */
-export const WELCOME_MESSAGE =
-  "Hi! I'm Cinderella, an archive bot for this group. I can republish messages " +
-  'on a public web archive - but ONLY from members who explicitly opt in. ' +
-  'Nothing you post is published unless you choose to. ' +
-  'To opt in, send /publish. To opt out at any time (which also removes your ' +
-  'already-published messages), send /unpublish. Publishing is forward-only: ' +
-  'only messages you send after opting in are ever published.';
+export const WELCOME_MESSAGE = `I'm Cinderella, and yes, I run this place.
+
+Before you settle in, one thing you should know. By default, whatever you say here stays here, between us. I publish nothing of yours to the outside world unless you tell me to.
+
+If you want your words to step into the light and join the public record, that is your call. Say so, and I will carry your messages, meaning your text, images, video and links, out to my public archive, a searchable page kept for good, with your name on it. From the moment you say yes, and only forward from there. Never behind your back.
+
+To let me publish for you, send /publish
+To take it all back, send /unpublish, and I will stop at once and pull anything of yours already out there back into the dark.
+
+No /publish, and you simply talk freely. Nothing leaves this room. Your choice, always, and yours to change whenever you like.
+
+Cinderella`;
 
 async function reply(botHandle: BotHandle, msg: CapturedMessage, text: string): Promise<void> {
   try {

@@ -2,11 +2,15 @@
 
 > The tireless worker — first into the group, never resting, endlessly diligent.
 
-Cinderella is a **consent-based SimpleX-group-to-web archive bot**. It joins a
-public SimpleX group that the operator controls, captures every message that
-**opted-in** members contribute (text, images, videos, files, links), stores it
-in a database alongside the media files, and later republishes it as a
-searchable, sortable public web archive.
+**Cinderella is the central AI / identity of this system** — the top-level
+product. This repo builds her **first capability**: a consent-based
+SimpleX-group-to-web **archive**. (Later seasons bring a team of additional
+agents under the same identity.)
+
+As the archive, she joins a public SimpleX group that the operator controls,
+captures every message that **opted-in** members contribute (text, images,
+videos, files, links), stores it in a database alongside the media files, and
+later republishes it as a searchable, sortable public web archive.
 
 ## The one rule that matters most: consent-first
 

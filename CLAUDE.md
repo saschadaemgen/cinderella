@@ -1,10 +1,14 @@
 # CLAUDE.md — Cinderella standing context
 
-Cinderella is a **consent-based SimpleX-group-to-web archive bot**. It joins a
-public SimpleX group the operator controls, captures opted-in members' messages
-(text/image/video/voice/file/link) into PostgreSQL + a media tree on disk, and
-(later season) republishes them as a searchable public web archive. Standalone —
-NOT part of CARVILON, CyberDesk, or SimpleGoX.
+**Cinderella is the central AI / identity of this system** — the top-level
+product, not just a bot. The consent-based SimpleX-group-to-web **archive is her
+first capability**; later she brings a team of additional agents. Treat
+"Cinderella" as the identity, with the archive as one capability under her.
+
+As the archive, she joins a public SimpleX group the operator controls, captures
+opted-in members' messages (text/image/video/voice/file/link) into PostgreSQL +
+a media tree on disk, and (later season) republishes them as a searchable public
+web archive. Standalone — NOT part of CARVILON, CyberDesk, or SimpleGoX.
 
 ## The one rule: consent-first
 
