@@ -16,6 +16,7 @@
 import { loadAdminConfig, loadConfig, redactConfig, type Config } from './config.js';
 import { log, setLogLevel } from './log.js';
 import { startBot, type BotHandle } from './bot/client.js';
+import { flushAvatarToGroups } from './bot/avatar.js';
 import { registerCapture } from './capture/handler.js';
 import { makePersistenceHooks } from './capture/persist.js';
 import { makeConsentHandler } from './consent/commands.js';
@@ -104,6 +105,15 @@ async function startCaptureWorker(
     registerCapture(botHandle, cfg, hooks, { targetGroupId });
     await reportGroups(botHandle, cfg);
     status.botRunning(groupNames);
+
+    // Push the avatar to group members: the core only sends the member-profile
+    // update (XInfo, incl. avatar) when the bot next sends a GROUP message. This
+    // sends one minimal message per distinct avatar (marker-gated — no spam).
+    try {
+      await flushAvatarToGroups(botHandle.chat, getPool());
+    } catch (err) {
+      log.warn(`Avatar group-flush failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return botHandle;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -15,10 +15,14 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import type { api } from 'simplex-chat';
 import { util } from 'simplex-chat';
+import type { T } from '@simplex-chat/types';
 import { log } from '../log.js';
+import { getSetting, setSetting } from '../db/settings.js';
+import type { Queryable } from '../db/pool.js';
 
 type Chat = api.ChatApi;
 
@@ -49,14 +53,12 @@ export async function buildAvatarDataUri(source: Buffer): Promise<string> {
 /**
  * Ensures the bot's SimpleX profile carries an avatar.
  *
- * IMPORTANT — non-destructive on boot: `apiUpdateProfile` only propagates a
- * profile change to direct CONTACTS, not to already-joined group members (the
- * core exposes no member-profile broadcast command), so it cannot push an avatar
- * to the group. The reliable way to set the group avatar is the SimpleX desktop
- * app run against this DB. Therefore, when called WITHOUT `force` (i.e. on every
- * startup), this only sets the image if one is MISSING — it never overwrites or
- * re-encodes an image already on the profile (which would clobber what the
- * desktop app set). Pass `force` (the `set-avatar` CLI) to set it deliberately.
+ * `apiUpdateProfile` writes the image and bumps `userMemberProfileUpdatedAt`, but
+ * only SENDS the update to direct CONTACTS — group members receive it when the
+ * bot next sends a GROUP message (see flushAvatarToGroups). Non-destructive on
+ * boot: when called WITHOUT `force`, this only sets the image if one is MISSING,
+ * so it never re-encodes/clobbers an image already on the profile. Pass `force`
+ * (the `set-avatar` CLI) to set it deliberately.
  *
  * Returns true if the image is present after the call.
  */
@@ -105,4 +107,63 @@ export async function ensureAvatar(
       `${stored.length} char data URI stored (was ${profile.image ? 'different' : 'blank'}).`,
   );
   return true;
+}
+
+/** Marker (in `settings`) recording which avatar has been flushed to the group. */
+const FLUSH_MARKER_KEY = 'avatarGroupFlushMarker';
+/** A minimal, one-time group message whose only job is to flush the profile. */
+const FLUSH_MESSAGE = '🕯️✨';
+
+/**
+ * Flushes the bot's member profile (incl. avatar) to its groups.
+ *
+ * The SimpleX core only sends a member-profile update (`XInfo`) to a group when
+ * the bot next sends a GROUP message — it piggybacks the profile when
+ * `userMemberProfileSentAt < userMemberProfileUpdatedAt` (setting the avatar
+ * advances the latter). `apiUpdateProfile` alone reaches contacts only, so
+ * without a group send the avatar never reaches members.
+ *
+ * This sends ONE minimal group message per distinct avatar (gated by a hash
+ * marker in `settings`, so restarts don't spam). After the send the core has
+ * flushed the profile and won't re-piggyback; normal command replies keep it
+ * current thereafter.
+ */
+export async function flushAvatarToGroups(chat: Chat, db: Queryable): Promise<void> {
+  const user = await chat.apiGetActiveUser();
+  if (!user) return;
+  const image = util.fromLocalProfile(user.profile).image;
+  if (!image) return; // nothing to flush
+
+  const marker = createHash('sha256').update(image).digest('hex').slice(0, 16);
+  const stored = await getSetting(db, FLUSH_MARKER_KEY);
+  if (stored === marker) {
+    log.debug('Avatar already flushed to groups; no group send needed.');
+    return;
+  }
+
+  // Attempt every group; a non-connected group just errors and is skipped (the
+  // GroupMemberStatus runtime value doesn't reliably match the typed enum, so we
+  // don't pre-filter on it).
+  const groups = await chat.apiListGroups(user.userId);
+  let sent = 0;
+  for (const g of groups) {
+    try {
+      const chatInfo: T.ChatInfo = { type: 'group', groupInfo: g };
+      await chat.apiSendTextMessage(chatInfo, FLUSH_MESSAGE);
+      sent++;
+    } catch (err) {
+      log.warn(
+        `Could not flush profile to group ${g.localDisplayName}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+  if (sent > 0) {
+    await setSetting(db, FLUSH_MARKER_KEY, marker);
+    log.info(
+      `Flushed member profile (avatar) to ${sent} group(s) via one group message — ` +
+        'members receive the XInfo profile update on this send.',
+    );
+  }
 }
