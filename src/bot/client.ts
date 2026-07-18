@@ -12,6 +12,7 @@ import type { T } from '@simplex-chat/types';
 import type { Config } from '../config.js';
 import { log } from '../log.js';
 import { FileReceiver } from './files.js';
+import { ensureAvatar } from './avatar.js';
 
 type Chat = api.ChatApi;
 
@@ -88,6 +89,14 @@ export async function startBot(cfg: Config, opts: StartBotOptions = {}): Promise
   log.info(`SimpleX core started as "${user.profile.displayName}" (userId=${user.userId}).`);
 
   await configureFilesFolder(chat, cfg.simplexFilesFolder);
+
+  // bot.run() reconciles the profile without the image, blanking any avatar on
+  // every restart — re-apply it idempotently now (no-op if the file is absent).
+  try {
+    await ensureAvatar(chat, cfg.avatarPath);
+  } catch (err) {
+    log.warn(`Avatar re-apply failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const fileReceiver = new FileReceiver(chat, cfg.simplexFilesFolder, opts.getFileTimeoutMs);
   chat.on('rcvFileComplete', (ev) => fileReceiver.handleComplete(ev));

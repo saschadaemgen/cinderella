@@ -75,6 +75,7 @@ async function main(): Promise<void> {
     simplexFilesFolder: './state/files',
     groupName: '',
     mediaRoot: process.cwd(),
+    avatarPath: '',
     databaseUrl: 'postgres://cinderella:pw@127.0.0.1:5432/cinderella',
     logLevel: 'info',
   };

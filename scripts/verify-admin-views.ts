@@ -111,6 +111,7 @@ async function main(): Promise<void> {
     simplexFilesFolder: '/var/lib/cinderella/files',
     groupName: 'cinderella-test',
     mediaRoot: process.cwd(),
+    avatarPath: '',
     databaseUrl: `postgres://cinderella:${DB_PASSWORD_SECRET}@127.0.0.1:5432/cinderella`,
     logLevel: 'info',
   };

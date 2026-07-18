@@ -74,6 +74,7 @@ async function main(): Promise<void> {
     simplexFilesFolder: './f',
     groupName: '',
     mediaRoot: process.cwd(),
+    avatarPath: '',
     databaseUrl: 'postgres://cinderella:pw@127.0.0.1:5432/cinderella',
     logLevel: 'info',
   };
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
     settings,
     security,
     mediaRoot: process.cwd(),
+    avatarPath: '',
     registerViews: registerAdminViews,
   });
   await app.ready();
@@ -124,6 +126,7 @@ async function main(): Promise<void> {
       settings,
       security,
       mediaRoot: process.cwd(),
+      avatarPath: '',
       registerViews: registerAdminViews,
     });
     await app2.ready();

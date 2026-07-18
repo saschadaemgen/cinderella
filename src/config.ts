@@ -32,6 +32,12 @@ export interface Config {
   groupName: string;
   /** Absolute path to Cinderella's own media store. */
   mediaRoot: string;
+  /**
+   * Path to the bot's avatar image (jpg/png/webp). Re-applied to the SimpleX
+   * profile on every startup (bot.run blanks it otherwise). Optional — if the
+   * file is absent the profile image is left as-is.
+   */
+  avatarPath: string;
   /** PostgreSQL connection string (the archive DB — separate from the SimpleX DB). */
   databaseUrl: string;
   /** Log verbosity. */
@@ -91,12 +97,15 @@ let cached: Config | undefined;
 export function loadConfig(): Config {
   if (cached) return cached;
 
+  const filesFolder = resolve(optional('SIMPLEX_FILES_FOLDER', './state/files'));
   const cfg: Config = {
     botDisplayName: optional('BOT_DISPLAY_NAME', 'Cinderella'),
     simplexDbPrefix: resolve(optional('SIMPLEX_DB_PREFIX', './state/simplex/cinderella')),
-    simplexFilesFolder: resolve(optional('SIMPLEX_FILES_FOLDER', './state/files')),
+    simplexFilesFolder: filesFolder,
     groupName: optional('GROUP_NAME', ''),
     mediaRoot: resolve(optional('MEDIA_ROOT', './media')),
+    // Default next to the runtime data (e.g. /var/lib/cinderella/avatar.jpg).
+    avatarPath: resolve(optional('AVATAR_PATH', resolve(filesFolder, '..', 'avatar.jpg'))),
     databaseUrl: required('DATABASE_URL'),
     logLevel: parseLogLevel(process.env['LOG_LEVEL']),
   };
