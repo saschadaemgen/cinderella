@@ -12,7 +12,7 @@ import type { T } from '@simplex-chat/types';
 import type { Config } from '../config.js';
 import { log } from '../log.js';
 import { FileReceiver } from './files.js';
-import { ensureAvatar } from './avatar.js';
+import { loadAvatarDataUri } from './avatar.js';
 
 type Chat = api.ChatApi;
 
@@ -72,9 +72,19 @@ export interface StartBotOptions {
 export async function startBot(cfg: Config, opts: StartBotOptions = {}): Promise<BotHandle> {
   await ensureDirs(cfg);
 
+  // Carry the avatar IN the boot profile so the SDK's updateBotUserProfile applies
+  // it (and self-heals it on any boot where it differs). undefined if no file.
+  const image = await loadAvatarDataUri(cfg.avatarPath);
+
   log.info('Starting embedded SimpleX chat core…');
   const [chat, user] = await bot.run({
-    profile: { displayName: cfg.botDisplayName, fullName: '' },
+    profile: {
+      displayName: cfg.botDisplayName,
+      fullName: '',
+      // Only set `image` when we actually have one — a profile with image:undefined
+      // must deep-equal the stored profile so bot.run doesn't churn the update.
+      ...(image ? { image } : {}),
+    },
     dbOpts: { type: 'sqlite', filePrefix: cfg.simplexDbPrefix },
     options: {
       // Consent bot: no open contact address (commands arrive in-group), but
@@ -82,27 +92,25 @@ export async function startBot(cfg: Config, opts: StartBotOptions = {}): Promise
       createAddress: false,
       updateAddress: false,
       allowFiles: true,
-      // Do NOT let bot.run reconcile the profile: it passes an image-less profile
-      // and would broadcast a BLANK-avatar update to the group on every restart
-      // (then ensureAvatar re-broadcasts the image). That blank-then-image churn
-      // can leave members rendering no avatar. We manage the profile/avatar
-      // ourselves via ensureAvatar below.
-      updateProfile: false,
+      // Reconcile the profile ONLY when we actually loaded an avatar: then bot.run
+      // applies the FULL profile (image included) and self-heals it whenever it
+      // differs from the stored one. If the avatar file is missing/unreadable at
+      // boot, `image` is undefined — we must NOT let the SDK reconcile, or it
+      // would deep-diff the image-less profile against the stored one and WIPE the
+      // avatar (then propagate the blank to the group). false = leave the stored
+      // profile untouched. Existing members get the avatar via flushAvatarToGroups
+      // (a profile update alone only reaches direct contacts, of which we have 0).
+      updateProfile: image !== undefined,
       logContacts: true,
       logNetwork: false,
     },
   });
-  log.info(`SimpleX core started as "${user.profile.displayName}" (userId=${user.userId}).`);
+  log.info(
+    `SimpleX core started as "${user.profile.displayName}" (userId=${user.userId})` +
+      `${image ? ' with avatar' : ' (no avatar file)'}.`,
+  );
 
   await configureFilesFolder(chat, cfg.simplexFilesFolder);
-
-  // bot.run() reconciles the profile without the image, blanking any avatar on
-  // every restart — re-apply it idempotently now (no-op if the file is absent).
-  try {
-    await ensureAvatar(chat, cfg.avatarPath);
-  } catch (err) {
-    log.warn(`Avatar re-apply failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
 
   const fileReceiver = new FileReceiver(chat, cfg.simplexFilesFolder, opts.getFileTimeoutMs);
   chat.on('rcvFileComplete', (ev) => fileReceiver.handleComplete(ev));

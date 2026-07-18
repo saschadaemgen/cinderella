@@ -120,21 +120,34 @@ systemctl start cinderella
 
 ## Set the bot avatar
 
-Place the image on the VPS (e.g. `/var/lib/cinderella/avatar.jpg`, readable by
-the `cinderella` user) — SimpleX profile images ride inside the profile
-broadcast, so the tool auto-downscales to a 192px square JPEG (a full-size photo
-is silently never applied). It re-reads the profile to verify the image stuck.
+The avatar is carried **in the boot profile**: on startup the bot loads the image
+at `AVATAR_PATH` (default `/var/lib/cinderella/avatar.jpg`), auto-downscales it to
+a small square JPEG (SimpleX profile images ride inside the profile message
+envelope — a full-size photo is silently never applied), and the SDK applies /
+self-heals it. So the whole flow is **place the file, then restart** — no need to
+stop the service first (the DB is never opened by the avatar tooling):
 
 ```bash
-systemctl stop cinderella
-cd /opt/cinderella
-sudo -u cinderella env $(grep -vE '^#|^ADMIN_PASSWORD_HASH|^SESSION_SECRET' /etc/cinderella/cinderella.env | xargs) \
-  node dist/bot/set-avatar.js /var/lib/cinderella/avatar.jpg
-systemctl start cinderella
+# 1. Put the image where the bot reads it, owned by the cinderella user.
+sudo install -o cinderella -g cinderella -m 0644 avatar.jpg /var/lib/cinderella/avatar.jpg
+
+# 2. Apply it: restart picks up the new image and the boot-time group flush
+#    pushes it to existing members (one small group message, once per image).
+systemctl restart cinderella
 ```
 
-Admin sessions persist in PostgreSQL (`admin_sessions`), so restarts/deploys no
-longer log the operator out.
+Optional — validate the downscale and copy in one step with the helper (it only
+reads the image and writes it to `AVATAR_PATH`; it does **not** open the SimpleX
+core, so the service can stay running — then restart as above):
+
+```bash
+cd /opt/cinderella
+sudo -u cinderella env AVATAR_PATH=/var/lib/cinderella/avatar.jpg \
+  node dist/bot/set-avatar.js /path/to/source-image.jpg
+```
+
+Admin sessions persist in PostgreSQL (`admin_sessions`), so the restart does not
+log the operator out.
 
 ## Update
 

@@ -1,12 +1,18 @@
 /**
- * Bot avatar handling (Connect & Go-Live C.3 + restart-proofing).
+ * Bot avatar handling (Connect & Go-Live C.3, SDK-native).
  *
- * `bot.run()` reconciles the profile at startup and does NOT carry the `image`
- * field, so it blanks any previously-set avatar on every restart. We therefore
- * re-apply the avatar idempotently on EVERY boot: read the active profile, and if
- * the image is missing or differs from the intended one, update the profile with
- * the FULL existing profile plus the image (a partial profile would blank
- * displayName/fullName).
+ * The avatar is carried IN the profile passed to `bot.run`: the SDK's
+ * `updateBotUserProfile` (simplex-chat 6.5.4 `bot.ts`) deep-compares the config
+ * profile against the stored one and, when `updateProfile` is true (the default),
+ * calls `apiUpdateProfile(userId, profile)` with the FULL profile — image
+ * included. So we simply include the image in the boot profile: the core sets it
+ * on first run and self-heals it on any boot where it differs. (The earlier
+ * `updateProfile:false` + separate re-apply fought the SDK: a profile WITHOUT an
+ * image differed from the stored one WITH an image, so every boot blanked it.)
+ *
+ * `apiUpdateProfile` only notifies direct CONTACTS (the bot has none); existing
+ * GROUP members receive the avatar only when the bot next sends a group message
+ * — see flushAvatarToGroups.
  *
  * SimpleX profile images ride inside the profile message envelope (~15,610 bytes
  * encoded), so the avatar must be small — we downscale to a square JPEG and drop
@@ -51,62 +57,28 @@ export async function buildAvatarDataUri(source: Buffer): Promise<string> {
 }
 
 /**
- * Ensures the bot's SimpleX profile carries an avatar.
- *
- * `apiUpdateProfile` writes the image and bumps `userMemberProfileUpdatedAt`, but
- * only SENDS the update to direct CONTACTS — group members receive it when the
- * bot next sends a GROUP message (see flushAvatarToGroups). Non-destructive on
- * boot: when called WITHOUT `force`, this only sets the image if one is MISSING,
- * so it never re-encodes/clobbers an image already on the profile. Pass `force`
- * (the `set-avatar` CLI) to set it deliberately.
- *
- * Returns true if the image is present after the call.
+ * Reads the avatar file and returns a size-budgeted `data:image/jpg;base64,…`
+ * data URI to embed in the bot's `bot.run` profile, or `undefined` if no avatar
+ * file is present (or it can't be read). The SDK then applies/self-heals it.
  */
-export async function ensureAvatar(
-  chat: Chat,
-  avatarPath: string,
-  force = false,
-): Promise<boolean> {
-  const user = await chat.apiGetActiveUser();
-  if (!user) {
-    log.warn('Cannot apply avatar: no active SimpleX user.');
-    return false;
-  }
-  const profile = util.fromLocalProfile(user.profile);
-
-  if (!force && profile.image && profile.image.length > 0) {
-    // An image is already set (possibly by the desktop app) — leave it untouched.
-    log.debug('Avatar already present on profile; leaving it as-is (non-destructive).');
-    return true;
-  }
-
+export async function loadAvatarDataUri(avatarPath: string): Promise<string | undefined> {
   let source: Buffer;
   try {
     source = await readFile(avatarPath);
   } catch {
-    log.debug(`No avatar file at ${avatarPath}; leaving profile image as-is.`);
-    return false;
+    log.debug(`No avatar file at ${avatarPath}; bot profile will carry no image.`);
+    return undefined;
   }
   const dataUri = await buildAvatarDataUri(source);
-  if (!force && profile.image === dataUri) {
-    log.debug('Avatar already up to date.');
-    return true;
+  if (dataUri.length > MAX_DATA_URI_CHARS) {
+    // Over the profile envelope — the core would silently not propagate it.
+    log.warn(
+      `Avatar data URI is ${dataUri.length} chars (> ${MAX_DATA_URI_CHARS}); ` +
+        'it may not propagate to members. Use a simpler/smaller source image.',
+    );
   }
-
-  // Full profile + image — never a partial (that would blank displayName/fullName).
-  await chat.apiUpdateProfile(user.userId, { ...profile, image: dataUri });
-
-  const after = await chat.apiGetActiveUser();
-  const stored = after ? util.fromLocalProfile(after.profile).image : undefined;
-  if (!stored || stored.length < 100) {
-    log.error('Avatar update did not stick — profile image still empty after apiUpdateProfile.');
-    return false;
-  }
-  log.info(
-    `Avatar (re)applied on startup for "${profile.displayName}": ` +
-      `${stored.length} char data URI stored (was ${profile.image ? 'different' : 'blank'}).`,
-  );
-  return true;
+  log.info(`Avatar loaded from ${avatarPath}: ${dataUri.length} char data URI.`);
+  return dataUri;
 }
 
 /** Marker (in `settings`) recording which avatar has been flushed to the group. */

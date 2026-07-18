@@ -1,19 +1,22 @@
 /**
- * One-step tool to set the bot's SimpleX profile avatar (Connect & Go-Live C.3).
+ * Stages the bot's SimpleX profile avatar (Connect & Go-Live C.3).
  *
- *   # stop the service first (single-writer SimpleX DB), then:
  *   npm run avatar -- /path/to/avatar.jpg
- *   # then start the service again
+ *   # then restart the service to apply it
  *
- * Note: the service also re-applies the avatar on every startup (bot.run blanks
- * it), reading it from AVATAR_PATH — so the normal path is just to place the
- * image there. This tool applies a specific file immediately and verifies it.
+ * The avatar is applied by the running service: `bot.run` carries the image in
+ * the boot profile and the SDK's updateBotUserProfile sets/self-heals it (see
+ * src/bot/avatar.ts). So this tool does NOT open the SimpleX core (which is a
+ * single-writer DB the live service holds open) — it just validates the image
+ * fits the profile envelope and copies it to AVATAR_PATH. Restart the service to
+ * apply, and the boot-time group flush pushes it to existing members.
  */
 
-import { api, core } from 'simplex-chat';
-import { loadConfig } from '../config.js';
-import { log, setLogLevel } from '../log.js';
-import { ensureAvatar } from './avatar.js';
+import { copyFile, readFile, mkdir } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { resolveAvatarPath } from '../config.js';
+import { log } from '../log.js';
+import { buildAvatarDataUri } from './avatar.js';
 
 async function main(): Promise<void> {
   const file = process.argv[2];
@@ -22,37 +25,36 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  const cfg = loadConfig();
-  setLogLevel(cfg.logLevel);
+  // Only the avatar path is needed — no DB/admin env (this never opens the core).
+  const avatarPath = resolveAvatarPath();
 
-  log.info('Opening SimpleX core to update the profile…');
-  const chat = await api.ChatApi.init(
-    { type: 'sqlite', filePrefix: cfg.simplexDbPrefix },
-    core.MigrationConfirmation.YesUp,
-  );
-  await chat.startChat();
+  let source: Buffer;
   try {
-    // force: always broadcast the profile update so existing group members
-    // receive the avatar (not just a local DB write).
-    const ok = await ensureAvatar(chat, file, true);
-    if (!ok) {
-      log.error('Avatar was not applied (file missing/unreadable or update did not stick).');
-      process.exit(1);
-    }
-    // The profile update transmits to group members asynchronously; keep the core
-    // alive briefly so the broadcast actually goes out before we close.
-    log.info('Broadcasting profile update to group members…');
-    await new Promise((r) => setTimeout(r, 15000));
-    log.info('✓ Avatar applied, broadcast, and verified. Start the service again.');
-  } finally {
-    await chat.stopChat().catch(() => undefined);
-    await chat.close().catch(() => undefined);
+    source = await readFile(file);
+  } catch (err) {
+    log.error(`Cannot read image ${file}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
   }
+
+  // Validate it downscales to a data URI within the profile envelope.
+  const dataUri = await buildAvatarDataUri(source);
+  log.info(`Prepared avatar: ${dataUri.length} char data URI (image/jpg).`);
+
+  if (resolve(file) !== avatarPath) {
+    await mkdir(dirname(avatarPath), { recursive: true });
+    await copyFile(file, avatarPath);
+    log.info(`Copied avatar to ${avatarPath}.`);
+  } else {
+    log.info(`Avatar already at ${avatarPath}.`);
+  }
+
+  log.info('✓ Avatar staged. Restart the service to apply it to the bot profile');
+  log.info('  and flush it to existing group members (systemctl restart cinderella).');
 }
 
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    log.error(`Failed to set avatar: ${err instanceof Error ? err.message : String(err)}`);
+    log.error(`Failed to stage avatar: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   });

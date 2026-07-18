@@ -104,14 +104,23 @@ export function loadConfig(): Config {
     simplexFilesFolder: filesFolder,
     groupName: optional('GROUP_NAME', ''),
     mediaRoot: resolve(optional('MEDIA_ROOT', './media')),
-    // Default next to the runtime data (e.g. /var/lib/cinderella/avatar.jpg).
-    avatarPath: resolve(optional('AVATAR_PATH', resolve(filesFolder, '..', 'avatar.jpg'))),
+    avatarPath: resolveAvatarPath(),
     databaseUrl: required('DATABASE_URL'),
     logLevel: parseLogLevel(process.env['LOG_LEVEL']),
   };
 
   cached = cfg;
   return cfg;
+}
+
+/**
+ * Resolves the avatar path (env `AVATAR_PATH`, else next to the runtime data,
+ * e.g. `/var/lib/cinderella/avatar.jpg`). Standalone so the `set-avatar` helper
+ * can stage an image WITHOUT the DB/admin env that full `loadConfig` requires.
+ */
+export function resolveAvatarPath(): string {
+  const filesFolder = resolve(optional('SIMPLEX_FILES_FOLDER', './state/files'));
+  return resolve(optional('AVATAR_PATH', resolve(filesFolder, '..', 'avatar.jpg')));
 }
 
 let cachedAdmin: AdminConfig | undefined;
