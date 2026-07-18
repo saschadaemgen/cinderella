@@ -118,23 +118,37 @@ env $(grep -v '^#' /etc/cinderella/cinderella.env | xargs) npm run connect -- "<
 systemctl start cinderella
 ```
 
-## Set the bot avatar (when the operator supplies the image)
+## Set the bot avatar
+
+Place the image on the VPS (e.g. `/var/lib/cinderella/avatar.jpg`, readable by
+the `cinderella` user) — SimpleX profile images ride inside the profile
+broadcast, so the tool auto-downscales to a 192px square JPEG (a full-size photo
+is silently never applied). It re-reads the profile to verify the image stuck.
 
 ```bash
 systemctl stop cinderella
 cd /opt/cinderella
-env $(grep -v '^#' /etc/cinderella/cinderella.env | xargs) npm run avatar -- /path/to/avatar.png
+sudo -u cinderella env $(grep -vE '^#|^ADMIN_PASSWORD_HASH|^SESSION_SECRET' /etc/cinderella/cinderella.env | xargs) \
+  node dist/bot/set-avatar.js /var/lib/cinderella/avatar.jpg
 systemctl start cinderella
 ```
 
+Admin sessions persist in PostgreSQL (`admin_sessions`), so restarts/deploys no
+longer log the operator out.
+
 ## Update
+
+> The repo is **private**: the VPS cannot `git pull` anonymously. Either add a
+> read-only deploy key/token on the VPS, or ship commits with a git bundle:
+> `git bundle create /tmp/x.bundle main` (locally) → `scp` → on the VPS
+> `git pull /tmp/x.bundle main`.
 
 ```bash
 cd /opt/cinderella
-git pull
+git pull            # (needs a deploy key; else use the bundle above)
 npm ci && npm run build
 env $(grep -v '^#' /etc/cinderella/cinderella.env | xargs) node dist/db/migrate.js
-systemctl restart cinderella
+systemctl restart cinderella   # sessions survive this now
 ```
 
 ## Backup

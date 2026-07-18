@@ -53,8 +53,8 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   `capture/` (parse, media, links, persist), `consent/`, `settings/`, `db/`,
   `web/` (server, auth, session, views), `index.ts`.
 - `migrations/` — 001 messages/links · 002 consent+views · 003 admin · 004
-  moderation gate · 005 deletion provenance · 006 webauthn + TOTP. Runner:
-  `node dist/db/migrate.js`.
+  moderation gate · 005 deletion provenance · 006 webauthn + TOTP · 007 admin
+  sessions (persisted across restarts). Runner: `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.
 - Git-ignored: `.env`, `state/`, `media/`, `public/` (built assets), `dist/`.
