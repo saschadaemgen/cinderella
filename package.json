@@ -41,6 +41,7 @@
     "otplib": "^12.0.1",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
+    "sharp": "^0.33.5",
     "simplex-chat": "^6.5.4"
   },
   "devDependencies": {

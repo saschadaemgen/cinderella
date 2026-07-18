@@ -77,6 +77,7 @@ export function registerSecurity(app: FastifyInstance, ctx: ViewContext): void {
         /^(auth|passkey|security)\./.test(a.action),
       );
       const stepUp = await needsStepUp(ctx, req.session ?? null);
+      const activeSessions = await ctx.sessions.count();
       const notice = req.query.saved
         ? html`<div
             class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
@@ -346,7 +347,7 @@ ${s.passkey.allowedAaguids.join('\n')}</textarea>
             <button
               class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
             >
-              Log out other sessions (${ctx.sessions.count()} active)
+              Log out other sessions (${activeSessions} active)
             </button>
           </form>`,
       );
@@ -713,7 +714,7 @@ ${s.headers.csp}</textarea>
   // --- Sessions ---
   app.post('/security/logout-others', async (req, reply) => {
     if (req.session) {
-      const n = ctx.sessions.destroyOthers(req.session.sessionId);
+      const n = await ctx.sessions.destroyOthers(req.session.sessionId);
       await writeAudit(db, req.session.username, 'security.logout_others', `count:${n}`, null);
     }
     return reply.redirect('/security');

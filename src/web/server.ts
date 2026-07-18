@@ -81,7 +81,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const { db, adminCfg, cfg, settings, security } = deps;
   const app = Fastify({ trustProxy: 'loopback', logger: false });
 
-  const sessions = new SessionStore(() => {
+  const sessions = new SessionStore(db, () => {
     const s = security.get().session;
     return { idleMs: s.idleTimeoutMinutes * 60000, absoluteMs: s.absoluteMaxHours * 3600000 };
   });
@@ -132,7 +132,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // Global rate limit + IP access policy + session read + auth guard.
   app.addHook('onRequest', async (req, reply) => {
-    sessions.prune();
     loginLimiter.prune();
     globalLimiter.prune();
     challenges.prune();
@@ -153,7 +152,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       }
     }
 
-    req.session = readSession(req, sessions);
+    req.session = await readSession(req, sessions);
 
     const isPublic =
       path === '/login' ||
@@ -233,6 +232,14 @@ export type SecurityHeaderFn = (reply: FastifyReply, req: FastifyRequest) => voi
 export async function startAdminServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerNav();
   const app = buildServer(deps);
+  // Housekeeping: sweep abandoned expired sessions periodically. get() already
+  // evicts on access, so this only reaps sessions never touched again.
+  const sweeper = new SessionStore(deps.db, () => {
+    const s = deps.security.get().session;
+    return { idleMs: s.idleTimeoutMinutes * 60000, absoluteMs: s.absoluteMaxHours * 3600000 };
+  });
+  const pruneTimer = setInterval(() => void sweeper.prune().catch(() => undefined), 30 * 60 * 1000);
+  if (typeof pruneTimer.unref === 'function') pruneTimer.unref();
   await app.listen({ host: '127.0.0.1', port: deps.adminCfg.adminPort });
   log.info(
     `Admin console listening on 127.0.0.1:${deps.adminCfg.adminPort} (public via nginx TLS).`,

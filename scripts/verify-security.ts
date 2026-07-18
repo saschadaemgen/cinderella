@@ -21,6 +21,7 @@ import { registerAdminViews } from '../src/web/views/index.js';
 import { loadMigrationFiles } from '../src/db/migrate.js';
 import { SettingsService } from '../src/settings/service.js';
 import { SecurityService } from '../src/security/settings.js';
+import { SessionStore, readSession } from '../src/web/session.js';
 import { completeAuthentication, isCounterRegression } from '../src/web/security/webauthn.js';
 import {
   countCredentials,
@@ -108,6 +109,41 @@ async function main(): Promise<void> {
   let session = await login();
   check('break-glass password login works by default (bootstrap)', session !== '');
   const authed = { cookie: session };
+
+  // --- Regression (premature-logout hotfix): sessions persist across a restart ---
+  {
+    const persisted = (
+      await pg.query<{ n: number }>('SELECT count(*)::int AS n FROM admin_sessions')
+    ).rows[0]?.n;
+    check('session is persisted in admin_sessions (not in-memory)', (persisted ?? 0) >= 1);
+    // Simulate a `systemctl restart`: a brand-new server on the SAME database.
+    const app2 = buildServer({
+      db,
+      adminCfg,
+      cfg,
+      settings,
+      security,
+      mediaRoot: process.cwd(),
+      registerViews: registerAdminViews,
+    });
+    await app2.ready();
+    const afterRestart = await app2.inject({ method: 'GET', url: '/', headers: authed });
+    check(
+      'session survives a simulated restart (new server instance, same DB)',
+      afterRestart.statusCode === 200,
+      `status=${afterRestart.statusCode}`,
+    );
+    // A fresh SessionStore (as a new process would build) still resolves it.
+    const store2 = new SessionStore(db, () => ({ idleMs: 3600_000, absoluteMs: 86_400_000 }));
+    const sid = (await pg.query<{ id: string }>('SELECT id FROM admin_sessions LIMIT 1')).rows[0]
+      ?.id;
+    check(
+      'a new SessionStore reads the persisted session',
+      sid !== undefined && (await store2.get(sid)) !== null,
+    );
+    await app2.close();
+    void readSession; // (readSession is covered via the inject path above)
+  }
 
   // --- Regression (login "Session expired" hotfix): a background 2nd GET /login
   // (e.g. the browser's favicon fetch, 302'd here) must NOT rotate the login-CSRF

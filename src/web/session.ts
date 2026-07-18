@@ -1,15 +1,17 @@
 /**
- * Session + CSRF handling for the admin console (A3 §2/§4, extended in A4.5).
+ * Session + CSRF handling for the admin console (A3 §2/§4, A4.5).
  *
- * Server-side session store keyed by a random 256-bit id carried in a SIGNED
- * cookie (HMAC with SESSION_SECRET); cookie flags HttpOnly, Secure,
- * SameSite=Strict, Path=/. Idle + absolute lifetimes are admin-configurable.
- * Tracks the auth method (passkey/password) and the last passkey step-up, and
- * supports a single-session (log-out-others) policy.
+ * Sessions are persisted in PostgreSQL (the `admin_sessions` table) so they
+ * SURVIVE service restarts and deploys — previously an in-memory store logged the
+ * operator out on every `systemctl restart`. The session id lives in a SIGNED
+ * cookie (HMAC with the fixed SESSION_SECRET); cookie flags HttpOnly, Secure,
+ * SameSite=Strict, Path=/. Idle timeout is sliding (refreshed each request);
+ * there is also an absolute max age. Both are admin-configurable.
  */
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { Queryable } from '../db/pool.js';
 
 export const SESSION_COOKIE = 'cinderella_session';
 
@@ -20,81 +22,108 @@ export interface SessionLifetimes {
   absoluteMs: number;
 }
 
-interface SessionData {
+interface SessionRow {
+  id: string;
+  username: string;
+  csrf_token: string;
+  auth_method: string;
+  created_at: string;
+  last_seen_at: string;
+  last_step_up_at: string | null;
+}
+
+export interface SessionData {
   username: string;
   csrfToken: string;
   authMethod: AuthMethod;
   createdAt: number;
   lastSeenAt: number;
-  /** Last time a passkey step-up succeeded (passkey login counts). */
   lastStepUpAt: number;
 }
 
+function toData(r: SessionRow): SessionData {
+  return {
+    username: r.username,
+    csrfToken: r.csrf_token,
+    authMethod: r.auth_method === 'passkey' ? 'passkey' : 'password',
+    createdAt: new Date(r.created_at).getTime(),
+    lastSeenAt: new Date(r.last_seen_at).getTime(),
+    lastStepUpAt: r.last_step_up_at ? new Date(r.last_step_up_at).getTime() : 0,
+  };
+}
+
 export class SessionStore {
-  private readonly sessions = new Map<string, SessionData>();
+  constructor(
+    private readonly db: Queryable,
+    private readonly lifetimes: () => SessionLifetimes,
+  ) {}
 
-  constructor(private readonly lifetimes: () => SessionLifetimes) {}
-
-  create(username: string, authMethod: AuthMethod): { id: string; csrfToken: string } {
+  async create(
+    username: string,
+    authMethod: AuthMethod,
+  ): Promise<{ id: string; csrfToken: string }> {
     const id = randomBytes(32).toString('hex');
     const csrfToken = randomBytes(32).toString('hex');
-    const now = Date.now();
-    this.sessions.set(id, {
-      username,
-      csrfToken,
-      authMethod,
-      createdAt: now,
-      lastSeenAt: now,
-      // A passkey login is itself a fresh step-up; a password login is not.
-      lastStepUpAt: authMethod === 'passkey' ? now : 0,
-    });
+    // A passkey login is itself a fresh step-up; a password login is not.
+    const stepUp = authMethod === 'passkey' ? 'now()' : 'NULL';
+    await this.db.query(
+      `INSERT INTO admin_sessions (id, username, csrf_token, auth_method, last_step_up_at)
+       VALUES ($1, $2, $3, $4, ${stepUp})`,
+      [id, username, csrfToken, authMethod],
+    );
     return { id, csrfToken };
   }
 
-  get(id: string): SessionData | null {
-    const s = this.sessions.get(id);
-    if (!s) return null;
+  /** Returns the session if valid (and refreshes its idle timer); else null. */
+  async get(id: string): Promise<SessionData | null> {
+    const { rows } = await this.db.query<SessionRow>(`SELECT * FROM admin_sessions WHERE id = $1`, [
+      id,
+    ]);
+    const row = rows[0];
+    if (!row) return null;
+    const data = toData(row);
     const now = Date.now();
     const { idleMs, absoluteMs } = this.lifetimes();
-    if (now - s.lastSeenAt > idleMs || now - s.createdAt > absoluteMs) {
-      this.sessions.delete(id);
+    if (now - data.lastSeenAt > idleMs || now - data.createdAt > absoluteMs) {
+      await this.db.query(`DELETE FROM admin_sessions WHERE id = $1`, [id]);
       return null;
     }
-    s.lastSeenAt = now;
-    return s;
+    // Sliding idle expiry.
+    await this.db.query(`UPDATE admin_sessions SET last_seen_at = now() WHERE id = $1`, [id]);
+    data.lastSeenAt = now;
+    return data;
   }
 
-  markStepUp(id: string): void {
-    const s = this.sessions.get(id);
-    if (s) s.lastStepUpAt = Date.now();
+  async markStepUp(id: string): Promise<void> {
+    await this.db.query(`UPDATE admin_sessions SET last_step_up_at = now() WHERE id = $1`, [id]);
   }
 
-  destroy(id: string): void {
-    this.sessions.delete(id);
+  async destroy(id: string): Promise<void> {
+    await this.db.query(`DELETE FROM admin_sessions WHERE id = $1`, [id]);
   }
 
   /** Single-session policy: drop every session except the given one. */
-  destroyOthers(exceptId: string): number {
-    let n = 0;
-    for (const id of [...this.sessions.keys()]) {
-      if (id !== exceptId) {
-        this.sessions.delete(id);
-        n++;
-      }
-    }
-    return n;
+  async destroyOthers(exceptId: string): Promise<number> {
+    const { rowCount } = await this.db.query(`DELETE FROM admin_sessions WHERE id <> $1`, [
+      exceptId,
+    ]);
+    return rowCount ?? 0;
   }
 
-  count(): number {
-    return this.sessions.size;
+  async count(): Promise<number> {
+    const { rows } = await this.db.query<{ n: string }>(`SELECT count(*) AS n FROM admin_sessions`);
+    return Number(rows[0]?.n ?? 0);
   }
 
-  prune(): void {
-    const now = Date.now();
+  /** Removes expired sessions (called opportunistically). */
+  async prune(): Promise<void> {
     const { idleMs, absoluteMs } = this.lifetimes();
-    for (const [id, s] of this.sessions) {
-      if (now - s.lastSeenAt > idleMs || now - s.createdAt > absoluteMs) this.sessions.delete(id);
-    }
+    await this.db.query(
+      `DELETE FROM admin_sessions
+       WHERE now() - last_seen_at > ($1 || ' milliseconds')::interval
+          OR now() - created_at   > ($2 || ' milliseconds')::interval`,
+      [String(idleMs), String(absoluteMs)],
+    );
   }
 }
 
@@ -106,12 +135,15 @@ export interface AuthedSession {
   lastStepUpAt: number;
 }
 
-export function readSession(req: FastifyRequest, store: SessionStore): AuthedSession | null {
+export async function readSession(
+  req: FastifyRequest,
+  store: SessionStore,
+): Promise<AuthedSession | null> {
   const rawCookie = req.cookies[SESSION_COOKIE];
   if (!rawCookie) return null;
   const unsigned = req.unsignCookie(rawCookie);
   if (!unsigned.valid || !unsigned.value) return null;
-  const session = store.get(unsigned.value);
+  const session = await store.get(unsigned.value);
   if (!session) return null;
   return {
     sessionId: unsigned.value,
@@ -137,13 +169,6 @@ export function clearSessionCookie(reply: FastifyReply): void {
   reply.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 
-function constantTimeEquals(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
-
 function requestCsrfToken(req: FastifyRequest): string | null {
   const header = req.headers['x-csrf-token'];
   if (typeof header === 'string' && header.length > 0) return header;
@@ -158,5 +183,8 @@ function requestCsrfToken(req: FastifyRequest): string | null {
 export function csrfOk(req: FastifyRequest, session: AuthedSession): boolean {
   const token = requestCsrfToken(req);
   if (!token) return false;
-  return constantTimeEquals(token, session.csrfToken);
+  const a = Buffer.from(token);
+  const b = Buffer.from(session.csrfToken);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }

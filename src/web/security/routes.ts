@@ -157,9 +157,9 @@ async function startSession(
   username: string,
   method: AuthMethod,
 ): Promise<void> {
-  const { id } = ctx.sessions.create(username, method);
+  const { id } = await ctx.sessions.create(username, method);
   if (ctx.security.get().session.concurrent === 'single') {
-    ctx.sessions.destroyOthers(id);
+    await ctx.sessions.destroyOthers(id);
   }
   setSessionCookie(reply, id, absoluteMaxMs(ctx));
   await writeAudit(ctx.db, username, 'auth.login', `method:${method}`, { ip: req.ip });
@@ -302,7 +302,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AdminContext): voi
   });
 
   app.post('/logout', async (req, reply) => {
-    if (req.session) ctx.sessions.destroy(req.session.sessionId);
+    if (req.session) await ctx.sessions.destroy(req.session.sessionId);
     clearSessionCookie(reply);
     return reply.redirect('/login');
   });
@@ -334,7 +334,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AdminContext): voi
       );
       if (!result.ok) return reply.code(400).send({ error: result.error ?? 'registration failed' });
       // Registering counts as a fresh step-up.
-      if (req.session) ctx.sessions.markStepUp(req.session.sessionId);
+      if (req.session) await ctx.sessions.markStepUp(req.session.sessionId);
       return reply.send({ ok: true });
     },
   );
@@ -360,7 +360,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AdminContext): voi
       req.body as AuthenticationResponseJSON,
     );
     if (!result.ok) return reply.code(401).send({ error: 'step-up failed' });
-    ctx.sessions.markStepUp(req.session.sessionId);
+    await ctx.sessions.markStepUp(req.session.sessionId);
     await writeAudit(db, req.session.username, 'auth.stepup', 'passkey', { ip: req.ip });
     return reply.send({ ok: true });
   });
