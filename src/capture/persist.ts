@@ -20,6 +20,9 @@ import type { CaptureHooks } from './handler.js';
 import { extractLinks, linksToSearchText } from './links.js';
 import { storeMedia } from './media.js';
 
+/** Message types that carry a downloadable file. */
+const MEDIA_TYPES = new Set(['image', 'video', 'voice', 'file']);
+
 export function makePersistenceHooks(cfg: Config): CaptureHooks {
   return {
     onMessage: async (msg) => {
@@ -65,6 +68,19 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
           `${links.length ? ` (+${links.length} link(s))` : ''}` +
           `${msg.file ? ' — awaiting file' : ''}`,
       );
+
+      // A media-type message with no file transfer can never be downloaded —
+      // e.g. images shared as group history carry a preview thumbnail but no
+      // file descriptor. Record it so it is not counted as a perpetually-pending
+      // receipt on the dashboard.
+      if (!msg.file && MEDIA_TYPES.has(msg.type)) {
+        await recordMediaError(
+          getPool(),
+          msg.groupId,
+          msg.itemId,
+          'no downloadable file (shared without a file transfer — e.g. group history)',
+        );
+      }
     },
 
     onFileReceived: async (msg, file) => {
