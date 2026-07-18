@@ -13,8 +13,12 @@ dist/
 media/
 state/
 
-# Operator-supplied avatar image (applied via `npm run avatar` — not repo content)
-avatar.*
+# Operator-supplied avatar image at the repo root (applied via `npm run avatar`).
+# Root-anchored so it does NOT match source files like src/bot/avatar.ts.
+/avatar.jpg
+/avatar.jpeg
+/avatar.png
+/avatar.webp
 
 # Generated front-end assets (built by `npm run assets`)
 public/
