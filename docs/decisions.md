@@ -1,0 +1,233 @@
+# Cinderella — Decision Log
+
+> _Living document — Cinderella, Season 0. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S0-017**._
+
+Standing record of the architectural and operational decisions taken across
+Season 0, newest first. Each entry states the decision, a one-line rationale, and
+whether it is **IMPLEMENTED** (present in the code / config today) or **PLANNED**
+(committed direction, not yet in code). Where a decision differs from how the code
+actually behaves today, the divergence is called out inline.
+
+Companion documents: `seasons/SEASON-0-PROTOCOL.md` (close-out CCB-S0-017),
+`CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-013 — Consent to move to the private member-support scope (Season 1)
+**Status: PLANNED.**
+**Decision.** Onboarding and the `/publish` consent exchange will be conducted
+privately, per member, through SimpleX's member-support scope (knock → private
+greeting → `/publish` → accept), rather than in the shared group timeline.
+**Rationale.** SimpleX offers no per-member "whisper" inline in the main group
+timeline, so the member-support scope is the only private per-member channel for a
+one-to-one consent conversation.
+
+> **Note: the outline (and the Season 0 close-out) describe consent as "conducted
+> privately via the member-support scope." The code today does consent in-group,
+> not privately.** `parseConsentCommand` handles `/publish` / `/unpublish` that
+> "arrive as plain group messages to the bot," and the confirmation is sent as an
+> in-group reply via `apiSendTextReply` (`src/consent/commands.ts:4-6`, `:19-24`,
+> `:61-70`). The consent-first `WELCOME_MESSAGE` is defined in
+> `src/consent/commands.ts:48-59` but is actually *sent* to the group from the
+> one-shot `npm run connect` helper when the bot joins
+> (`src/bot/connect.ts:47-63`, `apiSendTextMessage`), not from `commands.ts` and
+> not privately. No member-support / support-scope code exists in `src/` (verified
+> by search: no matches for member-support / support-scope / whisper). The
+> private-scope flow is Season 1 scope — see `seasons/SEASON-0-PROTOCOL.md:100-104`.
+> The in-group reality is logged as D-004.
+
+---
+
+### D-012 — Local RTX 3090 hosts the AI brain; the bot pulls inference over a tunnel
+**Status: PLANNED.**
+**Decision.** The conversational/AI model ("the brain") runs locally on the
+operator's RTX 3090; the bot forwards free-form private messages to it over a
+secure tunnel and returns replies, while commands stay deterministic. The endpoint
+is to sit behind a single "AI endpoint" address so additional rented inference can
+be added later without a rebuild.
+**Rationale.** Keeps inference private and at zero marginal cost while the product
+is small, and decouples the model host from the bot.
+
+> **Note: no AI-brain, inference, or RTX code exists in the repository yet**
+> (verified: no matches for `rtx` / `3090` / `inference` / `ai brain` under
+> `src/`). This is Season 1 direction only — `seasons/SEASON-0-PROTOCOL.md:105-108`.
+
+---
+
+### D-011 — Seasons numbered from zero; every briefing carries a `CCB-S<season>-<NNN>` id
+**Status: IMPLEMENTED (process convention).**
+**Decision.** The unit of work is the **Season**, numbered from zero; Season 0 is
+the entire first block. Each briefing carries an id of the form `CCB-S0-017`, and
+that id goes in the resulting commit message. The earlier "Stages 0–7" framing is
+deprecated for new work.
+**Rationale.** A single, operator-mandated numbering scheme keeps briefings,
+commits, and documents traceable to one another.
+
+> **Note:** the deprecated "Stage" labels still exist as *historical* artifacts —
+> e.g. the internal task list carries "Stage 0…Stage 6" items. Per the directive
+> these are left as history and simply not used for new work
+> (`seasons/SEASON-0-PROTOCOL.md:21-29`).
+
+---
+
+### D-010 — Avatar carried inside the `bot.run` profile, then flushed to the group with one message
+**Status: IMPLEMENTED.**
+**Decision.** The bot avatar is passed as a data-URI `image` inside the profile
+given to `bot.run`, and `updateProfile` is enabled **only** when an avatar was
+actually loaded; a single minimal group message (`🕯️✨`, hash-gated in `settings`)
+then flushes the member-profile update to existing group members.
+**Rationale.** The SDK's `updateBotUserProfile` deep-compares against the stored
+profile, so an image-less profile would blank a stored avatar; and
+`apiUpdateProfile` reaches direct contacts only, so a group send is required to
+propagate the avatar to members.
+**Evidence.** `src/bot/client.ts:76-107` (image in boot profile;
+`updateProfile: image !== undefined`), `src/bot/avatar.ts:41-141`
+(`buildAvatarDataUri`, `flushAvatarToGroups`), `src/index.ts:113`
+(`flushAvatarToGroups` invoked at boot), `src/bot/set-avatar.ts`
+(`npm run avatar -- <img>` stages the file; restart applies).
+
+---
+
+### D-009 — Admin sessions persisted in PostgreSQL, not process memory
+**Status: IMPLEMENTED.**
+**Decision.** Admin sessions live in an `admin_sessions` table rather than
+in-process memory; the signed HttpOnly cookie carries only a stable id.
+**Rationale.** In-memory sessions were wiped on every `systemctl restart` (deploys,
+config changes), logging the operator out prematurely.
+**Evidence.** `migrations/007_sessions.sql:8` (`CREATE TABLE admin_sessions`),
+`:19` (`admin_sessions_last_seen_idx`); `src/web/session.ts`
+(`SessionStore` reads/writes `admin_sessions`); `src/web/server.ts:84-87`.
+
+---
+
+### D-008 — XFTP temp/work directory pinned to the media filesystem (EXDEV fix)
+**Status: IMPLEMENTED.**
+**Decision.** `TMPDIR` for the chat core is set to an `xftp-tmp` directory that
+sits on the same filesystem as the SimpleX files folder, created at boot before the
+core starts.
+**Rationale.** XFTP stages and decrypts a download in temp, then `rename()`s it into
+the files folder; if temp is on a different device (default `/tmp` tmpfs, further
+isolated by the systemd unit's `PrivateTmp`) the rename fails with `EXDEV` and every
+receive stalls. Same-filesystem temp makes the move a cheap rename.
+**Evidence.** `src/bot/client.ts:37-45` (`ensureDirs` sets `process.env['TMPDIR']`).
+
+---
+
+### D-007 — Appless public passkey console; WireGuard dropped from the admin path
+**Status: IMPLEMENTED.**
+**Decision.** The admin console is public over real TLS (nginx → Fastify on
+`127.0.0.1:8787`), with WebAuthn passkeys as primary auth and an admin-toggleable
+Argon2id break-glass path (optional TOTP). WireGuard is retired from the admin path;
+it stays installed only as optional defense-in-depth.
+**Rationale.** A tunnel-only console is friction for a solo operator and an obscure
+hostname is not a security control (Certificate Transparency exposes it); passkeys +
+the full A4.5 hardening suite provide the real control.
+**Evidence.** `src/web/server.ts:1-8`, `:80-82` (`trustProxy: 'loopback'`),
+`:110-188` (CSRF, step-up, IP allow/deny, rate limits, security headers),
+`:243-246` (binds `127.0.0.1`); the break-glass TOTP second factor is
+`migrations/006_webauthn.sql:27` (`CREATE TABLE admin_totp`);
+`deploy/nginx-admin.conf` (TLS vhost → `127.0.0.1:8787`);
+`deploy/wireguard.md:1-7` ("RETIRED as the admin path").
+
+---
+
+### D-006 — No host-wide firewall on the shared VPS; scope at the bind level
+**Status: IMPLEMENTED (operational posture).**
+**Decision.** Cinderella does not impose a host-wide firewall on the shared host;
+its own surface is confined by binding to loopback (admin `127.0.0.1:8787`, Postgres
+`127.0.0.1:5432`), and any host-wide firewall change is reviewed against neighbour
+services first.
+**Rationale.** The shared box runs other services that legitimately use many ports;
+a blanket firewall could break them, so Cinderella is scoped at the bind level and
+stays strictly additive.
+**Evidence.** `deploy/RUNBOOK.md:173-176` (Firewall section), `:9`
+("do not impose a host-wide firewall that could break them"),
+`deploy/wireguard.md:18-24`; bind confirmed in `src/web/server.ts:243`.
+
+---
+
+### D-005 — In-process `simplex-chat` SDK 6.5.4, not the deprecated WebSocket client
+**Status: IMPLEMENTED.**
+**Decision.** Run the SimpleX chat core in-process via the `simplex-chat` npm SDK
+(`^6.5.4`), which embeds the Haskell core as a native addon; `bot.run` opens the
+local SimpleX DB and event loop. There is no separate daemon and no exposed SimpleX
+port.
+**Rationale.** The old external WebSocket-daemon model is the deprecated ≤0.3.x
+line; the in-process core removes a network surface, leaving only the on-disk
+SimpleX DB (protected by filesystem perms) as the sensitive surface.
+**Evidence.** `src/bot/client.ts:9-10`, `:80-107` (`bot.run` from `simplex-chat`);
+`package.json:45` (`"simplex-chat": "^6.5.4"`), `:36`
+(`"@simplex-chat/types": "^0.8.0"`).
+
+---
+
+### D-004 — Consent conducted in-group via exact `/publish` / `/unpublish` commands
+**Status: IMPLEMENTED.**
+**Decision.** A member opts in/out by sending the exact ASCII commands `/publish` or
+`/unpublish` as ordinary group messages; each is recorded against the sender's
+stable member id and answered with an in-group confirmation that restates what
+publishing means and how to revoke. A consent-first welcome is posted to the group
+when the bot joins.
+**Rationale.** Explicit, per-member, forward-only consent is the product's legal
+backbone; capturing the exact command keeps the signal unambiguous.
+**Evidence.** `src/consent/commands.ts:19-24` (`parseConsentCommand`), `:76-104`
+(`makeConsentHandler` → `recordOptIn` / `recordOptOut` + reply), `:48-59`
+(`WELCOME_MESSAGE`); wiring in `src/capture/handler.ts:103` (command parse in the
+capture pipeline) and `src/index.ts:88` (`hooks.onCommand = makeConsentHandler`);
+the welcome is sent from `src/bot/connect.ts:47-63` (on `userJoinedGroup`, in the
+`npm run connect` helper).
+
+> **Note:** this is the *current, implemented* behaviour and diverges from the
+> Season 0 close-out prose, which describes consent as private via the member-support
+> scope (see D-013). Today it is in-group.
+
+---
+
+### D-003 — Publication state is derived, never a stored flag
+**Status: IMPLEMENTED.**
+**Decision.** Whether a message is public is computed from the `consent` table,
+forward-only `sent_at` from opt-in, `deleted` / `group_deleted`, and
+`moderation_state` — surfaced through the `message_publish_state` /
+`published_messages` views — rather than persisted as a mutable boolean.
+**Rationale.** A derived view cannot go stale or drift out of sync with a consent
+revocation or deletion, which a cached flag could.
+**Evidence.** `migrations/002_consent.sql` (consent + views),
+`migrations/004_moderation.sql`, `migrations/005_deletion_provenance.sql`;
+`CLAUDE.md:13-19`.
+
+---
+
+### D-002 — Two logical DBs kept separate; media on disk, DB stores the path
+**Status: IMPLEMENTED.**
+**Decision.** Keep the SimpleX core's own SQLite state (under `state/`) separate
+from Cinderella's archive PostgreSQL (messages, links, consent, settings, audit,
+embeds); store media bytes on disk under `MEDIA_ROOT` and keep only the path in the
+database.
+**Rationale.** The two stores have different owners, lifecycles, and trust models;
+keeping bytes out of Postgres keeps the archive DB small and lets media be served
+directly (behind auth).
+**Evidence.** `src/bot/client.ts:37-45` (creates `simplexDbPrefix`,
+`simplexFilesFolder`, `mediaRoot`); `migrations/001_init.sql`;
+`src/web/server.ts:119-124` (media served from `mediaRoot`); `CLAUDE.md:37-41`.
+
+---
+
+### D-001 — Work on `main`, Conventional Commits, mandatory pre-push secret grep, public repo
+**Status: IMPLEMENTED (process convention).**
+**Decision.** All work lands on `main` with Conventional Commit messages; before any
+push, grep for real IPs, secrets, hostnames, device ids, and member data; test and
+config data use placeholders only. Nothing sensitive lives in source or logs —
+everything sensitive is environment (git-ignored `.env` in dev; systemd
+`EnvironmentFile` 0600 in prod).
+**Rationale.** The repository is public, so a single leaked secret or member
+identifier is irreversible; a mechanical pre-push check is the backstop.
+**Evidence.** `CLAUDE.md:21-28`; placeholder hostnames throughout
+`deploy/nginx-admin.conf` (`cinderella.example.org`) and `deploy/wireguard.md`
+(keys/IPs as placeholders).
+
+---
+
+#### Status legend
+- **IMPLEMENTED** — observable in the code or committed config referenced above.
+- **PLANNED** — committed direction recorded in `seasons/SEASON-0-PROTOCOL.md`; no
+  implementing code exists yet.

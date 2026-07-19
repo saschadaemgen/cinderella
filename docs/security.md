@@ -1,0 +1,377 @@
+# Cinderella — Security Posture
+
+> _Living document — Cinderella, Season 0. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S0-017**._
+
+_Living document. Ground truth is the code; every claim below is anchored to a
+repo-relative `file:line`. Where the project outline and the code diverge, the
+code wins and the divergence is called out inline with a **Note:**._
+
+Cinderella's admin console is **hostile-facing by design**: it is published on the
+public internet at the admin hostname over real Let's Encrypt TLS, and it is
+secured by **what you have** (a passkey) rather than by network location. This
+document records the full security surface of that console, verified against the
+implementation.
+
+---
+
+## 1. Network shape: appless public console over TLS
+
+- **nginx terminates TLS and reverse-proxies to Fastify on `127.0.0.1`.** The app
+  binds the loopback interface only: `app.listen({ host: '127.0.0.1', port: deps.adminCfg.adminPort })`
+  (`src/web/server.ts:243`), default port `8787` (`src/config.ts:135`,
+  `deploy/nginx-admin.conf:54`).
+- **Let's Encrypt TLS at the edge.** The vhost listens on 443 with
+  `ssl_certificate .../fullchain.pem` and redirects all port-80 traffic to HTTPS
+  except the ACME challenge path (`deploy/nginx-admin.conf:18-46`). Certs are
+  issued with `certbot certonly --nginx` (`deploy/nginx-admin.conf:9`,
+  `deploy/RUNBOOK.md:83`).
+- **Why public + TLS rather than a bare IP:** WebAuthn requires a secure context
+  and a domain-based Relying Party ID; a bare IP or plain HTTP would not work.
+  The RP ID is derived from the host of `PUBLIC_ORIGIN` (`src/config.ts:158-167`;
+  see also the header comment in `deploy/nginx-admin.conf:14-15`).
+- **`trustProxy` is pinned to `'loopback'`** (`src/web/server.ts:82`) so only the
+  local nginx hop is trusted for `X-Forwarded-For`; `req.ip` therefore reflects
+  the real client (`X-Real-IP`/`X-Forwarded-For` set in
+  `deploy/nginx-admin.conf:56-58`). The console surfaces this as a non-editable
+  "pinned" status row (`src/web/views/security.ts:508-509`).
+- **Host header safety:** the vhost matches only its exact `server_name` and is
+  not `default_server`, so unknown Host headers never reach Cinderella
+  (`deploy/nginx-admin.conf:49-51`).
+- **Edge backstops:** nginx also adds `Strict-Transport-Security` and
+  `X-Robots-Tag: noindex, nofollow` (`deploy/nginx-admin.conf:46-47`) and caps
+  request bodies at `client_max_body_size 1m` (`deploy/nginx-admin.conf:60`).
+
+> **Note:** the outline calls the console "appless." Confirmed in the narrow
+> sense that there is **no SPA** — every page is server-rendered HTML. It is not,
+> however, script-free. There are **three** static, CSP-compliant
+> (`script-src 'self'`) client scripts, all served from `/assets/`:
+> `/assets/htmx.min.js`, loaded on **every** page for hypermedia interactions
+> (`src/web/html.ts:157`; the body carries `hx-headers`, `src/web/html.ts:171`),
+> plus `/assets/webauthn-browser.js` and `/assets/auth.js`, loaded on every
+> chrome page (`src/web/html.ts:160-161`) and injected directly on the
+> chrome-less login page (`src/web/security/routes.ts:147-148`). htmx is a small
+> hypermedia library, not an SPA framework — but a description of "only two
+> scripts on the login/security pages" would understate what actually ships.
+
+---
+
+## 2. Authentication
+
+### 2.1 Passkeys (WebAuthn) — the primary factor
+
+Implemented natively with `@simplewebauthn/server` (`src/web/security/webauthn.ts:12-18`).
+
+- **Usernameless, discoverable-credential login.** Authentication options are
+  generated with an empty `allowCredentials`, so the user picks any resident key
+  (`src/web/security/webauthn.ts:197-203`).
+- **Ceremonies** (all in `src/web/security/routes.ts`): login options/verify
+  (`/webauthn/login/options`, `/webauthn/login/verify` — lines 188-231),
+  authenticated registration (`/webauthn/register/*` — lines 311-340), and
+  step-up re-verification (`/webauthn/stepup/*` — lines 343-366).
+- **Challenges** are held server-side in a short-lived in-memory store keyed by a
+  random id carried in a signed, HttpOnly, `SameSite=Strict` cookie (`cinderella_wa`,
+  5-minute TTL — `src/web/security/routes.ts:27-46`, `src/web/security/webauthn.ts:49-82`).
+  > **Note:** unlike sessions (PostgreSQL-backed, §5), the WebAuthn challenge
+  > store is **in-memory and single-process** (`src/web/security/webauthn.ts:57-58`).
+  > This is safe because the app is one process (per the architecture decision in
+  > `CLAUDE.md`) and challenges live only for the seconds of a ceremony.
+- **Registered credentials** are stored in `webauthn_credentials`
+  (`migrations/006_webauthn.sql:4-22`): COSE public key, monotonic signature
+  counter, transports, AAGUID, operator label, backed-up flag, device type, and a
+  `locked` flag.
+
+### 2.2 Argon2id break-glass password — the fallback
+
+- A configurable **break-glass** path (`POST /login`), gated by the
+  `breakGlass.enabled` setting (`src/web/security/routes.ts:234-302`).
+- Password verification uses `argon2.verify` and **always runs a hash comparison
+  even for a wrong username** (against the real hash) so timing does not reveal
+  whether the username exists (`src/web/auth.ts:112-125`).
+- The username comparison is constant-time (`src/web/auth.ts:97-105,117`).
+- The operator hash is env-only (`ADMIN_PASSWORD_HASH`, must start with
+  `$argon2id$` — `src/config.ts:141-146`); it is never stored in the database or
+  rendered.
+- **Bootstrap safety:** break-glass defaults to `enabled: true`
+  (`src/security/settings.ts:91`) so a fresh install can log in and register
+  passkeys; the console **refuses to disable it while zero passkeys are
+  registered** (`src/web/views/security.ts:585-590`) and warns until ≥2 passkeys
+  exist (`src/web/views/security.ts:156-164`).
+
+### 2.3 Optional TOTP second factor (on the break-glass path only)
+
+- When `breakGlass.totpRequired` is set, the password path also verifies a TOTP
+  code (`src/web/security/routes.ts:273-277`, `src/web/auth.ts:127-135`, `otplib`
+  with ±1 step tolerance).
+- The TOTP secret lives in a single-row `admin_totp` table
+  (`migrations/006_webauthn.sql:27-32`); only its **enabled status** is ever
+  rendered, never the secret (`src/web/views/security.ts:229-231`).
+- Enroll/enable/disable flows with a QR code are in
+  `src/web/views/security.ts:683-712`.
+
+> **Note on migration numbering:** the outline lists "006 webauthn + TOTP · 007
+> admin sessions." The actual files are `migrations/006_webauthn.sql` (which
+> contains **both** `webauthn_credentials` and `admin_totp`) and
+> `migrations/007_sessions.sql`. Content matches the outline; only the file names
+> are shorter.
+
+---
+
+## 3. Hardening controls (all admin-configurable, persisted, audited)
+
+Every control below is a real, validated field in `SecuritySettings`
+(`src/security/settings.ts:23-74`), normalized from untrusted input with
+secure-default fallbacks (`normalizeSecurity`, `src/security/settings.ts:153-223`),
+persisted in the `settings` table under the `security` key, and **audited on every
+change** (`SecurityService.save` writes a `security.update` audit entry —
+`src/security/settings.ts:248-253`). The Security console renders one card per
+control (`src/web/views/security.ts`).
+
+### 3.1 Session policy — present
+
+- Idle timeout (sliding), absolute max age, concurrent-session policy, and
+  step-up toggle (`src/security/settings.ts:37-44`, defaults at lines 92-97: 12 h
+  idle, 24 h absolute, step-up off, multiple sessions).
+- Enforced in the session store: expiry is checked and slides on every access
+  (`src/web/session.ts:85-94`); a `single` policy drops all other sessions on new
+  login (`src/web/security/routes.ts:161-163`, `src/web/session.ts:105-111`).
+- The console exposes a "log out other sessions" action showing the active count
+  (`src/web/views/security.ts:341-352,715-721`).
+
+### 3.2 Step-up re-verification — present
+
+- When `session.stepUpForSensitive` is on, **sensitive mutations require a fresh
+  passkey re-verification** within a 5-minute window (`STEP_UP_WINDOW_MS`,
+  `src/web/security/routes.ts:25`). Enforced in the `preHandler` hook
+  (`src/web/server.ts:181-187`), which returns `403` with an
+  `x-step-up-required: 1` header so the UI can prompt.
+- "Sensitive" = any state-changing request **except** `/logout` and the WebAuthn
+  ceremonies (`isSensitive`, `src/web/server.ts:72-78`).
+- **Never locks out bootstrap:** step-up is skipped when zero passkeys exist
+  (`src/web/server.ts:183`). The same rule is mirrored in the **server-side view
+  helper** `needsStepUp` (`src/web/security/stepup.ts:13-21`), which the security
+  page uses during rendering to decide whether to show a proactive step-up
+  prompt — it is server-rendered logic, not client-side JavaScript.
+
+### 3.3 Rate limiting & lockout — present
+
+Two independent limiters (`src/web/auth.ts`), both reading live settings:
+
+- **Per-client login lockout** (`LoginRateLimiter`, `src/web/auth.ts:28-68`):
+  after `loginMaxAttempts` failures within `loginWindowMinutes`, the client is
+  locked for `lockoutMinutes` (defaults 5 / 15 / 15 —
+  `src/security/settings.ts:98-103`). Enforced on both the passkey verify path
+  (`src/web/security/routes.ts:195-197,212`) and the password path
+  (`src/web/security/routes.ts:247-249,280`).
+- **Global request-rate limiter** (`GlobalRateLimiter`, `src/web/auth.ts:71-95`):
+  optional per-client requests/minute (`globalPerMinute`, `0` = off; default off).
+  Enforced in the `onRequest` hook, with `/assets/` excluded so the UI still
+  loads (`src/web/server.ts:141-144`). Over-limit requests get `429`.
+
+### 3.4 IP allow/deny — present
+
+- Optional allowlist/denylist for the admin surface (`ipAccess.mode` + `list`,
+  `src/security/settings.ts:52-56`; default `off`). Enforced in `onRequest`, with
+  `/healthz` and `/assets/` exempt (`src/web/server.ts:146-153`); blocks return
+  `403` and log a warning.
+- Matching supports IPv4 (+CIDR) and IPv6 (exact or CIDR prefix); malformed rules
+  never match (`src/web/security/access.ts`).
+- **Deliberately off by default:** the module header and the UI both note it is
+  unsuitable for the operator's dynamic CGNAT/Starlink address — passkeys are the
+  real control (`src/web/security/access.ts:1-3`, `src/web/views/security.ts:390-393`).
+
+### 3.5 CSP & security headers — present
+
+- Applied to **every response** via an `onSend` hook (`src/web/server.ts:129-131`,
+  `src/web/security/headers.ts:9-23`).
+- Always set: `Content-Security-Policy` (configurable), `X-Content-Type-Options:
+  nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` (configurable),
+  `Cache-Control: no-store`, optional `Permissions-Policy`, and `Strict-Transport-Security`
+  when `hstsMaxAge > 0`.
+- **Default CSP is strict** (`DEFAULT_CSP`, `src/security/settings.ts:77-79`):
+  `default-src 'self'`, `script-src 'self'` (no inline JS), `frame-ancestors
+  'none'`, `form-action 'self'`, `base-uri 'none'`. `style-src` permits
+  `'unsafe-inline'` (Tailwind utility classes); scripts do not. The login page
+  comment confirms the no-inline-JS constraint drives the external `auth.js`
+  (`src/web/security/routes.ts:82`).
+- HSTS defaults to a 2-year max-age with `includeSubDomains`, preload off
+  (`src/security/settings.ts:105-112`). The console offers a one-click "reset CSP
+  to secure default" (`src/web/views/security.ts:451-457,625-627`).
+
+### 3.6 Audit log — present
+
+- `audit_log` table (`migrations/003_admin.sql:12-21`): who / what / when /
+  target / details, indexed by time.
+- Written by `writeAudit` (`src/db/audit.ts:17-29`) across the auth and security
+  flows — logins, failed logins, step-ups, passkey register/rename/revoke,
+  counter-regression, TOTP changes, and every settings save.
+
+### 3.7 Security-event feed — present
+
+- The Security page renders a **"Security events"** card: the 200 most recent
+  audit rows filtered to `auth.` / `passkey.` / `security.` actions, showing the
+  latest 40, with anomalies (counter regression, lockout, failed login, rejected
+  registration) highlighted (`src/web/views/security.ts:76-78,519-537`).
+
+### 3.8 Webhook alerting — present (narrow)
+
+- `alertSecurityEvent` posts a compact JSON payload to a configured HTTPS webhook,
+  best-effort with a 5-second timeout; failures are swallowed so they can never
+  break the auth path (`src/web/security/alert.ts`). Off when no URL is set; the
+  URL is validated to `https://` on save (`src/security/settings.ts:165-166`).
+- > **Note:** the outline implies broad "security-event alerting." In code the
+  > webhook fires for exactly **two** events: passkey **counter regression**
+  > (`src/web/security/routes.ts:217-222`) and login **lockout**
+  > (`src/web/security/routes.ts:291`). Other security events reach the audit log
+  > and the on-page feed (§3.6-3.7) but do **not** trigger a webhook.
+
+### 3.9 Counter-regression auto-lock — present
+
+- A valid assertion whose signature counter did not advance is treated as a
+  cloned-authenticator signal. On that signal the credential is **automatically
+  locked**, the event is audited, and an error is logged
+  (`completeAuthentication` catch branch, `src/web/security/webauthn.ts:246-267`;
+  helper `isCounterRegression` at lines 89-91).
+- The login route then fires the webhook alert and returns a
+  "This passkey was locked (security anomaly)" `403`
+  (`src/web/security/routes.ts:217-222`). A locked credential is refused up front
+  on subsequent attempts (`src/web/security/webauthn.ts:221`) and shown as
+  `locked` in the passkey list (`src/web/views/security.ts:114`).
+
+### 3.10 Passkey policy & AAGUID allowlist — present (beyond the outline)
+
+- **User verification** is configurable and applied to **both** the registration
+  and authentication ceremonies (`src/web/security/webauthn.ts:116,145,200,229`).
+  The **resident-key requirement** and **attestation conveyance** are also
+  configurable but applied **only at registration** — the usernameless
+  authentication ceremony sends neither (`src/security/settings.ts:24-30`,
+  `src/web/security/webauthn.ts:98-121` vs `192-203`).
+- An optional **AAGUID allowlist** restricts which authenticator models may
+  register; a non-allowlisted model is rejected and audited
+  (`src/web/security/webauthn.ts:156-165`).
+- > **Note:** `attestation` accepts `none | indirect | direct` in settings
+  > (`src/security/settings.ts:19`), but the library helper maps `indirect` down
+  > to `none` — only `direct` requests attestation
+  > (`src/web/security/webauthn.ts:93-96`).
+
+### 3.11 Argon2 cost settings — present but not applied at runtime
+
+- Memory/time/parallelism are configurable (`src/security/settings.ts:65-69,113`).
+- > **Note:** these values do **not** affect live password verification. Runtime
+  > verification uses the pre-computed `ADMIN_PASSWORD_HASH` from the environment
+  > (`src/web/auth.ts:112-124`); the console itself states the cost is applied by
+  > the `npm run hash-password` tool the next time the break-glass password is set
+  > (`src/web/views/security.ts:466-469`). The setting is guidance for that tool,
+  > not a live control.
+
+---
+
+## 4. CSRF protection
+
+- **Every state-changing request** (POST/PUT/PATCH/DELETE) is guarded in the
+  `preHandler` hook, which rejects with `403 invalid csrf token` unless a valid
+  session and token are present (`src/web/server.ts:172-178`). `/login` and the
+  WebAuthn login ceremony carry their own guards and are exempted here
+  (`src/web/server.ts:175`).
+- **`csrfOk` accepts the token from either the `x-csrf-token` header or a `_csrf`
+  body field**, compared to the session's token in constant time
+  (`src/web/session.ts:172-190`). Forms embed `_csrf` as a hidden input
+  (e.g. `src/web/views/security.ts:97-98`); htmx requests carry the header via the
+  body-level `hx-headers` attribute (`src/web/html.ts:171`).
+- The pre-session break-glass login uses a separate **double-submit** token: a
+  signed, HttpOnly, `Path=/login` cookie (`cinderella_login_csrf`) compared
+  constant-time to the submitted `_csrf` (`src/web/security/routes.ts:48-59,258-270`).
+
+---
+
+## 5. Sessions: PostgreSQL-backed
+
+- Sessions are persisted in the `admin_sessions` table
+  (`migrations/007_sessions.sql:8-19`) so they **survive `systemctl restart` and
+  deploys** — previously an in-memory store logged the operator out on every
+  restart (`src/web/session.ts:1-10`, `migrations/007_sessions.sql:1-6`).
+- The session id lives in a **signed cookie** (HMAC with the fixed
+  `SESSION_SECRET`) with flags **HttpOnly, Secure, SameSite=Strict, Path=/**
+  (`src/web/session.ts:157-166`; rendered as a status row at
+  `src/web/views/security.ts:510-511`).
+- Idle expiry slides on each request; an absolute max age also applies; both are
+  admin-configurable (`src/web/session.ts:85-94`, §3.1). A background sweeper
+  reaps abandoned expired rows every 30 minutes (`src/web/server.ts:237-242`).
+- A passkey login records a fresh step-up timestamp; a password login does not
+  (`src/web/session.ts:67-68`).
+
+---
+
+## 6. Media is served only behind authentication
+
+- `/media/` is a static mount (`src/web/server.ts:119-124`).
+- The `onRequest` auth guard's **public allowlist is exactly**: `/login`,
+  `/healthz`, `/favicon.ico`, `/assets/*`, and `/webauthn/login/*`
+  (`src/web/server.ts:157-162`). **`/media` is not in that set**, so any
+  unauthenticated request for media is redirected to `/login` (GET) or gets `401`
+  (`src/web/server.ts:163-168`).
+- This matters for the consent model: captured member media is not publicly
+  reachable through the admin console. (The future public archive/embed surface
+  is a separate, later-season concern — see `CLAUDE.md` "Parked.")
+
+---
+
+## 7. Network scoping without a host-wide firewall
+
+- Cinderella runs on a **shared VPS**; the runbook explicitly forbids imposing a
+  host-wide firewall that could break neighbouring services
+  (`deploy/RUNBOOK.md:7-9,173-177`).
+- Protection is therefore **bind-level**: the admin server binds `127.0.0.1:8787`
+  (`src/web/server.ts:243`) and PostgreSQL is reached at `127.0.0.1:5432`
+  (`deploy/RUNBOOK.md:44,175-176`). The only public entry point is nginx on
+  443/80, which proxies to loopback. Cinderella opens no other public port; the
+  SimpleX core runs in-process with no exposed port (`CLAUDE.md` architecture).
+
+---
+
+## 8. Secrets: environment-only, never in repo or logs
+
+- Boot/secret configuration is environment-only: `DATABASE_URL`, `SESSION_SECRET`
+  (≥32 chars, enforced), `ADMIN_PASSWORD_HASH` (Argon2id, enforced),
+  `ADMIN_USERNAME` (`src/config.ts:141-181`). None are ever stored in the
+  `settings`/`security` tables (`src/security/settings.ts:5-8`).
+- In production these live in a root-owned `0600` systemd `EnvironmentFile`
+  (`deploy/RUNBOOK.md:16,38-53`); in development, a git-ignored `.env`
+  (`src/config.ts:1-15`).
+- **Log redaction:** `redactConfig` masks the DB password in the userinfo and in
+  credential-bearing query params, and refuses to emit an unparseable connection
+  string (`src/config.ts:186-212`). The TOTP secret and session secret are never
+  rendered; the security settings model is explicit that secrets are never stored
+  or rendered there (`src/security/settings.ts:5-8`).
+
+---
+
+## 9. Control inventory (outline ↔ code)
+
+| Control (outline) | In code? | Anchor |
+| --- | --- | --- |
+| Public console over Let's Encrypt TLS (nginx → Fastify 127.0.0.1) | Yes | `deploy/nginx-admin.conf:31-61`, `src/web/server.ts:243` |
+| Passkey (WebAuthn) primary auth | Yes | `src/web/security/webauthn.ts`, `routes.ts:188-231` |
+| Argon2id break-glass password | Yes | `src/web/auth.ts:112-125`, `routes.ts:234-302` |
+| Optional TOTP (break-glass only) | Yes | `src/web/auth.ts:127-135`, `routes.ts:273-277` |
+| Session policy (idle/absolute/concurrent) | Yes | `src/web/session.ts:85-111`, `settings.ts:37-44` |
+| Step-up before sensitive actions | Yes | `src/web/server.ts:181-187`, `routes.ts:25` |
+| Rate-limit & lockout | Yes | `src/web/auth.ts:28-95`, `server.ts:141-144` |
+| IP allow/deny | Yes | `src/web/security/access.ts`, `server.ts:146-153` |
+| CSP & security headers | Yes | `src/web/security/headers.ts`, `settings.ts:77-79` |
+| Audit log | Yes | `migrations/003_admin.sql:12-21`, `src/db/audit.ts` |
+| Security-event feed | Yes | `src/web/views/security.ts:519-537` |
+| Webhook alerting | Yes (2 events only) | `src/web/security/alert.ts`, `routes.ts:217-222,291` |
+| Counter-regression auto-lock | Yes | `src/web/security/webauthn.ts:246-267` |
+| PostgreSQL-backed sessions | Yes | `migrations/007_sessions.sql`, `src/web/session.ts` |
+| Media behind auth (`/media` not public) | Yes | `src/web/server.ts:119-124,157-162` |
+| Bind-level scoping (no host firewall) | Yes | `src/web/server.ts:243`, `deploy/RUNBOOK.md:173-177` |
+| Secrets in on-VPS env (EnvironmentFile) | Yes | `src/config.ts:141-181`, `deploy/RUNBOOK.md:38-53` |
+| CSRF (header or `_csrf` body) | Yes | `src/web/session.ts:172-190` |
+
+Everything the outline claims is present in code. The material nuances to keep in
+mind are the two flagged above: **webhook alerting fires for only two event
+types** (§3.8), and the **Argon2 cost setting is tooling guidance, not a live
+verification control** (§3.11). Two further precision fixes applied to this draft:
+the console is script-free only in the "no SPA" sense — `htmx.min.js` is loaded
+site-wide (§1) — and resident-key/attestation policy is applied at registration
+only, not on the authentication ceremony (§3.10).
