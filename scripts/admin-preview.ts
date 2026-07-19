@@ -22,7 +22,7 @@ import { SecurityService } from '../src/security/settings.js';
 import type { Queryable } from '../src/db/pool.js';
 import type { AdminConfig, Config } from '../src/config.js';
 
-const PORT = 8788;
+const PORT = Number(process.env['PREVIEW_PORT']) || 8788;
 const PASSWORD = 'preview-password';
 
 async function main(): Promise<void> {
@@ -86,6 +86,15 @@ async function main(): Promise<void> {
   });
   await seed(5, A, 'file', null, '2026-07-13T08:00:00Z');
   await recordMediaError(db, 1, 5, 'XFTP relay AUTH error (seeded example)');
+  // Alice consented on 2026-07-10; this predates it, so it stays unpublished
+  // (forward-only) — exercises the "sent before opt-in" reason.
+  await seed(
+    6,
+    A,
+    'text',
+    'Posted before Alice opted in — stays unpublished.',
+    '2026-07-08T09:00:00Z',
+  );
 
   const adminCfg: AdminConfig = {
     adminPort: PORT,

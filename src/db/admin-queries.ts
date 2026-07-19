@@ -96,9 +96,34 @@ export interface AdminMessage {
   groupDeleted: boolean;
   moderationState: string;
   published: boolean;
+  /** Sender has a consent row (opted in at some point). */
+  hasConsent: boolean;
+  /** That consent row is currently revoked (/unpublish). */
+  consentRevoked: boolean;
+  /** Consented + not revoked, but this message predates the opt-in (forward-only). */
+  beforeOptIn: boolean;
 }
 
 const VALID_TYPES = new Set(['text', 'image', 'video', 'voice', 'link', 'file']);
+
+/**
+ * Human-readable reasons a message is NOT on the public archive, mirroring the
+ * `message_publish_state` derivation for display. Empty when the message is
+ * published. Lets the console explain why moderation actions don't change the
+ * published state (e.g. the sender never opted in), instead of looking inert.
+ */
+export function publishReasons(m: AdminMessage): string[] {
+  if (m.published) return [];
+  const reasons: string[] = [];
+  if (m.groupDeleted) reasons.push('removed in group');
+  if (m.deleted) reasons.push('deleted by admin');
+  if (m.moderationState === 'rejected') reasons.push('unpublished by admin');
+  if (!m.hasConsent) reasons.push('no member consent');
+  else if (m.consentRevoked) reasons.push('member opted out');
+  else if (m.beforeOptIn) reasons.push('sent before opt-in');
+  if (reasons.length === 0) reasons.push('not published');
+  return reasons;
+}
 
 export async function browseMessages(
   db: Queryable,
@@ -127,6 +152,7 @@ export async function browseMessages(
   const baseSql = `
     FROM messages m
     JOIN message_publish_state s ON s.id = m.id
+    LEFT JOIN consent c ON c.member_id = m.sender_member_id
     ${whereSql}`;
 
   const countRes = await db.query<{ n: string }>(`SELECT count(*) AS n ${baseSql}`, params);
@@ -152,11 +178,18 @@ export async function browseMessages(
     group_deleted: boolean;
     moderation_state: string;
     published: boolean;
+    has_consent: boolean;
+    consent_revoked: boolean;
+    before_opt_in: boolean;
   }>(
     `SELECT m.id, m.group_id, m.group_msg_id, m.sender_member_id, m.sender_display_name,
             m.sent_at, m.type::text AS type, m.text_body, m.media_path, m.media_mime,
             m.media_error, m.deleted, m.group_deleted,
-            m.moderation_state::text AS moderation_state, s.published
+            m.moderation_state::text AS moderation_state, s.published,
+            (c.member_id IS NOT NULL) AS has_consent,
+            (c.revoked_at IS NOT NULL) AS consent_revoked,
+            (c.member_id IS NOT NULL AND c.revoked_at IS NULL AND m.sent_at < c.opted_in_at)
+              AS before_opt_in
      ${baseSql}
      ORDER BY m.sent_at DESC, m.id DESC
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
@@ -181,6 +214,9 @@ export async function browseMessages(
       groupDeleted: r.group_deleted,
       moderationState: r.moderation_state,
       published: r.published,
+      hasConsent: r.has_consent,
+      consentRevoked: r.consent_revoked,
+      beforeOptIn: r.before_opt_in,
     })),
   };
 }
@@ -198,9 +234,14 @@ async function browseMessagesById(
     `SELECT m.id, m.group_id, m.group_msg_id, m.sender_member_id, m.sender_display_name,
             m.sent_at, m.type::text AS type, m.text_body, m.media_path, m.media_mime,
             m.media_error, m.deleted, m.group_deleted,
-            m.moderation_state::text AS moderation_state, s.published
+            m.moderation_state::text AS moderation_state, s.published,
+            (c.member_id IS NOT NULL) AS has_consent,
+            (c.revoked_at IS NOT NULL) AS consent_revoked,
+            (c.member_id IS NOT NULL AND c.revoked_at IS NULL AND m.sent_at < c.opted_in_at)
+              AS before_opt_in
      FROM messages m
      JOIN message_publish_state s ON s.id = m.id
+     LEFT JOIN consent c ON c.member_id = m.sender_member_id
      WHERE m.id = $1`,
     [id],
   );
@@ -221,6 +262,9 @@ async function browseMessagesById(
       groupDeleted: Boolean(r['group_deleted']),
       moderationState: String(r['moderation_state']),
       published: Boolean(r['published']),
+      hasConsent: Boolean(r['has_consent']),
+      consentRevoked: Boolean(r['consent_revoked']),
+      beforeOptIn: Boolean(r['before_opt_in']),
     })),
   };
 }

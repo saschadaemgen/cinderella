@@ -169,7 +169,11 @@ export type ModerationState = 'none' | 'pending' | 'approved' | 'rejected';
 
 /**
  * Manual moderation (admin takedown/restore). 'rejected' removes the message
- * from the published set via the publish views. Returns true if a row changed.
+ * from the published set via the publish views. Returns true only if the value
+ * ACTUALLY changed — the `IS DISTINCT FROM` guard means an idempotent re-apply
+ * (double-submit, stale page) reports no change, so the caller neither writes a
+ * spurious audit row nor shows a success banner. (A plain UPDATE ... WHERE id
+ * matches the row and returns rowCount=1 even when the value is unchanged.)
  */
 export async function setModerationState(
   db: Queryable,
@@ -177,21 +181,22 @@ export async function setModerationState(
   state: ModerationState,
 ): Promise<boolean> {
   const { rowCount } = await db.query(
-    `UPDATE messages SET moderation_state = $2::moderation_state WHERE id = $1`,
+    `UPDATE messages SET moderation_state = $2::moderation_state
+     WHERE id = $1 AND moderation_state IS DISTINCT FROM $2::moderation_state`,
     [messageId, state],
   );
   return (rowCount ?? 0) > 0;
 }
 
-/** Admin "mark deleted" by message row id. Returns true if a row changed. */
+/** Admin "mark deleted" by message row id. Returns true only if it changed. */
 export async function setDeletedById(
   db: Queryable,
   messageId: number,
   deleted: boolean,
 ): Promise<boolean> {
-  const { rowCount } = await db.query(`UPDATE messages SET deleted = $2 WHERE id = $1`, [
-    messageId,
-    deleted,
-  ]);
+  const { rowCount } = await db.query(
+    `UPDATE messages SET deleted = $2 WHERE id = $1 AND deleted IS DISTINCT FROM $2`,
+    [messageId, deleted],
+  );
   return (rowCount ?? 0) > 0;
 }

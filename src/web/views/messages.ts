@@ -8,7 +8,12 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { browseMessages, getAdminMessage, type MessageFilters } from '../../db/admin-queries.js';
+import {
+  browseMessages,
+  getAdminMessage,
+  publishReasons,
+  type MessageFilters,
+} from '../../db/admin-queries.js';
 import { writeAudit } from '../../db/audit.js';
 import { setDeletedById, setModerationState } from '../../db/messages.js';
 import { html, page, raw, type SafeHtml } from '../html.js';
@@ -39,7 +44,17 @@ interface MessagesQuery {
   since?: string;
   until?: string;
   page?: string;
+  flash?: string;
 }
+
+/** Success banners shown after an action redirect (whitelisted flash codes). */
+const FLASH_MESSAGES: Record<string, string> = {
+  takedown: 'Message unpublished — removed from the public archive.',
+  restore: 'Message restored — eligible for the archive again (subject to consent).',
+  delete: 'Message marked deleted — excluded from the archive.',
+  undelete: 'Message undeleted — no longer admin-excluded (subject to consent).',
+  nochange: 'No change — the message was already in that state.',
+};
 
 function parseFilters(q: MessagesQuery): MessageFilters {
   const page = Math.min(MAX_PAGE, Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1));
@@ -131,6 +146,20 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
     const back = filterQueryString(f, f.page);
     const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+    // Own-key guard: an inherited key (?flash=constructor/toString/…) must not
+    // resolve to an Object.prototype member (a truthy non-string → render crash).
+    const flashText =
+      req.query.flash && Object.hasOwn(FLASH_MESSAGES, req.query.flash)
+        ? FLASH_MESSAGES[req.query.flash]
+        : undefined;
+    const flashBanner = flashText
+      ? html`<div
+          class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+        >
+          ${flashText}
+        </div>`
+      : null;
+
     const filterBar = html`
       <form
         method="get"
@@ -195,13 +224,16 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
 
     const rows = messages.map((m) => {
       const actions: SafeHtml[] = [];
+      // Moderation axis: "Unpublish" only makes sense for a message that is
+      // actually published (else it silently sets a hidden 'rejected' state on a
+      // message that was never on the archive). "Restore" clears a prior takedown.
       if (m.moderationState === 'rejected') {
         actions.push(actionButton('Restore', `/messages/${m.id}/restore`, csrf, back, 'green'));
-      } else {
+      } else if (m.published) {
         actions.push(actionButton('Unpublish', `/messages/${m.id}/takedown`, csrf, back, 'red'));
       }
-      // In-group deletions cannot be undone (a member deleted it); only
-      // admin-initiated deletions offer Undelete.
+      // Deletion axis: in-group deletions cannot be undone (a member deleted it);
+      // only admin-initiated deletions offer Undelete.
       if (m.groupDeleted) {
         // no delete/undelete control — it stays excluded from publishing
       } else if (m.deleted) {
@@ -209,6 +241,7 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
       } else {
         actions.push(actionButton('Mark deleted', `/messages/${m.id}/delete`, csrf, back, 'red'));
       }
+      const reasons = publishReasons(m);
       return html`<tr class="border-t border-slate-100 align-top">
         <td class="px-3 py-2 text-xs whitespace-nowrap text-slate-400">${fmtDate(m.sentAt)}</td>
         <td class="px-3 py-2">
@@ -234,12 +267,14 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
         </td>
         <td class="px-3 py-2">${mediaCell(m)}</td>
         <td class="px-3 py-2">
-          <div class="flex flex-wrap gap-1">
-            ${m.published ? badge('published', 'green') : badge('not published', 'slate')}
-            ${m.groupDeleted ? badge('removed in group', 'red') : null}
-            ${m.deleted ? badge('deleted', 'red') : null}
-            ${m.moderationState !== 'none' ? badge(m.moderationState, 'amber') : null}
-          </div>
+          ${
+            m.published
+              ? badge('published', 'green')
+              : html`<div class="flex flex-col gap-1">
+                  ${badge('not published', 'slate')}
+                  <span class="text-xs text-slate-400">${reasons.join(' · ')}</span>
+                </div>`
+          }
         </td>
         <td class="px-3 py-2">
           <div class="flex flex-wrap gap-1">${actions}</div>
@@ -269,7 +304,7 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
 
     const body = html`
       ${pageHeader('Messages', 'Browse the captured archive; takedown removes from the published set')}
-      ${filterBar}
+      ${flashBanner} ${filterBar}
       <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table class="w-full min-w-[56rem] text-left">
           <thead>
@@ -362,7 +397,12 @@ export function registerMessages(app: FastifyInstance, ctx: ViewContext): void {
 
     const body = (req.body ?? {}) as Record<string, unknown>;
     const back = typeof body['back'] === 'string' && BACK_RE.test(body['back']) ? body['back'] : '';
-    return reply.redirect(`/messages${back}`);
+    // Flash confirmation so the operator SEES the result (the derived `published`
+    // state may not change — e.g. a message with no member consent — which
+    // otherwise makes a working action look inert).
+    const flash = changed ? action : 'nochange';
+    const sep = back.includes('?') ? '&' : '?';
+    return reply.redirect(`/messages${back}${sep}flash=${flash}`);
   }
 
   app.post<{ Params: { id: string } }>('/messages/:id/takedown', (req, reply) =>
