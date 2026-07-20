@@ -197,7 +197,10 @@ async function main(): Promise<void> {
     'jsonld: CollectionPage + BreadcrumbList',
     b.includes('CollectionPage') && b.includes('BreadcrumbList'),
   );
-  check('jsonld: consent — no unpublished text in structured data', !b.includes('SECRET unpublished'));
+  check(
+    'jsonld: consent — no unpublished text in structured data',
+    !b.includes('SECRET unpublished'),
+  );
   check('head: OG site_name + locale', b.includes('og:site_name') && b.includes('og:locale'));
   check('head: feed rel=alternate', b.includes('application/rss+xml'));
 
@@ -247,11 +250,17 @@ async function main(): Promise<void> {
   // Auto OG image — off by default → 404; enabled → 200 png.
   const ogOff = await app.inject({ method: 'GET', url: `${base}/og.png` });
   check('og image: off by default → 404', ogOff.statusCode === 404);
-  await updateEmbedInstance(db, inst.id, inst.name, withSeo({ og: { ...D.seo.og, autoImage: true } }));
+  await updateEmbedInstance(
+    db,
+    inst.id,
+    inst.name,
+    withSeo({ og: { ...D.seo.og, autoImage: true } }),
+  );
   const ogOn = await app.inject({ method: 'GET', url: `${base}/og.png` });
   check(
     'og image: enabled → 200 image/png',
-    ogOn.statusCode === 200 && (ogOn.headers['content-type'] ?? '').toString().includes('image/png'),
+    ogOn.statusCode === 200 &&
+      (ogOn.headers['content-type'] ?? '').toString().includes('image/png'),
   );
   await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
 
@@ -259,7 +268,9 @@ async function main(): Promise<void> {
   const noAnalytics = await app.inject({ method: 'GET', url: base });
   check(
     'analytics: off by default (connect-src none, no script)',
-    (noAnalytics.headers['content-security-policy'] ?? '').toString().includes("connect-src 'none'"),
+    (noAnalytics.headers['content-security-policy'] ?? '')
+      .toString()
+      .includes("connect-src 'none'"),
   );
   await updateEmbedInstance(
     db,
@@ -275,6 +286,56 @@ async function main(): Promise<void> {
         .toString()
         .includes('https://analytics.example.test'),
   );
+  await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
+
+  // ===== CCB-S2-005: theme (house palette, dark default + toggle) =====
+  const tp = await app.inject({ method: 'GET', url: base });
+  const tb = tp.body;
+  check('theme: dark by default (data-theme=dark)', tb.includes('data-theme="dark"'));
+  check('theme: house dark palette present', tb.includes('#45BDD1') && tb.includes('#050A12'));
+  check(
+    'theme: theme-color meta (dark)',
+    tb.includes('name="theme-color"') && tb.includes('#050A12'),
+  );
+  check('theme: no-flash script reads sg-theme', tb.includes("localStorage.getItem('sg-theme')"));
+  check(
+    'theme: sun/moon toggle button',
+    tb.includes('aria-label="Toggle theme"') &&
+      tb.includes('class="sun"') &&
+      tb.includes('class="moon"'),
+  );
+  check(
+    'theme: toggle persists (localStorage.setItem sg-theme)',
+    tb.includes("localStorage.setItem('sg-theme'"),
+  );
+  check(
+    'theme: SSR + JSON-LD unchanged (progressive enhancement)',
+    tb.includes('quick brown fox') && tb.includes('application/ld+json'),
+  );
+
+  // Instance mode light → data-theme=light.
+  await updateEmbedInstance(
+    db,
+    inst.id,
+    inst.name,
+    normalizeEmbedSettings({ ...D, theme: { ...D.theme, mode: 'light' } }),
+  );
+  const lightPage = await app.inject({ method: 'GET', url: base });
+  check(
+    'theme: mode=light renders data-theme=light',
+    lightPage.body.includes('data-theme="light"'),
+  );
+  await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
+
+  // Operator accent override still applies.
+  await updateEmbedInstance(
+    db,
+    inst.id,
+    inst.name,
+    normalizeEmbedSettings({ ...D, theme: { ...D.theme, colorAccent: '#ec4899' } }),
+  );
+  const pinkPage = await app.inject({ method: 'GET', url: base });
+  check('theme: operator accent override applies (#ec4899)', pinkPage.body.includes('#ec4899'));
   await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
 
   await app.close();

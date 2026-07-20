@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-005**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -110,6 +110,12 @@ to (so hosts, crawlers, and later briefings can rely on it):
     CollectionPage+BreadcrumbList wrapping an ItemList of the configured posting type
     (`DiscussionForumPosting` / `Article` / `SocialMediaPosting`), plus
     ImageObject/VideoObject on media items.
+- **Theme sync contract (CCB-S2-005).** The front persists the visitor's theme in
+  `localStorage['sg-theme']` (`'light'`/`'dark'`) — the SAME origin-scoped key the
+  operator's site uses, so the stream and site stay in sync. `data-theme` on `<html>`
+  is the switch (default `dark`); a no-flash `<head>` script applies the stored value
+  before paint (and honours `prefers-color-scheme` for `mode: auto`); `<meta
+  name="theme-color">` is `#050A12` (dark) / `#FAFBFD` (light), updated on toggle.
 
 ## Appendix: related file-transfer wire behaviour (context)
 

@@ -18,7 +18,7 @@
  */
 
 import { html, raw, type SafeHtml } from '../html.js';
-import type { EmbedSettings } from '../../db/embeds.js';
+import { DEFAULT_EMBED_SETTINGS, type EmbedSettings } from '../../db/embeds.js';
 import type { ArchiveType, PublicFilters, PublicItem } from '../../db/public-archive.js';
 import type { SeoHead } from './seo.js';
 
@@ -69,35 +69,75 @@ const TYPE_LABELS: Record<ArchiveType, string> = {
   file: 'Files',
 };
 
-/** Themed CSS, built from validated hex colors (safe to inline). */
+/**
+ * Themed CSS — the SimpleGo house palette (CCB-S2-005). Dark is the default via
+ * `[data-theme="dark"]`; `:root` is light. Operator accent/bg/text overrides are
+ * layered on BOTH themes only when they differ from the built-in default, so an
+ * unchanged instance uses the house palette (and the toggle), while a custom accent
+ * (e.g. Cinderella-pink) or bg/text still wins. Component rules use `--bg/--fg/…`
+ * aliases that resolve through `var()` per theme.
+ */
 function themeCss(t: EmbedSettings['theme'], layout: EmbedSettings['layout']): string {
-  // Use the operator's exact colours; derive muted/card/border from them with
-  // color-mix so any palette (light OR dark) stays coherent. `mode` sets
-  // color-scheme (native controls); `auto` lets the browser follow the OS.
-  const scheme = t.mode === 'auto' ? 'light dark' : t.mode;
+  const D = DEFAULT_EMBED_SETTINGS.theme;
+  const ov: string[] = [];
+  if (t.colorAccent !== D.colorAccent) {
+    ov.push(`--accent:${t.colorAccent};--accent-bright:${t.colorAccent}`);
+  }
+  if (t.colorBackground !== D.colorBackground) {
+    ov.push(
+      `--bg-deep:${t.colorBackground};` +
+        `--bg-dark:color-mix(in srgb, ${t.colorText} 5%, ${t.colorBackground});` +
+        `--bg-card:color-mix(in srgb, ${t.colorText} 3%, ${t.colorBackground})`,
+    );
+  }
+  if (t.colorText !== D.colorText) {
+    ov.push(
+      `--text:${t.colorText};--text-bright:${t.colorText};` +
+        `--text-dim:color-mix(in srgb, ${t.colorText} 55%, transparent)`,
+    );
+  }
+  const overrides = ov.length > 0 ? `:root,[data-theme="dark"]{${ov.join(';')}}` : '';
   return `
 :root{
-  --bg:${t.colorBackground};--fg:${t.colorText};--accent:${t.colorAccent};
-  --muted:color-mix(in srgb, var(--fg) 55%, var(--bg));
-  --card:color-mix(in srgb, var(--fg) 4%, var(--bg));
-  --border:color-mix(in srgb, var(--fg) 14%, var(--bg));
-  --radius:12px;color-scheme:${scheme}
+  --font:'Source Sans 3','Source Sans Pro',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --radius:12px;--radius-sm:8px;--radius-lg:16px;--tr:0.3s cubic-bezier(0.4,0,0.2,1);
+  --accent:#1A7D5A;--accent-bright:#146B4C;
+  --bg-deep:#FAFBFC;--bg-dark:#F0F3F5;--bg-card:rgba(255,255,255,0.92);
+  --text:#2C3440;--text-bright:#111827;--text-dim:rgba(44,52,64,0.55);
+  --border:rgba(26,125,90,0.12);color-scheme:light;
+  --bg:var(--bg-deep);--fg:var(--text);--muted:var(--text-dim);--card:var(--bg-card);
 }
+[data-theme="dark"]{
+  --accent:#45BDD1;--accent-bright:#6DD0DF;
+  --bg-deep:#050A12;--bg-dark:#080D18;--bg-card:rgba(10,18,32,0.7);
+  --text:#CBD5E1;--text-bright:#E8EDF4;--text-dim:rgba(203,213,225,0.5);
+  --border:rgba(69,189,209,0.12);color-scheme:dark;
+}
+${overrides}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+html{background:var(--bg);transition:background var(--tr),color var(--tr)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--font);transition:background var(--tr),color var(--tr)}
 .wrap{max-width:820px;margin:0 auto;padding:20px 16px}
 header.arch{margin-bottom:16px}
-header.arch h1{font-size:1.5rem;margin:0 0 4px}
+.head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+header.arch h1{font-size:1.5rem;margin:0 0 4px;color:var(--text-bright)}
 header.arch p{color:var(--muted);margin:0}
+.theme-toggle{flex:none;width:40px;height:40px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:var(--tr)}
+.theme-toggle:hover{border-color:var(--accent)}
+.theme-toggle svg{width:20px;height:20px}
+.theme-toggle .sun{display:none}
+.theme-toggle .moon{display:block}
+[data-theme="dark"] .theme-toggle .sun{display:block}
+[data-theme="dark"] .theme-toggle .moon{display:none}
 form.filters{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)}
-form.filters input,form.filters select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font-size:.9rem}
+form.filters input,form.filters select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-dark);color:var(--fg);font-size:.9rem}
 form.filters input[type=search]{flex:1;min-width:160px}
 form.filters button{padding:8px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
 form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .items{display:${layout === 'grid' ? 'grid' : 'flex'};${layout === 'grid' ? 'grid-template-columns:repeat(auto-fill,minmax(240px,1fr));' : 'flex-direction:column;'}gap:14px;list-style:none;padding:0;margin:0}
-.item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow-wrap:anywhere}
+.item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow-wrap:anywhere;transition:var(--tr)}
 .item .meta{display:flex;gap:8px;align-items:baseline;font-size:.8rem;color:var(--muted);margin-bottom:6px}
-.item .who{font-weight:600;color:var(--fg)}
+.item .who{font-weight:600;color:var(--text-bright)}
 .item .body{white-space:pre-wrap;margin:0}
 .item img.media{max-width:100%;height:auto;border-radius:8px;margin-top:8px;display:block}
 .item .filelink{display:inline-block;margin-top:8px;color:var(--accent);font-weight:600;text-decoration:none}
@@ -109,6 +149,17 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 footer.arch{margin-top:24px;color:var(--muted);font-size:.8rem;text-align:center}
 a{color:var(--accent)}
 `.trim();
+}
+
+/** Sun/moon toggle icons + the no-flash and toggle scripts (all nonce-guarded). */
+const THEME_TOGGLE = `<button type="button" id="sg-theme-toggle" class="theme-toggle" aria-label="Toggle theme"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>`;
+
+const THEME_TOGGLE_SCRIPT = `(function(){var b=document.getElementById('sg-theme-toggle');if(!b)return;function c(t){var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='light'?'#FAFBFD':'#050A12');}b.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';var n=cur==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',n);try{localStorage.setItem('sg-theme',n);}catch(e){}c(n);});})();`;
+
+/** No-flash theme script — runs in <head> before body paint. `sg-theme` shares the
+ * key with the operator's site so the stream and site stay in sync on one origin. */
+function noFlashScript(auto: boolean): string {
+  return `(function(){try{var t=localStorage.getItem('sg-theme');if(!t&&${auto ? 'true' : 'false'})t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='light'?'#FAFBFD':'#050A12');}}catch(e){}})();`;
 }
 
 /** Renders one published item's media/body into the card. */
@@ -191,6 +242,12 @@ const ARCHIVE_TYPE_ENTRIES: [string, string][] = Object.entries(TYPE_LABELS);
 export function renderEmbedPage(ctx: RenderContext): string {
   const css = themeCss(ctx.presentation.theme, ctx.presentation.layout);
   const seo = ctx.seo;
+  // SSR initial theme from the instance mode; the visitor toggle (localStorage)
+  // overrides on subsequent views. `auto` renders dark and lets the no-flash
+  // script honour prefers-color-scheme.
+  const mode = ctx.presentation.theme.mode;
+  const initialTheme = mode === 'light' ? 'light' : 'dark';
+  const themeColor = initialTheme === 'light' ? '#FAFBFD' : '#050A12';
 
   const items =
     ctx.items.length > 0
@@ -237,11 +294,15 @@ export function renderEmbedPage(ctx: RenderContext): string {
       : html``;
 
   const body = html`<!doctype html>
-    <html lang="en">
+    <html lang="en" data-theme="${initialTheme}">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="${seo.robots}" />
+        <meta name="theme-color" content="${themeColor}" />
+        <script nonce="${ctx.nonce}">
+          ${raw(noFlashScript(mode === 'auto'))};
+        </script>
         <title>${seo.title}</title>
         <meta name="description" content="${seo.description}" />
         ${seo.keywords ? html`<meta name="keywords" content="${seo.keywords}" />` : null}
@@ -287,14 +348,22 @@ export function renderEmbedPage(ctx: RenderContext): string {
       <body>
         <div class="wrap">
           <header class="arch">
-            <h1>${seo.title}</h1>
-            <p>${seo.description}</p>
+            <div class="head-row">
+              <div>
+                <h1>${seo.title}</h1>
+                <p>${seo.description}</p>
+              </div>
+              ${raw(THEME_TOGGLE)}
+            </div>
           </header>
           ${filterBar(ctx)} ${items} ${pager}
           <footer class="arch">Published with consent · powered by Cinderella</footer>
         </div>
         <script nonce="${ctx.nonce}">
           ${raw(HEIGHT_SCRIPT)};
+        </script>
+        <script nonce="${ctx.nonce}">
+          ${raw(THEME_TOGGLE_SCRIPT)};
         </script>
       </body>
     </html>`;

@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-005**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -77,9 +77,15 @@ full OG/Twitter + operator/auto social image, an RSS feed, and a privacy-respect
 per-instance analytics hook (off by default, CSP-scoped — D-017). All admin-edited on
 the embed instance, all consent-gated. See [`src/web/front/seo.ts`](../src/web/front/seo.ts).
 
-**Remaining in Season 2:** multiple templates (CCB-S2-005), a design editor
-(CCB-S2-006), the Web Component, and SSR/media caching with publish-event
-invalidation. The history below records the pre-CCB-S2-003 state.
+**Theming shipped (CCB-S2-005):** the SimpleGo house palette with **dark by default**
+and a persisting sun/moon visitor toggle (`sg-theme` localStorage, no-flash `<head>`
+script, `theme-color` meta) — the first design-template switch. Instance `mode`
+(auto/light/dark) sets the SSR default; operator accent/bg/text overrides still win.
+See [`src/web/front/render.ts`](../src/web/front/render.ts).
+
+**Remaining in Season 2:** a design editor (CCB-S2-006), further templates, the Web
+Component, and SSR/media caching with publish-event invalidation. The history below
+records the pre-CCB-S2-003 state.
 
 - **What exists today (verified):**
   - `embed_instances` table ([`migrations/003_admin.sql:26`](../migrations/003_admin.sql)).

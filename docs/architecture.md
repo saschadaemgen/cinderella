@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-005**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is *derived* from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -174,6 +174,15 @@ briefings extend it without touching consent logic:
   `isPublicFront()` now also covers `/robots.txt` and `/sitemap.xml`. Verified by the
   extended `verify:public` (structured-data toggles, sitemap/feed/robots, OG image,
   analytics-CSP, and the consent gate across every new output).
+- **Theming (CCB-S2-005)** — the front ships the SimpleGo house palette, **dark by
+  default** via `data-theme="dark"` on `<html>` (`:root` is light). The instance
+  `mode` (auto/light/dark) sets the SSR initial theme; a no-flash inline `<head>`
+  script reads `localStorage['sg-theme']` (the same key as the operator's site)
+  before paint, and a sun/moon toggle in the header flips + persists it and updates
+  the `theme-color` meta. Operator accent/bg/text overrides still win over the house
+  tokens when set (compared against the built-in defaults in `themeCss`). All
+  nonce-guarded — no CSP change — and the SSR content/SEO are untouched (progressive
+  enhancement). In [`src/web/front/render.ts`](../src/web/front/render.ts).
 
 ## Appendix: divergences (code wins)
 
