@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Season 1. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S1-019**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -375,3 +375,38 @@ verification control** (§3.11). Two further precision fixes applied to this dra
 the console is script-free only in the "no SPA" sense — `htmx.min.js` is loaded
 site-wide (§1) — and resident-key/attestation policy is applied at registration
 only, not on the authentication ceremony (§3.10).
+
+---
+
+## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
+
+The `/embed/<id>` front is the one deliberately public surface. Its security rests on
+keeping it strictly separate from the authenticated admin and gating everything on
+consent:
+
+- **Consent gate in SQL, re-checked per request.** Every public read goes through the
+  `published_messages` view (`src/db/public-archive.ts`). The public media route
+  `GET /embed/:id/media/:msgId` calls `getPublishedMedia` on **every** request and
+  serves only for a currently-published item — an unpublished / re-unpublished /
+  deleted item's media returns `404`. Media is never served by a client-supplied raw
+  path; the DB-stored path is additionally resolved within `MEDIA_ROOT` with a
+  traversal guard (`src/web/front/embed.ts`).
+- **Distinct from the admin media path.** The admin `/media/**` static mount stays
+  behind the auth guard (§6). The public path is a different route with its own
+  consent check — the admin path is not reused.
+- **Isolation in the request pipeline.** `/embed/*` is exempt from the admin auth
+  guard, the admin IP allow/deny policy, and the admin rate-limit (a public surface
+  must reach everyone), and the admin strict headers (`x-frame-options: DENY`,
+  `noindex`, `no-store`) are **skipped** for it in the onSend hook
+  (`src/web/server.ts`).
+- **Embed response headers.** The front sets its own: a CSP of
+  `default-src 'none'; img-src 'self'; style-src 'nonce-…'; script-src 'nonce-…';
+  frame-ancestors *; base-uri 'none'; form-action 'self'; connect-src 'none'`
+  (embeddable anywhere, no external assets), `x-content-type-options: nosniff`,
+  `referrer-policy: no-referrer`, and `cache-control: no-store` (consent freshness —
+  publish/unpublish/delete reflect immediately). The inline themed `<style>` and the
+  tiny height `<script>` carry the per-response nonce; there is no `'unsafe-inline'`.
+- **Indexable by design.** The public front is `index, follow` (the SEO goal); the
+  admin console remains `noindex, nofollow` — unchanged.
+- **Flagged follow-up.** SSR/media caching with invalidation on publish events, and a
+  public-appropriate rate limit, are deferred (the front renders per request today).

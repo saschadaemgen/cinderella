@@ -1,15 +1,51 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S1-019**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
 
 Standing record of the architectural and operational decisions taken across
-Season 1, newest first. Each entry states the decision, a one-line rationale, and
+Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
 whether it is **IMPLEMENTED** (present in the code / config today) or **PLANNED**
 (committed direction, not yet in code). Where a decision differs from how the code
 actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-016 — Consent-gating is absolute on the public archive front
+**Status: IMPLEMENTED.**
+**Decision.** Only published (opted-in) content is ever served, rendered, or
+indexed on the public front. Every public read goes through the
+`published_messages` view (consent + forward-only + not admin-deleted /
+group-deleted / moderation-rejected); the public media route
+(`/embed/:id/media/:msgId`) resolves each file through that same published check on
+**every request** (`getPublishedMedia`, [`src/db/public-archive.ts`](../src/db/public-archive.ts)),
+never by raw path — so an unpublished / re-unpublished / deleted item's media
+`404`s. The public routes are a distinct surface from the authenticated admin media
+path, exempt from the admin auth / IP-policy / rate-limit but carrying their own
+embeddable+indexable headers.
+**Rationale.** Consent is the product's legal backbone, and the public surface is
+where a leak would be irreversible — so the gate is enforced in SQL (the view) and
+re-derived per request, never cached or trusted from prior state. Verified by
+[`scripts/verify-public.ts`](../scripts/verify-public.ts) (published media → 200,
+unpublished/before-opt-in → 404).
+
+---
+
+### D-015 — Public-front doctrine: maximum functionality, everything configurable in the admin
+**Status: IMPLEMENTED (foundation) / PLANNED (full suite).**
+**Decision.** The public archive front aims to be best-in-class and differentiated:
+the full range of options is exposed and configured in the admin, whether or not
+every operator needs each one. Bounded technical limits live in internal docs, never
+as hidden UI warnings. CCB-S2-003 builds the extensible foundation — server-side
+rendered `/embed/<id>`, theme/layout/filters driven from the `embed_instances`
+record, and a single render entry point ([`src/web/front/render.ts`](../src/web/front/render.ts))
+— into which the full SEO/marketing suite (CCB-S2-004), templates (CCB-S2-005), and
+a design editor (CCB-S2-006) plug without a rewrite.
+**Rationale.** The public front is the product's outward face; over-exposing
+configuration (the same pattern as the admin console) differentiates it and avoids
+re-architecture as later briefings land.
 
 ---
 

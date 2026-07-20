@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S1-019**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -60,7 +60,16 @@ survives only in historical task labels and in-code comments).
 
 ### 1. Public embed front — the `/embed/<instance-id>` route
 
-**Status: partially present. The admin/config half exists; the public endpoint does not.**
+**Status: FOUNDATION SHIPPED (CCB-S2-003).** The SSR `GET /embed/:id` route, its
+consent-gated media route `GET /embed/:id/media/:msgId`, server-side
+type/time/full-text filtering via URL params, core SEO (title/description,
+canonical, OG/Twitter, schema.org JSON-LD, indexable), and iframe auto-height are
+built and verified ([`src/web/front/`](../src/web/front/),
+[`src/db/public-archive.ts`](../src/db/public-archive.ts),
+[`scripts/verify-public.ts`](../scripts/verify-public.ts)). **Remaining in Season 2:**
+the full SEO/marketing suite (CCB-S2-004), multiple templates (CCB-S2-005), a design
+editor (CCB-S2-006), the Web Component, and SSR/media caching with publish-event
+invalidation. The history below records the pre-CCB-S2-003 state.
 
 - **What exists today (verified):**
   - `embed_instances` table ([`migrations/003_admin.sql:26`](../migrations/003_admin.sql)).
@@ -69,7 +78,7 @@ survives only in historical task labels and in-code comments).
 - **What is missing (verified absent):** there is **no `GET /embed/:id` route anywhere in the codebase.** A repo-wide search finds `/embed/<instance-id>` only in comments, the snippet string, and season/schema docs — the only registered routes are the admin `/embeds` family. The iframe the operator can already copy today points at an endpoint that returns nothing. The source says so explicitly: "The public `/embed/<instance-id>` route and the widget rendering itself are a later season" ([`src/web/views/embeds.ts:5`](../src/web/views/embeds.ts)); "The `/embed` route goes live with the public-front season" ([`src/web/views/embeds.ts:265`](../src/web/views/embeds.ts)); and the schema comment "The `/embed/<instance-id>` route and widget rendering are a later season" ([`migrations/003_admin.sql:24`](../migrations/003_admin.sql)).
   > This matches the outline's suspicion exactly: the embed **admin settings** exist, the **public `/embed` endpoint is not implemented.** Season 2 must add the route that resolves an instance id → its settings → the `published_messages` projection and renders the widget (plus the Web Component, per [`CLAUDE.md`](../CLAUDE.md)).
 
-- [ ] Implement `GET /embed/:id` serving published content, honouring per-instance theme/layout/filters/media visibility.
+- [x] Implement `GET /embed/:id` serving published content, honouring per-instance theme/layout/filters/media visibility. **(CCB-S2-003)**
 - [ ] Render the widget (and the parked Web-Component wrapper).
 
 ### 2. Command & moderation system

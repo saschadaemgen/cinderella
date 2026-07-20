@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Season 1. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S1-019**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -71,6 +71,30 @@ Consequences that follow from this, all visible in code:
 - **No durable bans / no durable identity.** Because the id is regenerated on rejoin, there is no stable handle to ban or to carry consent across a leave/rejoin. Consent is intentionally re-requested.
 - **The id is used everywhere consent matters.** Capture records `senderMemberId` from `member.memberId` (`src/capture/message.ts:137`, and the field is documented "Stable group member id (NOT the display name)" at `message.ts:46`). The consent handler records opt-in/opt-out against `msg.senderMemberId` (`src/consent/commands.ts:83`, `87`), and the publish-state view joins `messages.sender_member_id` to `consent.member_id` (`migrations/002_consent.sql:35`).
 - **Publication is derived, forward-only.** The `message_publish_state` view (`migrations/002_consent.sql:21-35`) computes `published` live from: not deleted, a consent row exists, `revoked_at IS NULL`, and `sent_at >= opted_in_at`. Opt-in timestamps use the group-message clock domain (`opted_in_at` is the `/publish` message's timestamp, per the column comment at `migrations/002_consent.sql:8-10`), so "from the moment you say yes, forward only" is enforced at the id+timestamp level, not by a stored flag.
+
+## 6. Public archive front — the embed/host wire contract (CCB-S2-003)
+
+Not SimpleX wire, but the outward HTTP/embedding contract the public front commits
+to (so hosts, crawlers, and later briefings can rely on it):
+
+- **iframe auto-height.** The embed page posts `{ cinderellaEmbedHeight: <px> }` to
+  `window.parent` on `load`/`resize` (and via `ResizeObserver`), matching the
+  Season 1 snippet's listener that filters on `e.origin === publicOrigin` and
+  `e.data.cinderellaEmbedHeight` (`src/web/views/embeds.ts:24-30`,
+  `src/web/front/render.ts` `HEIGHT_SCRIPT`).
+- **URL-driven, crawlable filter state.** Filtering/search is expressed as query
+  params on `GET /embed/:id`: `type` (one of text/image/video/voice/link/file),
+  `since`/`until` (`YYYY-MM-DD`, interpreted UTC), `q` (full-text), `page`. Each is
+  honoured only if the instance enables that filter; the canonical URL echoes the
+  active params, so filtered/searched views are shareable and indexable.
+- **Media URL scheme.** A published item's media is addressed as
+  `GET /embed/:id/media/:messageId` — resolved through `published_messages` every
+  request (never a raw path), `404` when not published. Images render inline
+  (`content-disposition: inline`), other types download.
+- **SEO payload.** The page head emits schema.org JSON-LD as a `@graph`
+  (`WebSite`, `Organization`, and an `ItemList` of `DiscussionForumPosting`), plus
+  Open Graph / Twitter Card tags; `<` is escaped to `<` so message text cannot
+  break out of the `<script type="application/ld+json">` block.
 
 ## Appendix: related file-transfer wire behaviour (context)
 

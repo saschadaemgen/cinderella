@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Season 1. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S1-019**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is *derived* from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -128,10 +128,41 @@ Each migration is applied once, inside a transaction, by `db/migrate.ts`.
 
 Per `CLAUDE.md`'s "Parked" section:
 
-- **Public web archive front-end** — the publish views exist; the public renderer does not.
-- **`/embed/<id>` widget render + Web Component** — the config model and the `/embeds` admin nav exist; the public render is a later season.
+- **`/embed/<id>` foundation now SHIPPED** (CCB-S2-003, §11) — the SSR public front,
+  server-side filters/search, and consent-gated media are built. Still planned: the
+  full SEO/marketing suite (CCB-S2-004), multiple templates (CCB-S2-005), a design
+  editor (CCB-S2-006), the Web Component, and SSR caching with publish-event
+  invalidation.
 - **AI moderation / CSAM scanning** — `moderation_state` is only a hook (every row stays `'none'`); the scanning track is separate and unbuilt.
 - **Self-hosted relay/super-peer capture.**
+
+## 11. Public archive front (CCB-S2-003)
+
+The public, unauthenticated `/embed/<id>` front is deliberately layered so later
+briefings extend it without touching consent logic:
+
+- **Data layer** — [`src/db/public-archive.ts`](../src/db/public-archive.ts):
+  `listPublishedItems` and `getPublishedMedia` read **only** through the
+  `published_messages` view (the consent gate). Filters (media type, UTC time
+  window, `websearch_to_tsquery('simple', …)` over the generated `search` vector)
+  run in SQL, so filtered/searched views are server-rendered and crawlable.
+- **Presentation layer** — [`src/web/front/render.ts`](../src/web/front/render.ts):
+  one entry point `renderEmbedPage(ctx)` takes a `PresentationConfig` (template +
+  theme + layout, from the `embed_instances` record) and returns full SSR HTML —
+  content rendered into the markup (the SEO foundation), not client-JS-rendered. The
+  head carries `<title>`/description, canonical, Open Graph + Twitter, and an
+  extensible schema.org JSON-LD `@graph` (WebSite · Organization · ItemList of
+  DiscussionForumPosting). The seam is where CCB-S2-005 (templates) and CCB-S2-006
+  (design editor) plug in.
+- **Routes** — [`src/web/front/embed.ts`](../src/web/front/embed.ts): `GET /embed/:id`
+  (page) and `GET /embed/:id/media/:msgId` (media, resolved through the published
+  check every request). Registered in `buildServer` outside the admin auth guard;
+  `/embed/*` is exempt from auth, the admin IP policy, and the admin rate-limit, and
+  sets its own headers (embeddable `frame-ancestors *`, indexable, `no-store`, a
+  per-response CSP nonce) — the admin strict headers are skipped for `/embed/*` in
+  the onSend hook. The iframe posts its height to the parent
+  (`{cinderellaEmbedHeight}`), matching the Season 1 snippet. Verified end-to-end by
+  [`scripts/verify-public.ts`](../scripts/verify-public.ts).
 
 ## Appendix: divergences (code wins)
 

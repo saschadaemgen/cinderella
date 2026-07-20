@@ -27,6 +27,7 @@ import { ChallengeStore } from './security/webauthn.js';
 import { registerAuthRoutes, STEP_UP_WINDOW_MS } from './security/routes.js';
 import { countCredentials } from '../db/webauthn.js';
 import { SessionStore, csrfOk, readSession, type AuthedSession } from './session.js';
+import { registerPublicEmbed, isEmbedPath } from './front/embed.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -125,8 +126,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.decorateRequest('session', null);
 
-  // Security headers (configurable) on every response.
-  app.addHook('onSend', async (_req, reply) => {
+  // Security headers (configurable) on every response — EXCEPT the public archive
+  // front, which must be embeddable + indexable and sets its own headers (the
+  // admin strict headers are frame-DENY + noindex + no-store).
+  app.addHook('onSend', async (req, reply) => {
+    const path = req.url.split('?')[0] ?? req.url;
+    if (isEmbedPath(path)) return;
     applySecurityHeaders(reply, security.get());
   });
 
@@ -138,13 +143,19 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
     const path = req.url.split('?')[0] ?? req.url;
 
-    // Global request-rate limit (assets excluded so the UI still loads).
-    if (!path.startsWith('/assets/') && !globalLimiter.allow(req.ip)) {
+    // The public archive front is a public surface: it is exempt from the admin
+    // rate limit, the admin IP allow/deny policy, and the auth guard. (A
+    // public-appropriate rate limit + caching are the flagged follow-up.)
+    const isEmbed = isEmbedPath(path);
+
+    // Global request-rate limit (assets + public front excluded).
+    if (!path.startsWith('/assets/') && !isEmbed && !globalLimiter.allow(req.ip)) {
       return reply.code(429).send({ error: 'rate limit exceeded' });
     }
 
-    // Optional IP allow/deny for the admin surface (health + assets exempt).
-    if (path !== '/healthz' && !path.startsWith('/assets/')) {
+    // Optional IP allow/deny for the ADMIN surface only (health + assets + public
+    // front exempt — the public archive must reach everyone).
+    if (path !== '/healthz' && !path.startsWith('/assets/') && !isEmbed) {
       const { mode, list } = security.get().ipAccess;
       if (!ipAllowed(req.ip, mode, list)) {
         log.warn(`Blocked admin request from ${req.ip} by IP ${mode}list.`);
@@ -155,6 +166,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     req.session = await readSession(req, sessions);
 
     const isPublic =
+      isEmbed ||
       path === '/login' ||
       path === '/healthz' ||
       path === '/favicon.ico' ||
@@ -195,8 +207,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Auth routes (login page, WebAuthn ceremonies, break-glass, logout, step-up).
   registerAuthRoutes(app, ctx);
 
+  // Public archive front (CCB-S2-003) — no auth; consent-gated data + media.
+  const viewCtx: ViewContext = { db, adminCfg, cfg, settings, security, sessions };
+  registerPublicEmbed(app, viewCtx);
+
   if (deps.registerViews) {
-    deps.registerViews(app, { db, adminCfg, cfg, settings, security, sessions });
+    deps.registerViews(app, viewCtx);
   } else {
     // Minimal authed landing (used by the foundation harness; production always
     // registers the full views).
