@@ -25,17 +25,21 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getEmbedInstance, listEmbedInstances, type EmbedSettings } from '../../db/embeds.js';
 import {
   ARCHIVE_TYPES,
+  decodeCursor,
   getPublishedMedia,
   latestPublishedImageId,
   listPublishedIds,
   listPublishedItems,
+  listPublishedItemsByCursor,
+  listPublishedSpanState,
   publishedLastmod,
   type ArchiveType,
+  type CursorDir,
   type PublicFilters,
 } from '../../db/public-archive.js';
 import {
+  renderCards,
   renderEmbedPage,
-  renderStreamFragment,
   type PresentationConfig,
   type RenderContext,
 } from './render.js';
@@ -63,6 +67,18 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * the endpoints. These routes are otherwise exempt from the admin rate limit.
  */
 const POLL_RATE_PER_MIN = 120;
+/** Cursor page size for infinite scroll (CCB-S2-007) — 30–50 band; server-fixed so
+ * a client can never request a huge chunk. Distinct from the SSR `PAGE_SIZE` (30);
+ * the cursor is an exact row boundary, so mixing sizes never dupes/skips. */
+const CURSOR_PAGE_SIZE = 40;
+/** DOM windowing cap the client enforces + the span-state LIMIT ceiling. */
+const WINDOW_CAP = 200;
+/** `/state` span LIMIT — WINDOW_CAP plus margin. The client always sends `top`, so
+ * the span is bounded to the loaded band (≤ WINDOW_CAP) and this never truncates. */
+const SPAN_CAP = WINDOW_CAP + 50;
+/** Per-IP ceiling for the cursor `/page` endpoint. Its OWN bucket (not the poll's),
+ * so a scroll burst can't 429 the consent-critical `/state` poll. */
+const PAGE_RATE_PER_MIN = 240;
 
 /** True for any path the public front owns (skip admin headers/auth/IP/rate-limit). */
 export function isPublicFront(path: string): boolean {
@@ -86,6 +102,12 @@ interface EmbedQuery {
   until?: string;
   q?: string;
   page?: string;
+  /** Cursor pagination (CCB-S2-007). */
+  cursor?: string;
+  /** `/state` upper-bound cursor (topmost loaded card). */
+  top?: string;
+  /** `/page` direction: 'older' (default) or 'newer'. */
+  dir?: string;
 }
 
 /**
@@ -123,20 +145,25 @@ function applyEmbedHeaders(reply: FastifyReply, nonce: string, analyticsHost: st
 export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): void {
   const origin = ctx.adminCfg.publicOrigin.replace(/\/+$/, '');
 
-  // Per-IP limiter for the live-update poll endpoints only (state + fragment).
-  // The public front is otherwise exempt from the admin rate limit; these two
-  // endpoints are visitor-driven and cheap, so they get their own generous cap.
+  // Per-IP limiters for the visitor-driven public endpoints. The `/state` poll and
+  // the `/page` cursor endpoint get SEPARATE buckets (CCB-S2-007) so a scroll burst
+  // on `/page` can never 429 the consent-critical `/state` poll. Both are otherwise
+  // exempt from the admin rate limit.
   const pollLimiter = new GlobalRateLimiter(() => POLL_RATE_PER_MIN);
+  const pageLimiter = new GlobalRateLimiter(() => PAGE_RATE_PER_MIN);
   let sincePrune = 0;
-  const pollAllowed = (reply: FastifyReply, ip: string): boolean => {
+  const limited = (reply: FastifyReply, ip: string, limiter: GlobalRateLimiter): boolean => {
     if (++sincePrune >= 200) {
       sincePrune = 0;
       pollLimiter.prune();
+      pageLimiter.prune();
     }
-    if (pollLimiter.allow(ip)) return true;
+    if (limiter.allow(ip)) return true;
     reply.code(429).header('cache-control', 'no-store').header('retry-after', '30');
     return false;
   };
+  const pollAllowed = (reply: FastifyReply, ip: string): boolean => limited(reply, ip, pollLimiter);
+  const pageAllowed = (reply: FastifyReply, ip: string): boolean => limited(reply, ip, pageLimiter);
 
   // --- The SSR page ---
   app.get<{ Params: { id: string }; Querystring: EmbedQuery }>('/embed/:id', async (req, reply) => {
@@ -166,6 +193,8 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       basePath,
       canonicalUrl: `${basePath}${canonicalQuery(filters)}`,
       ogImageId,
+      page,
+      pageCount,
     };
     const seo = resolveSeoHead(seoCtx);
 
@@ -191,6 +220,10 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       nonce,
       showDownload: s.player.showDownload,
       streamHash,
+      nextCursor: items.length > 0 ? (items[items.length - 1]?.cursor ?? '') : '',
+      hasMore: (page - 1) * PAGE_SIZE + items.length < total,
+      windowCap: WINDOW_CAP,
+      cursorPageSize: CURSOR_PAGE_SIZE,
     };
 
     applyEmbedHeaders(reply, nonce, analyticsHost);
@@ -198,10 +231,11 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
     return renderEmbedPage(renderCtx);
   });
 
-  // --- Live-update state (CCB-S2-006): cheap consent-gated ids + version hash ---
-  // The poll hot path. Resolves ONLY through published_messages, so a recalled or
-  // unpublished id can never appear; the returned hash changes when the set (or an
-  // item's content) changes, which is the client's signal to fetch the fragment.
+  // --- Live-update state (CCB-S2-006/007): consent-gated ids + version hash ---
+  // The poll hot path. With a `cursor` (client bottom) + `top` it fingerprints the
+  // client's EXACT loaded band (CCB-S2-007 infinite scroll) and reports `hasNewer`;
+  // without a cursor it keeps the legacy page-1 window (empty-view fallback). Reads
+  // ONLY published_messages, so a recalled/unpublished id can never appear.
   app.get<{ Params: { id: string }; Querystring: EmbedQuery }>(
     '/embed/:id/state',
     async (req, reply) => {
@@ -209,41 +243,69 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       const instance = await getEmbedInstance(ctx.db, req.params.id);
       if (!instance) return reply.code(404).type('application/json').send({ error: 'not_found' });
       const { enabledTypes, filters } = resolveView(instance.settings, req.query);
-      const state = await listPublishedIds(ctx.db, enabledTypes, filters);
       // Short TTL: cache-friendly yet consent-fresh within the poll interval. The
       // payload carries ids + hash only — never content — so a briefly stale hash
       // can at most delay a card's removal by the TTL, never leak anything.
       reply.header('cache-control', 'public, max-age=5');
       reply.header('x-content-type-options', 'nosniff');
       reply.type('application/json; charset=utf-8');
-      return { hash: state.hash, ids: state.ids };
+
+      const bottom = typeof req.query.cursor === 'string' ? decodeCursor(req.query.cursor) : null;
+      if (bottom) {
+        const top = typeof req.query.top === 'string' ? decodeCursor(req.query.top) : null;
+        const span = await listPublishedSpanState(
+          ctx.db,
+          enabledTypes,
+          filters,
+          bottom,
+          top,
+          SPAN_CAP,
+        );
+        return { hash: span.hash, ids: span.ids, hasNewer: span.hasNewer };
+      }
+      const state = await listPublishedIds(ctx.db, enabledTypes, filters);
+      return { hash: state.hash, ids: state.ids, hasNewer: false };
     },
   );
 
-  // --- Live-update fragment (CCB-S2-006): the re-rendered #stream-list region ---
-  // Same consent-gated items as the full page, minus head/theme/scripts. Fetched
-  // only when the state hash changed, then swapped into the open page's DOM.
+  // --- Cursor page (CCB-S2-007): the next infinite-scroll chunk of cards ---
+  // JSON envelope { html, nextCursor, hasMore }. `html` is the bare <li> card
+  // sequence (reuses renderCards, byte-identical to SSR) for insertAdjacentHTML.
+  // Consent-gated through published_messages; a malformed cursor is a 400, never a
+  // silent page-1 (which would dupe cards). Its own per-IP rate limit.
   app.get<{ Params: { id: string }; Querystring: EmbedQuery }>(
-    '/embed/:id/fragment',
+    '/embed/:id/page',
     async (req, reply) => {
-      if (!pollAllowed(reply, req.ip)) return 'Rate limited';
+      if (!pageAllowed(reply, req.ip)) return { error: 'rate_limited' };
       const instance = await getEmbedInstance(ctx.db, req.params.id);
-      if (!instance) return reply.code(404).type('text/plain').send('Not found');
+      if (!instance) return reply.code(404).type('application/json').send({ error: 'not_found' });
       const { enabledTypes, filters } = resolveView(instance.settings, req.query);
-      const { items, total } = await listPublishedItems(ctx.db, enabledTypes, filters);
-      const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-      const basePath = `${origin}/embed/${instance.id}`;
+      let cursor = null;
+      if (typeof req.query.cursor === 'string' && req.query.cursor.length > 0) {
+        cursor = decodeCursor(req.query.cursor);
+        if (!cursor) return reply.code(400).type('application/json').send({ error: 'bad_cursor' });
+      }
+      const dir: CursorDir = req.query.dir === 'newer' ? 'newer' : 'older';
+      const chunk = await listPublishedItemsByCursor(
+        ctx.db,
+        enabledTypes,
+        filters,
+        cursor,
+        dir,
+        CURSOR_PAGE_SIZE,
+      );
       reply.header('cache-control', 'no-store');
       reply.header('x-content-type-options', 'nosniff');
-      reply.type('text/html; charset=utf-8');
-      return renderStreamFragment({
-        items,
-        filters,
-        basePath,
-        page: filters.page,
-        pageCount,
-        showDownload: instance.settings.player.showDownload,
-      });
+      reply.type('application/json; charset=utf-8');
+      return {
+        html: renderCards(
+          chunk.items,
+          `${origin}/embed/${instance.id}`,
+          instance.settings.player.showDownload,
+        ).toString(),
+        nextCursor: chunk.nextCursor,
+        hasMore: chunk.hasMore,
+      };
     },
   );
 

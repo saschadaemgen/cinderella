@@ -43,6 +43,9 @@ export interface PublicItem {
   senderDisplayName: string;
   /** ISO 8601 UTC. */
   sentAt: string;
+  /** Opaque pagination cursor for this row — its exact `(sent_at, id)` sort key
+   * (CCB-S2-007). SSR emits it as `data-cursor`; the client pages from it. */
+  cursor: string;
   type: ArchiveType;
   textBody: string | null;
   links: PublicLink[];
@@ -60,11 +63,81 @@ interface ItemRow {
   id: string;
   sender_display_name: string;
   sent_at: string;
+  /** `sent_at::text` — full microsecond precision for the cursor (never the ms ISO). */
+  sort_ts: string;
   type: string;
   text_body: string | null;
   has_media: boolean;
   media_mime: string | null;
   links: unknown;
+}
+
+/** Decoded pagination cursor: the exact `(sent_at, id)` sort key of a boundary row. */
+export interface Cursor {
+  /** Full-precision `sent_at::text`, e.g. `2026-07-18 09:00:00.123456+00`. */
+  sentAt: string;
+  id: number;
+}
+
+export type CursorDir = 'older' | 'newer';
+
+/** Strict shape of a `timestamptz::text` value (space-separated, offset suffix). */
+const CURSOR_TS_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?[+-]\d{2}(:?\d{2})?$/;
+
+/** Encodes a row's sort key as an opaque base64url cursor (public data only). */
+export function encodeCursor(sentAt: string, id: number): string {
+  return Buffer.from(`${sentAt}|${id}`, 'utf8').toString('base64url');
+}
+
+/**
+ * Decodes an opaque cursor with STRICT validation — malformed input returns null
+ * (the route maps that to 400, never a silent page-1 that would dupe cards, and the
+ * raw string is never fed to SQL). The cursor is a sort key, not a security boundary.
+ */
+export function decodeCursor(s: string): Cursor | null {
+  if (typeof s !== 'string' || s.length === 0 || s.length > 256) return null;
+  let decoded: string;
+  try {
+    decoded = Buffer.from(s, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  const i = decoded.lastIndexOf('|');
+  if (i <= 0) return null;
+  const sentAt = decoded.slice(0, i);
+  const idStr = decoded.slice(i + 1);
+  if (!/^\d{1,19}$/.test(idStr)) return null;
+  const id = Number.parseInt(idStr, 10);
+  if (!Number.isInteger(id) || id < 1) return null;
+  if (!CURSOR_TS_RE.test(sentAt)) return null;
+  return { sentAt, id };
+}
+
+/** Shared SELECT list for a public item row (includes the full-precision sort key). */
+const ITEM_COLUMNS = `m.id, m.sender_display_name, m.sent_at, m.sent_at::text AS sort_ts,
+            m.type::text AS type, m.text_body,
+            (m.media_path IS NOT NULL) AS has_media, m.media_mime,
+            COALESCE(
+              (SELECT json_agg(json_build_object('url', l.url, 'title', l.title) ORDER BY l.id)
+               FROM links l WHERE l.message_id = m.id),
+              '[]'::json
+            ) AS links`;
+
+/** Maps a DB row to a PublicItem (TIMESTAMPTZ → ISO for display; sort_ts → cursor). */
+function mapItem(r: ItemRow): PublicItem {
+  return {
+    id: Number(r.id),
+    senderDisplayName: r.sender_display_name,
+    // TIMESTAMPTZ comes back as a Date (pg/PGlite) — normalize to an ISO string
+    // so it renders and serializes (JSON-LD) deterministically.
+    sentAt: new Date(r.sent_at).toISOString(),
+    cursor: encodeCursor(r.sort_ts, Number(r.id)),
+    type: r.type as ArchiveType,
+    textBody: r.text_body,
+    links: toLinks(r.links),
+    hasMedia: r.has_media,
+    mediaMime: r.media_mime,
+  };
 }
 
 function toLinks(v: unknown): PublicLink[] {
@@ -134,13 +207,7 @@ export async function listPublishedItems(
   const limitParam = `$${params.length + 1}`;
   const offsetParam = `$${params.length + 2}`;
   const rows = await db.query<ItemRow>(
-    `SELECT m.id, m.sender_display_name, m.sent_at, m.type::text AS type, m.text_body,
-            (m.media_path IS NOT NULL) AS has_media, m.media_mime,
-            COALESCE(
-              (SELECT json_agg(json_build_object('url', l.url, 'title', l.title) ORDER BY l.id)
-               FROM links l WHERE l.message_id = m.id),
-              '[]'::json
-            ) AS links
+    `SELECT ${ITEM_COLUMNS}
      FROM published_messages m
      ${whereSql}
      ORDER BY m.sent_at DESC, m.id DESC
@@ -150,19 +217,67 @@ export async function listPublishedItems(
 
   return {
     total: Number(countRes.rows[0]?.n ?? 0),
-    items: rows.rows.map((r) => ({
-      id: Number(r.id),
-      senderDisplayName: r.sender_display_name,
-      // TIMESTAMPTZ comes back as a Date (pg/PGlite) — normalize to an ISO string
-      // so it renders and serializes (JSON-LD) deterministically.
-      sentAt: new Date(r.sent_at).toISOString(),
-      type: r.type as ArchiveType,
-      textBody: r.text_body,
-      links: toLinks(r.links),
-      hasMedia: r.has_media,
-      mediaMime: r.media_mime,
-    })),
+    items: rows.rows.map(mapItem),
   };
+}
+
+/** A cursor-paged slice of published items (CCB-S2-007). */
+export interface CursorPage {
+  items: PublicItem[];
+  hasMore: boolean;
+  /** Cursor to fetch the NEXT slice in the same direction; null when exhausted. */
+  nextCursor: string | null;
+}
+
+/**
+ * Cursor pagination over the published stream (CCB-S2-007) — stable across
+ * publish/recall between loads (no offset drift). `older` pages down (DESC, strictly
+ * older than the cursor); `newer` pages up (ASC then reversed to newest-first).
+ * Reads ONLY `published_messages`; the cursor clause only NARROWS an already
+ * consent-gated set, so it can never surface an unpublished/recalled id. Fetches
+ * `step+1` to derive `hasMore` without a count query.
+ */
+export async function listPublishedItemsByCursor(
+  db: Queryable,
+  enabledTypes: readonly ArchiveType[],
+  f: Pick<PublicFilters, 'type' | 'since' | 'until' | 'q'>,
+  cursor: Cursor | null,
+  dir: CursorDir,
+  step: number,
+): Promise<CursorPage> {
+  if (enabledTypes.length === 0) return { items: [], hasMore: false, nextCursor: null };
+
+  const { whereSql, params } = buildPublishedWhere(enabledTypes, f);
+  let cursorClause = '';
+  if (cursor) {
+    const tsP = `$${params.length + 1}`;
+    const idP = `$${params.length + 2}`;
+    params.push(cursor.sentAt, cursor.id);
+    // Expanded-OR form (NOT a row-value constructor — PGlite-unreliable); each value
+    // bound once with an explicit cast, mirroring the existing timestamp posture.
+    const cmp = dir === 'older' ? '<' : '>';
+    cursorClause =
+      ` AND (m.sent_at ${cmp} ${tsP}::timestamptz` +
+      ` OR (m.sent_at = ${tsP}::timestamptz AND m.id ${cmp} ${idP}::bigint))`;
+  }
+  const order = dir === 'older' ? 'DESC' : 'ASC';
+  const limitP = `$${params.length + 1}`;
+  const rows = await db.query<ItemRow>(
+    `SELECT ${ITEM_COLUMNS}
+     FROM published_messages m
+     ${whereSql}${cursorClause}
+     ORDER BY m.sent_at ${order}, m.id ${order}
+     LIMIT ${limitP}`,
+    [...params, step + 1],
+  );
+
+  let items = rows.rows.map(mapItem);
+  const hasMore = items.length > step;
+  if (hasMore) items = items.slice(0, step);
+  // `newer` fetched ascending (closest-to-cursor first) → flip to newest-first.
+  if (dir === 'newer') items.reverse();
+  const boundary = dir === 'older' ? items[items.length - 1] : items[0];
+  return { items, hasMore, nextCursor: hasMore && boundary ? boundary.cursor : null };
 }
 
 /** Cheap consent-gated fingerprint of a view (CCB-S2-006 live poll). */
@@ -180,10 +295,15 @@ interface StateRow {
   marker: string;
 }
 
-/** Version hash of a view: stable for an unchanged set, differs on add/remove/edit. */
-function streamHash(rows: StateRow[], total: number): string {
+/**
+ * Version hash of a view: stable for an unchanged set, differs on add/remove/edit.
+ * Hashes ONLY the ids + content markers of the given rows (NOT any archive-wide
+ * count) so the SSR-seeded page-1 hash (listPublishedIds) and the live span hash
+ * (listPublishedSpanState) agree for identical rows — the client's first poll is a
+ * true no-op instead of a spurious reconcile (#S2-007 review).
+ */
+function streamHash(rows: StateRow[]): string {
   const h = createHash('sha256');
-  h.update(String(total));
   for (const r of rows) {
     // Driver-dependent: PGlite returns `id` as a number, pg as a string — coerce.
     h.update(`\n${String(r.id)}:${String(r.marker)}`);
@@ -205,7 +325,7 @@ export async function listPublishedIds(
   enabledTypes: readonly ArchiveType[],
   f: PublicFilters,
 ): Promise<PublishedState> {
-  if (enabledTypes.length === 0) return { ids: [], hash: streamHash([], 0), total: 0 };
+  if (enabledTypes.length === 0) return { ids: [], hash: streamHash([]), total: 0 };
 
   const { whereSql, params } = buildPublishedWhere(enabledTypes, f);
   const countRes = await db.query<{ n: string }>(
@@ -227,7 +347,89 @@ export async function listPublishedIds(
   );
 
   const total = Number(countRes.rows[0]?.n ?? 0);
-  return { ids: res.rows.map((r) => Number(r.id)), hash: streamHash(res.rows, total), total };
+  return { ids: res.rows.map((r) => Number(r.id)), hash: streamHash(res.rows), total };
+}
+
+/** Consent-gated fingerprint of the loaded SPAN (CCB-S2-007 live reconcile). */
+export interface SpanState {
+  /** Published ids within the loaded band, newest-first. */
+  ids: number[];
+  /** Version hash over those ids + content markers. */
+  hash: string;
+  /** True when a published item exists NEWER than `top` (a new publish to prepend). */
+  hasNewer: boolean;
+}
+
+/**
+ * Fingerprints the client's currently-loaded band `[bottom, top]` (both inclusive)
+ * for the infinite-scroll live reconcile (CCB-S2-007). The client always sends its
+ * `top` (topmost rendered cursor), so the span is bounded to EXACTLY the loaded band
+ * (≤ WINDOW_CAP) and the `cap` LIMIT never truncates — a head→bottom span would drop
+ * the oldest loaded cards once the top is windowed off and wrongly sweep published
+ * content. Reads ONLY `published_messages`: a recalled id simply leaves the set (the
+ * client removes that card); `hasNewer` (a cheap EXISTS above `top`) tells an
+ * at-top client to prepend new publishes. Ids + markers only — never bodies/media.
+ */
+export async function listPublishedSpanState(
+  db: Queryable,
+  enabledTypes: readonly ArchiveType[],
+  f: Pick<PublicFilters, 'type' | 'since' | 'until' | 'q'>,
+  bottom: Cursor,
+  top: Cursor | null,
+  cap: number,
+): Promise<SpanState> {
+  if (enabledTypes.length === 0) return { ids: [], hash: streamHash([]), hasNewer: false };
+
+  const { whereSql, params } = buildPublishedWhere(enabledTypes, f);
+  const bTs = `$${params.length + 1}`;
+  const bId = `$${params.length + 2}`;
+  params.push(bottom.sentAt, bottom.id);
+  // Lower bound: newer-than-or-equal to `bottom`.
+  let clause =
+    ` AND (m.sent_at > ${bTs}::timestamptz` +
+    ` OR (m.sent_at = ${bTs}::timestamptz AND m.id >= ${bId}::bigint))`;
+  if (top) {
+    const tTs = `$${params.length + 1}`;
+    const tId = `$${params.length + 2}`;
+    params.push(top.sentAt, top.id);
+    // Upper bound: older-than-or-equal to `top`.
+    clause +=
+      ` AND (m.sent_at < ${tTs}::timestamptz` +
+      ` OR (m.sent_at = ${tTs}::timestamptz AND m.id <= ${tId}::bigint))`;
+  }
+  const limitP = `$${params.length + 1}`;
+  const res = await db.query<StateRow>(
+    `SELECT m.id,
+            md5(coalesce(m.text_body, '') || ':' || coalesce(m.media_path, '')) AS marker
+     FROM published_messages m
+     ${whereSql}${clause}
+     ORDER BY m.sent_at DESC, m.id DESC
+     LIMIT ${limitP}`,
+    [...params, cap],
+  );
+
+  let hasNewer = false;
+  if (top) {
+    const { whereSql: w2, params: p2 } = buildPublishedWhere(enabledTypes, f);
+    const nTs = `$${p2.length + 1}`;
+    const nId = `$${p2.length + 2}`;
+    p2.push(top.sentAt, top.id);
+    const ex = await db.query<{ e: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM published_messages m ${w2}
+         AND (m.sent_at > ${nTs}::timestamptz
+              OR (m.sent_at = ${nTs}::timestamptz AND m.id > ${nId}::bigint))
+       ) AS e`,
+      p2,
+    );
+    hasNewer = Boolean(ex.rows[0]?.e);
+  }
+
+  return {
+    ids: res.rows.map((r) => Number(r.id)),
+    hash: streamHash(res.rows),
+    hasNewer,
+  };
 }
 
 export interface PublishedMedia {

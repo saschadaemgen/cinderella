@@ -419,17 +419,21 @@ consent:
   (and re-adds HSTS, since `add_header` in a location replaces inherited ones) —
   see [`deploy/nginx-admin.conf`](../deploy/nginx-admin.conf). Without this, the
   edge header would defeat the page's `<meta robots>`.
-- **Live auto-update inherits the gate (CCB-S2-006).** The poll endpoints
-  `GET /embed/:id/state` (published ids + a version hash) and `GET /embed/:id/fragment`
-  (the re-rendered list region) read the SAME `published_messages` view, so neither
-  can emit an unpublished / recalled id — when an item is withdrawn its id leaves the
-  state set (hash changes → the client drops the card) and its media `404`s, all
-  within one poll interval. `state` carries ids + hash only (never bodies or media),
-  so its short-TTL cache (`max-age=5`) can at most delay a removal by the TTL, never
-  leak content; `fragment` is `no-store`. Both are behind a dedicated per-IP limiter
-  (`GlobalRateLimiter`, `POLL_RATE_PER_MIN`) — the public-appropriate rate limit the
-  front previously lacked — since they are the one visitor-driven, repeatedly-hit
-  surface here.
+- **Live auto-update + infinite scroll inherit the gate (CCB-S2-006/007).** The
+  visitor-driven endpoints `GET /embed/:id/state?cursor=&top=` (band ids + a version
+  hash + `hasNewer`) and `GET /embed/:id/page?cursor=&dir=` (a chunk of rendered cards)
+  read the SAME `published_messages` view, so neither can emit an unpublished / recalled
+  id. The cursor is a SORT KEY, never a security boundary: a malformed cursor is a `400`
+  (never a silent page-1), and a valid-but-arbitrary cursor only selects a published
+  sort position — so no HMAC is needed. When an item is withdrawn its id leaves the band
+  (hash changes → the client removes that card wherever it sits) and its media `404`s,
+  within one poll interval; windowed-out cards are DISCARDED (never stashed) and
+  scroll-up re-fetches through the gate, so a card recalled while off-screen can't
+  return. `state` carries ids + hash only (short-TTL `max-age=5`, at most a TTL's delay,
+  never a leak); `page` is `no-store`. `/state` and `/page` have SEPARATE per-IP
+  rate-limit buckets (`POLL_RATE_PER_MIN` / `PAGE_RATE_PER_MIN`) so a scroll burst can't
+  429 the consent-critical poll. The CCB-S2-006 `/fragment` route + wholesale swap are
+  removed.
 - **Inline video inherits the gate (CCB-S2-008).** Video plays inline via `<video>`
   loading from the SAME consent-gated media route; the route now answers HTTP `Range`
   with `206`/`Accept-Ranges` (WebKit needs it to play; seeking needs it), but the range

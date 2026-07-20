@@ -188,20 +188,30 @@ briefings extend it without touching consent logic:
   tokens when set (compared against the built-in defaults in `themeCss`). All
   nonce-guarded — no CSP change — and the SSR content/SEO are untouched (progressive
   enhancement). In [`src/web/front/render.ts`](../src/web/front/render.ts).
-- **Live auto-update (CCB-S2-006)** — an open page keeps itself current with no manual
-  refresh, as progressive enhancement over the unchanged SSR/SEO baseline. Two
-  consent-gated routes ([`src/web/front/embed.ts`](../src/web/front/embed.ts)), keyed
-  by the same query filters as the page: `GET /embed/:id/state` returns published ids
-  + a version hash (`listPublishedIds`; short-TTL cache; ids/hash only, no content),
-  and `GET /embed/:id/fragment` re-renders the `#stream-list` region (`no-store`). The
-  inline `LIVE_SCRIPT` polls state every ~18s; on a hash change it swaps in the
-  fragment and re-posts the iframe height, and it pauses while the tab is hidden.
-  Because both read `published_messages`, a recalled item vanishes (and its media
-  `404`s) within one interval and a newly published one appears — consent enforced
-  live, not just at load. The only CSP change is `connect-src 'self'` (the same-origin
-  poll); the two endpoints carry their own per-IP rate limit. SSE is a recorded future
-  upgrade, not built. Verified by the extended
-  [`scripts/verify-public.ts`](../scripts/verify-public.ts).
+- **Live auto-update + infinite scroll (CCB-S2-006/007)** — an open page keeps itself
+  current AND pages the full archive with no manual refresh, as progressive enhancement
+  over the unchanged SSR/SEO baseline. The stream pages by a stable `(sent_at, id)`
+  cursor (`listPublishedItemsByCursor`), not offset, so nothing dupes/skips under
+  concurrent publish/recall. Consent-gated routes
+  ([`src/web/front/embed.ts`](../src/web/front/embed.ts)), all reading
+  `published_messages`: `GET /embed/:id/page?cursor=&dir=older|newer` → JSON
+  `{ html, nextCursor, hasMore }` of bare `<li>` cards (`renderCards`, byte-identical to
+  SSR); `GET /embed/:id/state?cursor=<bottom>&top=<top>` fingerprints the EXACT loaded
+  band (`listPublishedSpanState`; ids + hash + `hasNewer`). The single inline
+  `STREAM_SCRIPT` owns one loaded-item model: a bottom `IntersectionObserver` appends
+  older cards and windows the top behind a height spacer (DOM bounded at `WINDOW_CAP`); a
+  top sentinel restores windowed-off cards on scroll-up by re-fetching (never stashing —
+  so a recalled card can't return); the ~18s poll sweeps out any recalled id wherever it
+  sits and prepends new publishes at the true head. Windowing is symmetric (trim top on
+  down-scroll, trim bottom on restore) so the loaded set never exceeds the span LIMIT.
+  A recalled item vanishes (media `404`s) within one interval; a new one appears live.
+  CSP change is `connect-src 'self'` only; `/page` and `/state` have SEPARATE per-IP
+  rate-limit buckets (a scroll burst can't starve the consent poll). Deep content stays
+  crawlable via the untouched `?page=N` SSR pages + `<link rel=prev/next>` + sitemap;
+  JS-off keeps the pager. The `/fragment` route + wholesale swap (CCB-S2-006) are
+  retired. SSE + full virtualization are recorded future upgrades. Verified by the
+  extended [`scripts/verify-public.ts`](../scripts/verify-public.ts) + a windowing
+  simulation.
 - **Media playback (CCB-S2-008)** — video renders as an INLINE native `<video controls
   preload="metadata" playsinline>` in the card (`itemMedia`,
   [`src/web/front/render.ts`](../src/web/front/render.ts)), house-styled and theme-aware,

@@ -22,6 +22,7 @@ import {
   DEFAULT_EMBED_SETTINGS,
 } from '../src/db/embeds.js';
 import { embedSnippet } from '../src/web/views/embeds.js';
+import { listPublishedSpanState, decodeCursor, ARCHIVE_TYPES } from '../src/db/public-archive.js';
 import { SettingsService } from '../src/settings/service.js';
 import { SecurityService } from '../src/security/settings.js';
 import type { Queryable } from '../src/db/pool.js';
@@ -113,6 +114,16 @@ async function main(): Promise<void> {
     mediaMime: 'video/mp4',
     mediaSize: 4,
   });
+
+  // Bulk published items (CCB-S2-007) — 35 messages OLDER than the named ones above
+  // (so page-1 assertions still hold) but after opt-in, giving a real 2-page dataset
+  // for cursor paging + rel=next/prev. Timestamps 2026-07-11T00:00…17:00, distinct.
+  const BULK = 35;
+  for (let i = 0; i < BULK; i++) {
+    const hh = String(Math.floor(i / 2)).padStart(2, '0');
+    const mm = i % 2 === 0 ? '00' : '30';
+    await seed(100 + i, A, 'text', `bulk message ${i}`, `2026-07-11T${hh}:${mm}:00Z`);
+  }
 
   // --- Server ---
   const adminCfg: AdminConfig = {
@@ -439,10 +450,22 @@ async function main(): Promise<void> {
   );
   await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
 
-  // ===== CCB-S2-006: live auto-update (consent-gated polling) =====
-  type State = { hash: string; ids: number[] };
+  // ===== CCB-S2-006/007: live auto-update + infinite scroll =====
+  type State = { hash: string; ids: number[]; hasNewer?: boolean };
+  type PageResp = { html: string; nextCursor: string | null; hasMore: boolean };
   const getState = async (url: string): Promise<State> =>
     JSON.parse((await app.inject({ method: 'GET', url })).body) as State;
+  const getPage = async (url: string): Promise<PageResp> =>
+    JSON.parse((await app.inject({ method: 'GET', url })).body) as PageResp;
+  const idsInOrder = (body: string): number[] =>
+    [...body.matchAll(/id="msg-(\d+)"/g)].map((m) => Number(m[1]));
+  const cardCursors = (body: string): { id: number; cursor: string }[] =>
+    [...body.matchAll(/id="msg-(\d+)" data-cursor="([^"]*)"/g)].map((m) => ({
+      id: Number(m[1]),
+      cursor: m[2] as string,
+    }));
+  const attr = (body: string, name: string): string =>
+    (body.match(new RegExp(`${name}="([^"]*)"`)) ?? [])[1] ?? '';
 
   // --- Page wiring: the progressive-enhancement client is present + CSP allows it ---
   const live = await app.inject({ method: 'GET', url: base });
@@ -457,11 +480,12 @@ async function main(): Promise<void> {
   );
   check('live: non-empty initial version hash embedded', /data-hash="[0-9a-f]{8,}"/.test(lb));
   check(
-    'live: poll client wired (state + fragment + visibility pause)',
+    'live: stream client wired (state + page + visibility pause), no fragment',
     lb.includes('/state') &&
-      lb.includes('/fragment') &&
+      lb.includes('/page') &&
       lb.includes('visibilitychange') &&
-      lb.includes('document.hidden'),
+      lb.includes('document.hidden') &&
+      !lb.includes('/fragment'),
   );
   check(
     'live: SSR content + JSON-LD still in markup (progressive enhancement)',
@@ -472,16 +496,82 @@ async function main(): Promise<void> {
     lb.includes('github.com/saschadaemgen/cinderella') && lb.includes('powered by'),
   );
 
-  // --- State endpoint: consent-gated ids + hash ---
-  const st = await app.inject({ method: 'GET', url: `${base}/state` });
+  // --- Infinite-scroll seed attributes + sentinels/spacer on #stream-list (CCB-S2-007) ---
   check(
-    'state: 200 + application/json',
-    st.statusCode === 200 &&
-      (st.headers['content-type'] ?? '').toString().includes('application/json'),
+    'scroll: seed attrs (next-cursor, has-more=1, window-cap, page-size)',
+    /data-next-cursor="[A-Za-z0-9_-]+"/.test(lb) &&
+      lb.includes('data-has-more="1"') &&
+      /data-window-cap="\d+"/.test(lb) &&
+      /data-page-size="\d+"/.test(lb),
   );
   check(
-    'state: short-TTL cache (carries ids+hash only, never content)',
-    (st.headers['cache-control'] ?? '').toString().includes('max-age='),
+    'scroll: spacer + top/bottom sentinels present',
+    lb.includes('id="stream-top-spacer"') &&
+      lb.includes('id="stream-top-sentinel"') &&
+      lb.includes('id="stream-bottom-sentinel"'),
+  );
+  check(
+    'scroll: SSR page 1 has 30 cards, all carry data-cursor',
+    idsInOrder(lb).length === 30 && cardCursors(lb).length === 30,
+  );
+
+  // --- rel=next/prev crawlable deep pages (CCB-S2-007) ---
+  check(
+    'seo: page 1 head has rel=next and NOT rel=prev',
+    /<link rel="next" href="[^"]+"/.test(lb) && !/<link rel="prev"/.test(lb),
+  );
+  const p2 = await app.inject({ method: 'GET', url: `${base}?page=2` });
+  check(
+    'seo: page 2 head has rel=prev and NOT rel=next (last page)',
+    /<link rel="prev" href="[^"]+"/.test(p2.body) && !/<link rel="next"/.test(p2.body),
+  );
+  check('seo: deep page 2 renders SSR cards server-side', idsInOrder(p2.body).length === 8);
+  check(
+    'scroll: data-at-top=1 on page 1, =0 on a deep page (no false auto-prepend)',
+    lb.includes('data-at-top="1"') && p2.body.includes('data-at-top="0"'),
+  );
+  const pBig = await app.inject({ method: 'GET', url: `${base}?page=99999` });
+  check(
+    'seo: out-of-range page emits neither rel=prev nor rel=next (no crawl trap)',
+    !/<link rel="prev"/.test(pBig.body) && !/<link rel="next"/.test(pBig.body),
+  );
+
+  // --- Cursor page endpoint: stable, consent-gated, no dupes/skips ---
+  const ssrFull = [...idsInOrder(lb), ...idsInOrder(p2.body)]; // 30 + 9, newest-first
+  const c1 = attr(lb, 'data-next-cursor'); // boundary between page 1 and page 2
+  const older = await getPage(`${base}/page?cursor=${encodeURIComponent(c1)}&dir=older`);
+  const olderIds = idsInOrder(older.html);
+  check(
+    'page: older chunk from the page-1 cursor == SSR page 2 (no dupes/skips)',
+    JSON.stringify(olderIds) === JSON.stringify(idsInOrder(p2.body)),
+  );
+  check('page: older chunk reports hasMore=false at the end', older.hasMore === false);
+  check(
+    'page: older chunk does NOT overlap page 1 (cursor is exclusive)',
+    olderIds.every((id) => !idsInOrder(lb).includes(id)),
+  );
+  check('page: consent — no unpublished text in a page chunk', !older.html.includes('SECRET'));
+  const newer = await getPage(`${base}/page?cursor=${encodeURIComponent(c1)}&dir=newer`);
+  check(
+    'page: newer chunk == page 1 minus the exclusive boundary card, newest-first',
+    JSON.stringify(idsInOrder(newer.html)) === JSON.stringify(idsInOrder(lb).slice(0, 29)),
+  );
+  const noCur = await getPage(`${base}/page?dir=older`);
+  check(
+    'page: no-cursor older chunk is the newest slice in full order',
+    JSON.stringify(idsInOrder(noCur.html)) ===
+      JSON.stringify(ssrFull.slice(0, idsInOrder(noCur.html).length)),
+  );
+  const badCur = await app.inject({ method: 'GET', url: `${base}/page?cursor=not*valid` });
+  check('page: malformed cursor → 400 (never a silent page 1)', badCur.statusCode === 400);
+
+  // --- State endpoint: legacy (no cursor) consent gate ---
+  const st = await app.inject({ method: 'GET', url: `${base}/state` });
+  check(
+    'state: 200 + application/json + short-TTL cache',
+    st.statusCode === 200 &&
+      (st.headers['content-type'] ?? '').toString().includes('application/json') &&
+      (st.headers['cache-control'] ?? '').toString().includes('max-age='),
   );
   const s0 = JSON.parse(st.body) as State;
   check('state: version hash present', typeof s0.hash === 'string' && s0.hash.length > 0);
@@ -497,34 +587,57 @@ async function main(): Promise<void> {
       !s0.ids.includes(beforeOptInId),
   );
 
-  // --- Fragment endpoint: rendered region, consent-gated, partial (no <head>) ---
-  const fr = await app.inject({ method: 'GET', url: `${base}/fragment` });
-  check(
-    'fragment: 200 + text/html',
-    fr.statusCode === 200 && (fr.headers['content-type'] ?? '').toString().includes('text/html'),
+  // --- Span state (CCB-S2-007): the loaded band [bottom, top] + hasNewer ---
+  const cc = cardCursors(lb); // 30 page-1 cards, newest-first
+  const topC = cc[5].cursor;
+  const botC = cc[20].cursor;
+  const bandIds = cc.slice(5, 21).map((x) => x.id);
+  const span = await getState(
+    `${base}/state?cursor=${encodeURIComponent(botC)}&top=${encodeURIComponent(topC)}`,
   );
   check(
-    'fragment: is a partial (no doctype / <head>)',
-    !/<!doctype/i.test(fr.body) && !fr.body.includes('<head'),
+    'span: covers exactly the loaded band [bottom, top]',
+    JSON.stringify(span.ids) === JSON.stringify(bandIds),
+  );
+  check('span: hasNewer=true (cards newer than top exist)', span.hasNewer === true);
+  // Falsifiable consent: recall a REAL band member and prove it drops out of the span.
+  const bandVictim = bandIds[8];
+  await db.query(`UPDATE messages SET moderation_state = 'rejected' WHERE id = $1`, [bandVictim]);
+  const spanRecalled = await getState(
+    `${base}/state?cursor=${encodeURIComponent(botC)}&top=${encodeURIComponent(topC)}`,
   );
   check(
-    'fragment: published text + card id present',
-    fr.body.includes('quick brown fox') && fr.body.includes(`id="msg-${pubTextId}"`),
+    'span: consent — a recalled band member drops out (was present, now gone)',
+    span.ids.includes(bandVictim) && !spanRecalled.ids.includes(bandVictim),
   );
-  check('fragment: consent — no unpublished text', !fr.body.includes('SECRET unpublished'));
+  await db.query(`UPDATE messages SET moderation_state = 'none' WHERE id = $1`, [bandVictim]);
+  // Directly stress the LIMIT (the HTTP SPAN_CAP=250 can't be hit with this seed):
+  // a small cap must truncate from the OLDEST, returning the band's NEWEST ids.
+  const truncated = await listPublishedSpanState(
+    db,
+    ARCHIVE_TYPES,
+    {} as never,
+    decodeCursor(botC)!,
+    decodeCursor(topC)!,
+    4,
+  );
+  check(
+    'span: cap LIMIT truncates from the oldest (returns the 4 newest band ids)',
+    JSON.stringify(truncated.ids) === JSON.stringify(bandIds.slice(0, 4)),
+  );
 
   // --- Add-on-publish: a new opted-in message appears; hash changes ---
   const freshId = await seed(6, A, 'text', 'FRESHLY published banana', '2026-07-18T09:00:00Z');
   const sAdd = await getState(`${base}/state`);
   check('add: state hash changes after publish', sAdd.hash !== s0.hash);
   check('add: newly published id appears in state', sAdd.ids.includes(freshId));
-  const frAdd = await app.inject({ method: 'GET', url: `${base}/fragment` });
+  const afterAdd = await app.inject({ method: 'GET', url: base });
   check(
-    'add: fragment now includes the new card',
-    frAdd.body.includes('FRESHLY published banana') && frAdd.body.includes(`id="msg-${freshId}"`),
+    'add: SSR page now renders the new card at the top',
+    idsInOrder(afterAdd.body)[0] === freshId,
   );
 
-  // --- Remove-on-recall: reject a published item; it leaves state AND media 404s ---
+  // --- Remove-on-recall: reject a published item; it leaves state, page AND media 404s ---
   const preRecallMedia = await app.inject({ method: 'GET', url: `${base}/media/${pubImgId}` });
   check('recall: media served before recall (200)', preRecallMedia.statusCode === 200);
   const sBefore = await getState(`${base}/state`);
@@ -534,23 +647,34 @@ async function main(): Promise<void> {
   check('recall: recalled id leaves state', !sAfter.ids.includes(pubImgId));
   const postRecallMedia = await app.inject({ method: 'GET', url: `${base}/media/${pubImgId}` });
   check('recall: recalled media now 404s', postRecallMedia.statusCode === 404);
-  const frRecall = await app.inject({ method: 'GET', url: `${base}/fragment` });
+  const pageRecall = await getPage(`${base}/page?dir=older`);
   check(
-    'recall: fragment drops the recalled card',
-    !frRecall.body.includes(`id="msg-${pubImgId}"`),
+    'recall: page chunk drops the recalled card',
+    !idsInOrder(pageRecall.html).includes(pubImgId),
   );
   await db.query(`UPDATE messages SET moderation_state = 'none' WHERE id = $1`, [pubImgId]);
 
-  // --- Public-appropriate rate limit on the poll endpoint (run last: burns the bucket) ---
-  let got429 = false;
-  for (let i = 0; i < 200; i++) {
-    const r = await app.inject({ method: 'GET', url: `${base}/state` });
-    if (r.statusCode === 429) {
-      got429 = true;
-      break;
+  // --- Public-appropriate rate limits (run last: burns the buckets) ---
+  let stateGot429 = false;
+  for (let i = 0; i < 200 && !stateGot429; i++) {
+    if ((await app.inject({ method: 'GET', url: `${base}/state` })).statusCode === 429)
+      stateGot429 = true;
+  }
+  check('rate limit: /state returns 429 under a burst', stateGot429);
+  // Cross-bucket proof: /state's bucket is now exhausted, yet /page has its OWN
+  // bucket → a single /page must still succeed (would 429 under a merged regime).
+  const pageAfterStateBurst = await app.inject({ method: 'GET', url: `${base}/page?dir=older` });
+  check(
+    'rate limit: /page still 200 after /state bucket exhausted (separate buckets)',
+    pageAfterStateBurst.statusCode === 200,
+  );
+  let pageGot429 = false;
+  for (let i = 0; i < 400 && !pageGot429; i++) {
+    if ((await app.inject({ method: 'GET', url: `${base}/page?dir=older` })).statusCode === 429) {
+      pageGot429 = true;
     }
   }
-  check('rate limit: /state returns 429 under a burst', got429);
+  check('rate limit: /page has its OWN bucket and 429s under a burst', pageGot429);
 
   await app.close();
   console.log(failures === 0 ? '\nverify:public OK' : `\nverify:public FAILED (${failures})`);

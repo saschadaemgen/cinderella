@@ -73,6 +73,10 @@ export interface SeoHead {
   analyticsScriptUrl: string;
   /** Serialized JSON-LD @graph ('' → omit). */
   jsonLd: string;
+  /** `<link rel=prev>` for the previous crawlable page ('' → omit; CCB-S2-007). */
+  prevUrl: string;
+  /** `<link rel=next>` for the next crawlable page ('' → omit; CCB-S2-007). */
+  nextUrl: string;
 }
 
 export interface SeoContext {
@@ -88,6 +92,21 @@ export interface SeoContext {
   canonicalUrl: string;
   /** Latest published image id for default preview imagery (or null). */
   ogImageId: number | null;
+  /** Current page (1-based) for rel=prev/next (CCB-S2-007). */
+  page: number;
+  /** Total pages for rel=prev/next (CCB-S2-007). */
+  pageCount: number;
+}
+
+/** A crawlable `?page=N` URL for the active filters (drops page=1), origin-based. */
+function pageUrl(basePath: string, f: PublicFilters, page: number): string {
+  const parts: string[] = [];
+  if (f.type) parts.push(`type=${encodeURIComponent(f.type)}`);
+  if (f.since) parts.push(`since=${encodeURIComponent(f.since)}`);
+  if (f.until) parts.push(`until=${encodeURIComponent(f.until)}`);
+  if (f.q) parts.push(`q=${encodeURIComponent(f.q)}`);
+  if (page > 1) parts.push(`page=${page}`);
+  return parts.length > 0 ? `${basePath}?${parts.join('&')}` : basePath;
 }
 
 const DEFAULT_DESCRIPTION =
@@ -107,9 +126,22 @@ export function resolveSeoHead(c: SeoContext): SeoHead {
   const description = seo.description.trim() || DEFAULT_DESCRIPTION;
 
   // Canonical honours the operator's base override, else the deployment origin.
-  const canonicalUrl = seo.canonicalBase
-    ? c.canonicalUrl.replace(c.origin, seo.canonicalBase.replace(/\/+$/, ''))
-    : c.canonicalUrl;
+  const applyBase = (u: string): string =>
+    seo.canonicalBase ? u.replace(c.origin, seo.canonicalBase.replace(/\/+$/, '')) : u;
+  const canonicalUrl = applyBase(c.canonicalUrl);
+
+  // rel=prev/next for crawlable deep pages (CCB-S2-007) — same canonicalBase as the
+  // canonical, omitted at the edges and entirely when the instance is noindex.
+  // Both gated to the real page range so an out-of-range `?page=N` (up to MAX_PAGE)
+  // emits NEITHER link — no descending chain of empty duplicate pages for crawlers.
+  const noindex = /noindex/i.test(seo.robots);
+  const inRange = c.page >= 1 && c.page <= c.pageCount;
+  const prevUrl =
+    !noindex && inRange && c.page > 1 ? applyBase(pageUrl(c.basePath, c.filters, c.page - 1)) : '';
+  const nextUrl =
+    !noindex && inRange && c.page < c.pageCount
+      ? applyBase(pageUrl(c.basePath, c.filters, c.page + 1))
+      : '';
 
   const ogImageUrl =
     seo.og.imageUrl ||
@@ -140,6 +172,8 @@ export function resolveSeoHead(c: SeoContext): SeoHead {
     feedUrl: seo.feed.enabled ? `${c.basePath}/feed.xml` : '',
     analyticsScriptUrl: seo.analytics.scriptUrl,
     jsonLd,
+    prevUrl,
+    nextUrl,
   };
 }
 

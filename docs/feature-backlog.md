@@ -105,6 +105,15 @@ the copy-paste snippet's iframe grants `allow="fullscreen"` for the cross-origin
 button (D-019). See [`src/web/front/render.ts`](../src/web/front/render.ts),
 [`src/web/front/embed.ts`](../src/web/front/embed.ts), [`src/db/embeds.ts`](../src/db/embeds.ts).
 
+**Infinite scroll shipped (CCB-S2-007):** the stream pages the full archive on scroll by a
+stable `(sent_at, id)` cursor (no offset drift), with DOM windowing (bounded memory), and a
+live reconcile that coexists with CCB-S2-006 (recalled content disappears wherever it sits;
+new head publishes prepend). New `GET /page` (cursor chunks) + ranged `GET /state?cursor=&top=`;
+the `/fragment` route is retired. Deep content stays crawlable via `?page=N` SSR + `rel=next/prev`
++ sitemap. Separate `/page` rate-limit bucket; SSE + full virtualization are future upgrades
+(D-020). See [`src/db/public-archive.ts`](../src/db/public-archive.ts),
+[`src/web/front/render.ts`](../src/web/front/render.ts), [`src/web/front/embed.ts`](../src/web/front/embed.ts).
+
 **Remaining in Season 2:** a design editor, further templates, the Web Component, an
 SSE transport for live-update, and SSR/media caching with publish-event invalidation.
 The history below records the pre-CCB-S2-003 state.
@@ -119,6 +128,7 @@ The history below records the pre-CCB-S2-003 state.
 - [x] Implement `GET /embed/:id` serving published content, honouring per-instance theme/layout/filters/media visibility. **(CCB-S2-003)**
 - [x] Live auto-update — consent-gated `state`/`fragment` poll endpoints; recalled content disappears and new content appears without a manual refresh. **(CCB-S2-006)**
 - [x] Inline video player — native `<video>` with controls/fullscreen, byte-range serving, per-instance download toggle (default on). **(CCB-S2-008)**
+- [x] Infinite scroll — cursor pagination, DOM windowing, crawlable deep pages (rel=next/prev + sitemap); coexists with live-update. **(CCB-S2-007)**
 - [ ] Render the widget (and the parked Web-Component wrapper).
 
 ### 2. Command & moderation system

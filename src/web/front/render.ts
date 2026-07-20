@@ -55,6 +55,14 @@ export interface RenderContext {
    * so the fragment path (which renders only the region) can omit it.
    */
   streamHash?: string;
+  /** Cursor for the next (older) infinite-scroll page (CCB-S2-007); '' when none. */
+  nextCursor: string;
+  /** Whether older pages exist beyond this SSR page (seeds the bottom sentinel). */
+  hasMore: boolean;
+  /** DOM windowing cap — max rendered cards the client keeps before trimming. */
+  windowCap: number;
+  /** Cursor endpoint page size (informational seed for the client). */
+  cursorPageSize: number;
 }
 
 /**
@@ -173,6 +181,11 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .pager{display:flex;justify-content:space-between;align-items:center;margin:20px 0;color:var(--muted);font-size:.9rem}
 .pager a{color:var(--accent);font-weight:600;text-decoration:none}
 .empty{color:var(--muted);text-align:center;padding:40px 0}
+#stream-top-sentinel,#stream-bottom-sentinel{height:1px;margin:0}
+#stream-top-spacer{width:100%}
+.stream-status{color:var(--muted);text-align:center;font-size:.85rem;padding:14px 0;margin:0}
+.stream-status button{margin-top:6px;padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--accent);font-weight:600;cursor:pointer;font-size:.85rem;transition:var(--tr)}
+.stream-status button:hover{border-color:var(--accent)}
 footer.arch{margin-top:24px;color:var(--muted);font-size:.8rem;text-align:center}
 a{color:var(--accent)}
 `.trim();
@@ -306,28 +319,41 @@ function filterBar(ctx: RenderContext): SafeHtml {
 const ARCHIVE_TYPE_ENTRIES: [string, string][] = Object.entries(TYPE_LABELS);
 
 /**
- * The live-reconcilable region: the item list (or empty state) plus the pager.
- * Rendered inside `#stream-list` on the full page AND returned verbatim by the
- * `/embed/:id/fragment` endpoint (CCB-S2-006), so a poll-triggered refresh swaps
- * exactly this markup. Deliberately free of <head>/theme/scripts — it drops into
- * the already-themed page, and carries only already-consent-gated items.
+ * The card sequence (`<li>` items only, no `<ul>` wrapper). Shared by the SSR
+ * region and the `/embed/:id/page` cursor endpoint (CCB-S2-007), so appended
+ * infinite-scroll cards are byte-identical to SSR. Each card carries `data-cursor`
+ * (its exact `(sent_at,id)` sort key) so the client can page/window/reconcile from
+ * the DOM alone. Consent-gated items only — inserted via `insertAdjacentHTML`, which
+ * runs no scripts, and media stays under the page's `img-src`/`media-src 'self'`.
+ */
+export function renderCards(
+  items: PublicItem[],
+  basePath: string,
+  showDownload: boolean,
+): SafeHtml {
+  return html`${items.map(
+    (it) =>
+      html`<li class="item" id="msg-${it.id}" data-cursor="${it.cursor}">
+        <div class="meta">
+          <span class="who">${it.senderDisplayName}</span>
+          <time datetime="${it.sentAt}">${fmtTime(it.sentAt)}</time>
+        </div>
+        ${it.textBody ? html`<p class="body">${it.textBody}</p>` : html``}
+        ${itemMedia(it, `${basePath}/media/${it.id}`, showDownload)} ${itemLinks(it)}
+      </li>`,
+  )}`;
+}
+
+/**
+ * The stream region: the item list (or empty state) plus the no-JS pager. Rendered
+ * inside `#stream-list` on the SSR page. The pager remains for crawlers + JS-off
+ * visitors; the infinite-scroll client hides it once it initializes (CCB-S2-007).
  */
 function renderStreamRegion(ctx: StreamRegionCtx): SafeHtml {
   const items =
     ctx.items.length > 0
       ? html`<ul class="items">
-          ${ctx.items.map(
-            (it) =>
-              html`<li class="item" id="msg-${it.id}">
-                <div class="meta">
-                  <span class="who">${it.senderDisplayName}</span>
-                  <time datetime="${it.sentAt}">${fmtTime(it.sentAt)}</time>
-                </div>
-                ${it.textBody ? html`<p class="body">${it.textBody}</p>` : html``}
-                ${itemMedia(it, `${ctx.basePath}/media/${it.id}`, ctx.showDownload)}
-                ${itemLinks(it)}
-              </li>`,
-          )}
+          ${renderCards(ctx.items, ctx.basePath, ctx.showDownload)}
         </ul>`
       : html`<p class="empty">No published messages match this view yet.</p>`;
 
@@ -361,15 +387,6 @@ function renderStreamRegion(ctx: StreamRegionCtx): SafeHtml {
   return html`${items} ${pager}`;
 }
 
-/**
- * The `/embed/:id/fragment` payload (CCB-S2-006): just {@link renderStreamRegion}
- * as a string, for the live-update client to swap into `#stream-list`. Same
- * consent-gated items as the full page — no head, no scripts.
- */
-export function renderStreamFragment(ctx: StreamRegionCtx): string {
-  return renderStreamRegion(ctx).toString();
-}
-
 /** The single render entry point. Returns a complete HTML document. */
 export function renderEmbedPage(ctx: RenderContext): string {
   const css = themeCss(ctx.presentation.theme, ctx.presentation.layout);
@@ -397,6 +414,8 @@ export function renderEmbedPage(ctx: RenderContext): string {
         <meta name="description" content="${seo.description}" />
         ${seo.keywords ? html`<meta name="keywords" content="${seo.keywords}" />` : null}
         <link rel="canonical" href="${seo.canonicalUrl}" />
+        ${seo.prevUrl ? html`<link rel="prev" href="${seo.prevUrl}" />` : null}
+        ${seo.nextUrl ? html`<link rel="next" href="${seo.nextUrl}" />` : null}
         ${
           seo.feedUrl
             ? html`<link
@@ -447,8 +466,21 @@ export function renderEmbedPage(ctx: RenderContext): string {
             </div>
           </header>
           ${filterBar(ctx)}
-          <div id="stream-list" data-hash="${ctx.streamHash ?? ''}" data-poll="${POLL_INTERVAL_MS}">
+          <div
+            id="stream-list"
+            data-hash="${ctx.streamHash ?? ''}"
+            data-poll="${POLL_INTERVAL_MS}"
+            data-next-cursor="${ctx.nextCursor}"
+            data-has-more="${ctx.hasMore ? '1' : '0'}"
+            data-at-top="${ctx.page === 1 ? '1' : '0'}"
+            data-page-size="${ctx.cursorPageSize}"
+            data-window-cap="${ctx.windowCap}"
+          >
+            <div id="stream-top-spacer" style="height: 0"></div>
+            <div id="stream-top-sentinel" aria-hidden="true"></div>
             ${region}
+            <div id="stream-bottom-sentinel" aria-hidden="true"></div>
+            <p class="stream-status" role="status" hidden></p>
           </div>
           <footer class="arch">
             Published with consent · powered by
@@ -464,7 +496,7 @@ export function renderEmbedPage(ctx: RenderContext): string {
           ${raw(THEME_TOGGLE_SCRIPT)};
         </script>
         <script nonce="${ctx.nonce}">
-          ${raw(LIVE_SCRIPT)};
+          ${raw(STREAM_SCRIPT)};
         </script>
       </body>
     </html>`;
@@ -478,16 +510,165 @@ export function renderEmbedPage(ctx: RenderContext): string {
 const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);document.addEventListener('loadedmetadata',h,true);document.addEventListener('fullscreenchange',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h()})();`;
 
 /**
- * Live-update client (CCB-S2-006) — consent-gated polling, progressive
- * enhancement. Polls `/embed/:id/state` (cheap ids+hash for the SAME URL filters
- * as this page); on a hash change it fetches the rendered `/embed/:id/fragment`
- * and swaps `#stream-list` — so a recalled item disappears and a newly published
- * one appears with no manual refresh. Both fetches are same-origin (CSP
- * connect-src 'self') and consent-gated server-side; the client never sees
- * unpublished ids. Re-posts the iframe height after any swap, and pauses entirely
- * while the tab is hidden (resuming — with an immediate tick — on focus).
+ * Stream client (CCB-S2-007) — infinite scroll + DOM windowing + live reconcile
+ * over ONE loaded-item model, progressive enhancement (SSR + no-JS pager stay
+ * intact). Replaces the CCB-S2-006 wholesale-fragment swap, which was incompatible
+ * with appended pages. Three drivers, serialized by a single-flight `busy` flag:
+ *  - bottom sentinel → `GET /page?dir=older` appends older cards, then windows the
+ *    top (removing far-above cards behind a height-preserving spacer);
+ *  - top sentinel → `GET /page?dir=newer` restores windowed-off cards on scroll-up
+ *    (RE-FETCH, never a stash — so a card recalled while off-screen can't return);
+ *  - ~18s poll → `GET /state?cursor=<bottom>&top=<top>` over the EXACT loaded band:
+ *    sweeps out any recalled id wherever it sits, and (only when at the true top)
+ *    prepends new publishes. All same-origin (CSP `connect-src 'self'`), consent-
+ *    gated server-side; the client never sees an unpublished id. Re-posts iframe
+ *    height after every mutation; pauses while hidden. In an auto-height iframe the
+ *    bottom sentinel is always in view, so auto-loads are burst-capped, then a
+ *    "Load older" button takes over (the SSR pager is the ultimate fallback).
  */
-const LIVE_SCRIPT = `(function(){var el=document.getElementById('stream-list');if(!el||!window.fetch)return;var poll=Math.max(8000,parseInt(el.getAttribute('data-poll'),10)||18000);var hash=el.getAttribute('data-hash')||'';var base=location.pathname.replace(/\\/+$/,'');var qs=location.search;var busy=false,timer=null;function height(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}function refresh(){fetch(base+'/fragment'+qs,{credentials:'omit'}).then(function(r){return r.ok?r.text():null}).then(function(t){if(t!=null){el.innerHTML=t;height()}}).catch(function(){})}function tick(){if(busy||document.hidden)return;busy=true;fetch(base+'/state'+qs,{credentials:'omit',headers:{accept:'application/json'}}).then(function(r){return r.ok?r.json():null}).then(function(s){busy=false;if(s&&typeof s.hash==='string'&&s.hash!==hash){hash=s.hash;refresh()}}).catch(function(){busy=false})}function start(){if(!timer)timer=setInterval(tick,poll)}function stop(){if(timer){clearInterval(timer);timer=null}}document.addEventListener('visibilitychange',function(){if(document.hidden){stop()}else{start();tick()}});if(!document.hidden)start()})();`;
+const STREAM_SCRIPT = `(function(){
+  var root=document.getElementById('stream-list');
+  if(!root||!window.fetch)return;
+  var base=location.pathname.replace(/\\/+$/,'');
+  var qs=location.search;
+  var POLL=Math.max(8000,parseInt(root.getAttribute('data-poll'),10)||18000);
+  function get(u){return fetch(u,{credentials:'omit',headers:{accept:'application/json'}});}
+  function postHeight(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*');}catch(e){}}
+  var ul=root.querySelector('ul.items');
+  if(!ul||!window.IntersectionObserver){
+    // Empty view (or no IO support): still reflect an empty->content transition.
+    var eh=root.getAttribute('data-hash')||'',et=null;
+    function eTick(){if(document.hidden)return;get(base+'/state'+qs).then(function(r){return r.ok?r.json():null;}).then(function(s){if(s&&typeof s.hash==='string'&&s.hash!==eh)location.reload();}).catch(function(){});}
+    document.addEventListener('visibilitychange',function(){if(!document.hidden)eTick();});
+    if(!document.hidden)et=setInterval(eTick,POLL);
+    return;
+  }
+  var spacer=document.getElementById('stream-top-spacer');
+  var topSent=document.getElementById('stream-top-sentinel');
+  var botSent=document.getElementById('stream-bottom-sentinel');
+  var statusEl=root.querySelector('.stream-status');
+  var pager=root.querySelector('nav.pager');
+  var CAP=Math.max(60,parseInt(root.getAttribute('data-window-cap'),10)||200);
+  var KEEP=Math.max(30,Math.floor(CAP*0.75));
+  var MIN_INTERVAL=250,MAX_BURST=5;
+  var atStreamTop=root.getAttribute('data-at-top')==='1';
+  var nextCursor=root.getAttribute('data-next-cursor')||'';
+  var hasMoreOlder=root.getAttribute('data-has-more')==='1';
+  var lastHash=root.getAttribute('data-hash')||'';
+  var loaded=[],idset={};
+  Array.prototype.forEach.call(ul.querySelectorAll('li.item[data-cursor]'),function(li){
+    var id=li.id.replace('msg-','');loaded.push({id:id,cursor:li.getAttribute('data-cursor'),el:li});idset[id]=1;
+  });
+  var hasWindowedNewer=false,busy=false,lastLoad=0,autoBurst=0,manual=false,timer=null,backoff=800;
+  // At the true stream head only when the SSR entry was page 1 AND nothing is
+  // windowed above (a deep ?page=N entry must NOT auto-prepend newer cards).
+  function atTop(){return atStreamTop&&!hasWindowedNewer;}
+  function fwd(path,extra){return base+path+(qs?qs+'&':'?')+extra;}
+  function setStatus(msg,btn,onClick){
+    if(!statusEl)return;
+    statusEl.textContent=msg||'';
+    if(btn){var b=document.createElement('button');b.type='button';b.textContent=btn;b.addEventListener('click',onClick);statusEl.appendChild(b);}
+    statusEl.hidden=!(msg||btn);
+  }
+  function parseCards(h){var t=document.createElement('template');t.innerHTML=h||'';return t.content.querySelectorAll('li.item[data-cursor]');}
+  function onError(retry){setStatus('Couldn\\u2019t load.',retry?'Retry':null,retry||null);if(retry){setTimeout(function(){if(!busy)retry();},backoff);backoff=Math.min(backoff*2,15000);}}
+  function loadOlder(auto){
+    if(busy||!hasMoreOlder||!nextCursor)return;
+    if(Date.now()-lastLoad<MIN_INTERVAL)return;
+    busy=true;lastLoad=Date.now();if(!manual)setStatus('Loading\\u2026');
+    get(fwd('/page','dir=older&cursor='+encodeURIComponent(nextCursor))).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){
+      busy=false;backoff=800;setStatus('');
+      Array.prototype.forEach.call(parseCards(d.html),function(li){var id=li.id.replace('msg-','');if(idset[id])return;ul.appendChild(li);loaded.push({id:id,cursor:li.getAttribute('data-cursor'),el:li});idset[id]=1;});
+      nextCursor=d.nextCursor||'';hasMoreOlder=!!d.hasMore;
+      if(!hasMoreOlder)io.unobserve(botSent);
+      trimTop();postHeight();
+      if(auto){autoBurst++;if(autoBurst>=MAX_BURST)enterManual();}else{autoBurst=0;}
+    }).catch(function(){busy=false;onError(function(){loadOlder(false);});});
+  }
+  function watchMedia(li){
+    // Lazy <img>/<video> grow AFTER insert; shrink the spacer by each settle delta
+    // so restored content doesn't drift the reader (#S2-007 review).
+    Array.prototype.forEach.call(li.querySelectorAll('img,video'),function(el){
+      var h0=el.offsetHeight;
+      function adj(){var d=el.offsetHeight-h0;if(d>0){spacer.style.height=Math.max(0,(parseInt(spacer.style.height,10)||0)-d)+'px';h0=el.offsetHeight;postHeight();}}
+      el.addEventListener('load',adj);el.addEventListener('loadedmetadata',adj);
+    });
+  }
+  function doPrepend(fromCursor,restore){
+    if(busy||!fromCursor)return;
+    if(Date.now()-lastLoad<MIN_INTERVAL)return;
+    busy=true;lastLoad=Date.now();setStatus('Loading\\u2026');
+    get(fwd('/page','dir=newer&cursor='+encodeURIComponent(fromCursor))).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){
+      busy=false;backoff=800;setStatus('');
+      var frag=document.createDocumentFragment(),fresh=[],k;
+      Array.prototype.forEach.call(parseCards(d.html),function(li){var id=li.id.replace('msg-','');if(idset[id])return;frag.appendChild(li);fresh.push({id:id,cursor:li.getAttribute('data-cursor'),el:li});idset[id]=1;});
+      if(fresh.length){ul.insertBefore(frag,ul.firstChild);loaded=fresh.concat(loaded);
+        if(restore){var h=0;for(k=0;k<fresh.length;k++)h+=fresh[k].el.offsetHeight;spacer.style.height=Math.max(0,(parseInt(spacer.style.height,10)||0)-h)+'px';for(k=0;k<fresh.length;k++)watchMedia(fresh[k].el);}
+      }
+      if(restore&&(!d.hasMore||(parseInt(spacer.style.height,10)||0)<=0)){spacer.style.height='0';hasWindowedNewer=false;}
+      trimBottom();postHeight();
+    }).catch(function(){busy=false;onError(null);});
+  }
+  function trimTop(){
+    if(loaded.length<=CAP)return;
+    var remove=loaded.length-KEEP,h=0;
+    for(var i=0;i<remove;i++){var it=loaded[i];h+=it.el.offsetHeight;if(it.el.parentNode)it.el.parentNode.removeChild(it.el);delete idset[it.id];}
+    loaded=loaded.slice(remove);
+    spacer.style.height=((parseInt(spacer.style.height,10)||0)+h)+'px';
+    hasWindowedNewer=true;postHeight();
+  }
+  function trimBottom(){
+    // Symmetric to trimTop: keep loaded <= CAP on the UPWARD path so it never
+    // exceeds the /state span LIMIT (which would truncate and wrongly evict still-
+    // published cards). Reset nextCursor to the new oldest kept card so scroll-down
+    // re-fetches the trimmed tail contiguously — no dupe, no gap (#S2-007 review).
+    if(loaded.length<=CAP)return;
+    var remove=loaded.length-KEEP,i;
+    for(i=0;i<remove;i++){var it=loaded[loaded.length-1-i];if(it.el.parentNode)it.el.parentNode.removeChild(it.el);delete idset[it.id];}
+    loaded=loaded.slice(0,KEEP);
+    nextCursor=loaded[loaded.length-1].cursor;hasMoreOlder=true;io.observe(botSent);
+    postHeight();
+  }
+  function reconcile(s){
+    var live={};for(var i=0;i<s.ids.length;i++)live[String(s.ids[i])]=1;
+    var changed=false;
+    for(var j=loaded.length-1;j>=0;j--){var it=loaded[j];if(!live[it.id]){if(it.el.parentNode)it.el.parentNode.removeChild(it.el);loaded.splice(j,1);delete idset[it.id];changed=true;}}
+    if(changed)postHeight();
+    if(atTop()&&s.hasNewer&&loaded.length)doPrepend(loaded[0].cursor,false);
+  }
+  function tick(){
+    if(busy||document.hidden||!loaded.length)return;
+    var top=loaded[0].cursor,bottom=loaded[loaded.length-1].cursor;
+    // Hold the single-flight lock across the poll so no load mutates loaded[] while
+    // the span is in flight (else reconcile would sweep cards outside the stale band).
+    busy=true;
+    get(fwd('/state','cursor='+encodeURIComponent(bottom)+'&top='+encodeURIComponent(top))).then(function(r){return r.ok?r.json():null;}).then(function(s){
+      busy=false;
+      if(!s||typeof s.hash!=='string')return;
+      // The band hash misses a publish NEWER than top — so also proceed on hasNewer.
+      if(s.hash===lastHash&&!s.hasNewer)return;
+      lastHash=s.hash;reconcile(s);
+    }).catch(function(){busy=false;});
+  }
+  var io=new IntersectionObserver(function(entries){
+    for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.isIntersecting)continue;
+      if(e.target===botSent){if(!manual)loadOlder(true);}
+      else if(e.target===topSent){if(hasWindowedNewer&&loaded.length)doPrepend(loaded[0].cursor,true);}
+    }
+  },{rootMargin:'600px 0px'});
+  function enterManual(){manual=true;io.unobserve(botSent);setStatus('',hasMoreOlder?'Load older messages':null,exitManual);}
+  function exitManual(){if(!manual)return;manual=false;autoBurst=0;setStatus('');if(hasMoreOlder)io.observe(botSent);}
+  addEventListener('scroll',function(){autoBurst=0;if(manual)exitManual();},{passive:true});
+  if(hasMoreOlder)io.observe(botSent);
+  io.observe(topSent);
+  function start(){if(!timer)timer=setInterval(tick,POLL);}
+  function stop(){if(timer){clearInterval(timer);timer=null;}}
+  document.addEventListener('visibilitychange',function(){if(document.hidden)stop();else{start();tick();}});
+  if(!document.hidden)start();
+  // Hide the no-JS pager only at the true head (page 1); a deep ?page=N entry keeps
+  // it so a JS visitor can still navigate to newer pages (infinite scroll only pages older).
+  if(pager&&atStreamTop)pager.style.display='none';
+})();`;
 
 /** Compact UTC timestamp for display (deterministic, locale-independent). */
 function fmtTime(iso: string): string {

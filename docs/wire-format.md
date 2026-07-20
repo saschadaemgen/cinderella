@@ -127,24 +127,31 @@ to (so hosts, crawlers, and later briefings can rely on it):
   is the switch (default `dark`); a no-flash `<head>` script applies the stored value
   before paint (and honours `prefers-color-scheme` for `mode: auto`); `<meta
   name="theme-color">` is `#050A12` (dark) / `#FAFBFD` (light), updated on toggle.
-- **Live auto-update contract (CCB-S2-006).** An open page keeps itself current
-  without a manual refresh via two consent-gated poll endpoints, both keyed by the
-  SAME query params as the page (so the visitor's filtered view stays live):
-  - `GET /embed/:id/state` → `{ "hash": "<16-hex>", "ids": [<published ids>] }`.
-    Cheap: ids + a version hash (over the id set + an md5 content marker), never
-    bodies or media. `cache-control: public, max-age=5`. The hash changes iff the
-    set — or an item's content — changes; that is the client's signal to refresh.
-  - `GET /embed/:id/fragment` → the re-rendered `#stream-list` region (the item
-    list + pager) as an HTML partial (no `<head>`/scripts), `cache-control: no-store`.
-  - The page carries the initial hash on `#stream-list` (`data-hash`) and the poll
-    interval (`data-poll`, ms). The client (`LIVE_SCRIPT`) polls state every ~18s,
-    and on a hash change swaps in the fragment and re-posts the iframe height. It
-    **pauses while `document.hidden`** and resumes (with an immediate tick) on focus.
-  - Both endpoints resolve through `published_messages`, so a recalled id vanishes
-    from `state`/`fragment` (and its media `404`s) within one interval; a newly
-    published one appears the same way. The embed CSP includes `connect-src 'self'`
-    for the same-origin poll; both endpoints are under a per-IP rate limit. SSE
-    (`/embed/:id/events`) is a recorded future upgrade, not part of today's contract.
+- **Live auto-update + infinite-scroll contract (CCB-S2-006/007).** An open page keeps
+  itself current AND pages the archive without a manual refresh, via consent-gated
+  endpoints keyed by the SAME query params as the page (so the filtered view stays
+  live), all reading `published_messages`:
+  - **Cursor**: an opaque base64url of `"<sent_at::text>|<id>"` (full precision). SSR
+    emits it on each card (`data-cursor`) and the next-page cursor on `#stream-list`
+    (`data-next-cursor`, plus `data-has-more`, `data-at-top`, `data-window-cap`,
+    `data-page-size`, `data-hash`, `data-poll`). A malformed cursor → `400`.
+  - `GET /embed/:id/page?cursor=<c>&dir=older|newer` → `{ "html": "<li…>…", "nextCursor":
+    "<c>|null", "hasMore": <bool> }`. `html` is the bare card sequence (reuses the SSR
+    renderer). `older` pages down (strictly older); `newer` pages up (newest-first).
+    `cache-control: no-store`.
+  - `GET /embed/:id/state?cursor=<bottom>&top=<top>` → `{ "hash": "<16-hex>", "ids":
+    [<band ids>], "hasNewer": <bool> }` over the loaded band `[bottom, top]` inclusive.
+    Ids + hash only (never bodies/media), `cache-control: public, max-age=5`. Without a
+    cursor it falls back to the legacy page-1 window (empty-view use).
+  - The client (`STREAM_SCRIPT`) auto-loads older on scroll (IntersectionObserver),
+    windows the DOM (height-preserving top spacer), polls `state` every ~18s to sweep
+    recalled ids + prepend new head publishes, re-posts iframe height after every
+    mutation, and **pauses while `document.hidden`**. `/page` + `/state` sit in SEPARATE
+    per-IP rate-limit buckets. A recalled id vanishes (media `404`s) within one interval.
+  - **Crawlable deep pages**: `<link rel="prev"/"next">` in `<head>` (range-gated,
+    canonicalBase-consistent) alongside the unchanged `?page=N` SSR pages + sitemap.
+  - The CCB-S2-006 `/fragment` route + wholesale swap are REMOVED; SSE
+    (`/embed/:id/events`) remains a recorded future upgrade.
 
 ## Appendix: related file-transfer wire behaviour (context)
 

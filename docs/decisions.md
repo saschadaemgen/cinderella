@@ -13,6 +13,38 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-020 — Infinite scroll is cursor-paged + DOM-windowed; live-update reconciles the loaded span
+**Status: IMPLEMENTED.**
+**Decision.** The public stream pages by a stable `(sent_at, id)` cursor (CCB-S2-007), not by
+offset, so items don't shift/dupe when content is published/recalled between loads. The SSR
+first page is unchanged (SEO) and seeds the next cursor. `GET /embed/:id/page?cursor=&dir=older|newer`
+returns a JSON envelope `{ html, nextCursor, hasMore }` of bare `<li>` cards (reusing
+`renderCards`, byte-identical to SSR), consent-gated through `published_messages`, behind its
+OWN per-IP rate-limit bucket (a scroll burst can't 429 the consent poll). A single inline
+`STREAM_SCRIPT` owns one loaded-item model: a bottom `IntersectionObserver` appends older cards
+and windows the top behind a height-preserving spacer (DOM bounded at `WINDOW_CAP`); a top
+sentinel restores windowed-off cards on scroll-up by RE-FETCHING (never a stash — a card
+recalled while off-screen can't return); the ~18s poll hits
+`GET /embed/:id/state?cursor=<bottom>&top=<top>` over the EXACT loaded band (+ `hasNewer`),
+sweeping out any recalled id wherever it sits and prepending new publishes only at the true
+head. Windowing is symmetric (trim top on scroll-down, trim bottom on restore) so `loaded` never
+exceeds the span LIMIT. Deep crawlability is preserved by the untouched `?page=N` SSR pages +
+`<link rel=prev/next>` (canonicalBase-consistent, range-gated) + the sitemap; JS-off keeps the
+pager. Filters/search reset pagination via a full SSR navigation (shareable).
+**Rationale.** Offset paging dupes/skips under concurrent publish/recall; a cursor is a stable
+row boundary. The wholesale `/fragment` swap (D-018) was incompatible with appended pages, so it
+is retired for a surgical reconcile — the D-016/D-018 CONSENT guarantees are UNCHANGED (both
+/page and /state read only `published_messages`; recalled content still vanishes within the poll
+interval); only the DOM mechanism differs. The auto-height-iframe eager-load case is bounded by a
+burst cap → "Load older" button; full virtualization is the heavier future alternative. Verified
+by [`scripts/verify-public.ts`](../scripts/verify-public.ts) (cursor stability, span bounding +
+LIMIT truncation, consent, rel=next/prev, separate rate-limit buckets) + a windowing simulation
+(loaded never breaches the cap through a down-then-up cycle). An adversarial review caught and
+fixed asymmetric windowing (unbounded up-scroll growth), a hash-gate hiding new top publishes, a
+deep-page auto-prepend misfire, and a poll single-flight gap.
+
+---
+
 ### D-019 — Video plays inline; a media download button is per-instance, default ON; the media route serves byte-ranges
 **Status: IMPLEMENTED.**
 **Decision.** On the public stream, video renders as an INLINE native `<video controls
@@ -44,7 +76,12 @@ consent-before-range + snippet fullscreen grant).
 ---
 
 ### D-018 — Live auto-update on the public front is consent-gated polling; "immediately" = within the poll interval
-**Status: IMPLEMENTED.**
+**Status: IMPLEMENTED (DOM mechanism revised by [D-020](#d-020)).**
+**Mechanism note (CCB-S2-007):** the wholesale `GET /embed/:id/fragment` swap and the
+`LIVE_SCRIPT` described below were REPLACED by the infinite-scroll client's surgical reconcile
+(cursor `/page` + ranged `/state?cursor=&top=` + id-sweep, D-020). The polling posture, the
+per-IP poll rate limit, "immediately = within the poll interval", and the consent guarantees
+here are ALL unchanged — only the DOM update path differs (`/fragment` is removed).
 **Decision.** An open `/embed/:id` page keeps itself current with no manual refresh by
 polling a cheap, consent-gated state endpoint and swapping in a re-rendered fragment
 when the set changes — progressive enhancement layered on the unchanged SSR/SEO
