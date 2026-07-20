@@ -78,10 +78,11 @@ Not SimpleX wire, but the outward HTTP/embedding contract the public front commi
 to (so hosts, crawlers, and later briefings can rely on it):
 
 - **iframe auto-height.** The embed page posts `{ cinderellaEmbedHeight: <px> }` to
-  `window.parent` on `load`/`resize` (and via `ResizeObserver`), matching the
-  Season 1 snippet's listener that filters on `e.origin === publicOrigin` and
-  `e.data.cinderellaEmbedHeight` (`src/web/views/embeds.ts:24-30`,
-  `src/web/front/render.ts` `HEIGHT_SCRIPT`).
+  `window.parent` on `load`/`resize` (and via `ResizeObserver`), and again after a
+  live-update DOM swap (CCB-S2-006), matching the Season 1 snippet's listener that
+  filters on `e.origin === publicOrigin` and `e.data.cinderellaEmbedHeight`
+  (`src/web/views/embeds.ts:24-30`, `src/web/front/render.ts` `HEIGHT_SCRIPT` /
+  `LIVE_SCRIPT`).
 - **URL-driven, crawlable filter state.** Filtering/search is expressed as query
   params on `GET /embed/:id`: `type` (one of text/image/video/voice/link/file),
   `since`/`until` (`YYYY-MM-DD`, interpreted UTC), `q` (full-text), `page`. Each is
@@ -116,6 +117,24 @@ to (so hosts, crawlers, and later briefings can rely on it):
   is the switch (default `dark`); a no-flash `<head>` script applies the stored value
   before paint (and honours `prefers-color-scheme` for `mode: auto`); `<meta
   name="theme-color">` is `#050A12` (dark) / `#FAFBFD` (light), updated on toggle.
+- **Live auto-update contract (CCB-S2-006).** An open page keeps itself current
+  without a manual refresh via two consent-gated poll endpoints, both keyed by the
+  SAME query params as the page (so the visitor's filtered view stays live):
+  - `GET /embed/:id/state` → `{ "hash": "<16-hex>", "ids": [<published ids>] }`.
+    Cheap: ids + a version hash (over the id set + an md5 content marker), never
+    bodies or media. `cache-control: public, max-age=5`. The hash changes iff the
+    set — or an item's content — changes; that is the client's signal to refresh.
+  - `GET /embed/:id/fragment` → the re-rendered `#stream-list` region (the item
+    list + pager) as an HTML partial (no `<head>`/scripts), `cache-control: no-store`.
+  - The page carries the initial hash on `#stream-list` (`data-hash`) and the poll
+    interval (`data-poll`, ms). The client (`LIVE_SCRIPT`) polls state every ~18s,
+    and on a hash change swaps in the fragment and re-posts the iframe height. It
+    **pauses while `document.hidden`** and resumes (with an immediate tick) on focus.
+  - Both endpoints resolve through `published_messages`, so a recalled id vanishes
+    from `state`/`fragment` (and its media `404`s) within one interval; a newly
+    published one appears the same way. The embed CSP includes `connect-src 'self'`
+    for the same-origin poll; both endpoints are under a per-IP rate limit. SSE
+    (`/embed/:id/events`) is a recorded future upgrade, not part of today's contract.
 
 ## Appendix: related file-transfer wire behaviour (context)
 

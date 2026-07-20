@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-005**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-006**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -83,9 +83,21 @@ script, `theme-color` meta) — the first design-template switch. Instance `mode
 (auto/light/dark) sets the SSR default; operator accent/bg/text overrides still win.
 See [`src/web/front/render.ts`](../src/web/front/render.ts).
 
-**Remaining in Season 2:** a design editor (CCB-S2-006), further templates, the Web
-Component, and SSR/media caching with publish-event invalidation. The history below
-records the pre-CCB-S2-003 state.
+**Live auto-update shipped (CCB-S2-006):** an open page keeps itself current with no
+manual refresh — consent-gated polling as progressive enhancement over the unchanged
+SSR/SEO. `GET /embed/:id/state` (published ids + a version hash) and
+`GET /embed/:id/fragment` (the re-rendered list region) both read
+`published_messages`, so a recalled item disappears (its media `404`s) and a newly
+published one appears within one poll interval; the client pauses while the tab is
+hidden and re-posts the iframe height after a swap. Adds `connect-src 'self'` to the
+embed CSP and a per-IP rate limit on the two poll endpoints. SSE is the recorded
+future upgrade; "immediately" means "within the poll interval" (D-018). See
+[`src/web/front/embed.ts`](../src/web/front/embed.ts),
+[`src/web/front/render.ts`](../src/web/front/render.ts).
+
+**Remaining in Season 2:** a design editor, further templates, the Web Component, an
+SSE transport for live-update, and SSR/media caching with publish-event invalidation.
+The history below records the pre-CCB-S2-003 state.
 
 - **What exists today (verified):**
   - `embed_instances` table ([`migrations/003_admin.sql:26`](../migrations/003_admin.sql)).
@@ -95,6 +107,7 @@ records the pre-CCB-S2-003 state.
   > This matches the outline's suspicion exactly: the embed **admin settings** exist, the **public `/embed` endpoint is not implemented.** Season 2 must add the route that resolves an instance id → its settings → the `published_messages` projection and renders the widget (plus the Web Component, per [`CLAUDE.md`](../CLAUDE.md)).
 
 - [x] Implement `GET /embed/:id` serving published content, honouring per-instance theme/layout/filters/media visibility. **(CCB-S2-003)**
+- [x] Live auto-update — consent-gated `state`/`fragment` poll endpoints; recalled content disappears and new content appears without a manual refresh. **(CCB-S2-006)**
 - [ ] Render the widget (and the parked Web-Component wrapper).
 
 ### 2. Command & moderation system

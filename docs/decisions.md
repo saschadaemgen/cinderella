@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-006**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,35 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-018 — Live auto-update on the public front is consent-gated polling; "immediately" = within the poll interval
+**Status: IMPLEMENTED.**
+**Decision.** An open `/embed/:id` page keeps itself current with no manual refresh by
+polling a cheap, consent-gated state endpoint and swapping in a re-rendered fragment
+when the set changes — progressive enhancement layered on the unchanged SSR/SEO
+baseline. `GET /embed/:id/state` returns only the published item ids for the page's
+active filters plus a short version hash (ids + an md5 content marker — never bodies
+or media); `GET /embed/:id/fragment` returns the re-rendered `#stream-list` region.
+Both resolve through `published_messages`
+([`listPublishedIds`](../src/db/public-archive.ts)), so a recalled / unpublished id
+can never appear — when one leaves the set the hash changes and the client drops the
+card; a newly published one appears the same way. The client (`LIVE_SCRIPT`,
+[`src/web/front/render.ts`](../src/web/front/render.ts)) polls every ~18s, pauses
+while the tab is hidden (resuming, with an immediate tick, on focus), and re-posts the
+iframe height after any swap. The embed CSP adds `connect-src 'self'` for the
+same-origin poll; the two poll endpoints carry their own per-IP rate limit (the public
+front is otherwise exempt from the admin limiter). **"Immediately" means "within one
+poll interval"** (plus a ≤5s state-cache TTL). SSE (`/embed/:id/events`) is the
+recorded future upgrade — deliberately not built.
+**Rationale.** Live removal of recalled content is defense-in-depth for consent, not
+only UX: a viewer who leaves the page open must not keep seeing content a member has
+withdrawn. Polling (vs SSE) keeps the server stateless and cache-friendly and ships
+with no new infrastructure; the state payload is ids + hash only, so even a briefly
+stale cache can at most delay a card's removal by the TTL, never leak content.
+Verified by [`scripts/verify-public.ts`](../scripts/verify-public.ts) (remove-on-recall
+incl. media 404, add-on-publish, consent-only ids, rate limit).
 
 ---
 

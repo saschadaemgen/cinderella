@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-005**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-006**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is *derived* from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -128,11 +128,12 @@ Each migration is applied once, inside a transaction, by `db/migrate.ts`.
 
 Per `CLAUDE.md`'s "Parked" section:
 
-- **`/embed/<id>` foundation now SHIPPED** (CCB-S2-003, §11) — the SSR public front,
-  server-side filters/search, and consent-gated media are built. Still planned: the
-  full SEO/marketing suite (CCB-S2-004), multiple templates (CCB-S2-005), a design
-  editor (CCB-S2-006), the Web Component, and SSR caching with publish-event
-  invalidation.
+- **`/embed/<id>` public front now SHIPPED** (§11) — the SSR front, server-side
+  filters/search, and consent-gated media (CCB-S2-003); the full SEO/marketing suite
+  (CCB-S2-004); house-palette theming with a light/dark toggle (CCB-S2-005); and
+  consent-gated live auto-update (CCB-S2-006). Still planned: multiple templates, a
+  design editor, the Web Component, an SSE upgrade of the live-update transport, and
+  SSR caching with publish-event invalidation.
 - **AI moderation / CSAM scanning** — `moderation_state` is only a hook (every row stays `'none'`); the scanning track is separate and unbuilt.
 - **Self-hosted relay/super-peer capture.**
 
@@ -142,8 +143,10 @@ The public, unauthenticated `/embed/<id>` front is deliberately layered so later
 briefings extend it without touching consent logic:
 
 - **Data layer** — [`src/db/public-archive.ts`](../src/db/public-archive.ts):
-  `listPublishedItems` and `getPublishedMedia` read **only** through the
-  `published_messages` view (the consent gate). Filters (media type, UTC time
+  `listPublishedItems`, `listPublishedIds` (the cheap ids + version-hash query for
+  the live poll, CCB-S2-006), and `getPublishedMedia` read **only** through the
+  `published_messages` view (the consent gate) — a shared `buildPublishedWhere`
+  keeps the item and ids queries filtering identically. Filters (media type, UTC time
   window, `websearch_to_tsquery('simple', …)` over the generated `search` vector)
   run in SQL, so filtered/searched views are server-rendered and crawlable.
 - **Presentation layer** — [`src/web/front/render.ts`](../src/web/front/render.ts):
@@ -152,8 +155,10 @@ briefings extend it without touching consent logic:
   content rendered into the markup (the SEO foundation), not client-JS-rendered. The
   head carries `<title>`/description, canonical, Open Graph + Twitter, and an
   extensible schema.org JSON-LD `@graph` (WebSite · Organization · ItemList of
-  DiscussionForumPosting). The seam is where CCB-S2-005 (templates) and CCB-S2-006
-  (design editor) plug in.
+  DiscussionForumPosting). The list-and-pager region factors into
+  `renderStreamRegion` / `renderStreamFragment` (CCB-S2-006) so the live fragment and
+  the full page render identical markup. The seam is where later templates and a
+  design editor plug in.
 - **Routes** — [`src/web/front/embed.ts`](../src/web/front/embed.ts): `GET /embed/:id`
   (page) and `GET /embed/:id/media/:msgId` (media, resolved through the published
   check every request). Registered in `buildServer` outside the admin auth guard;
@@ -183,6 +188,20 @@ briefings extend it without touching consent logic:
   tokens when set (compared against the built-in defaults in `themeCss`). All
   nonce-guarded — no CSP change — and the SSR content/SEO are untouched (progressive
   enhancement). In [`src/web/front/render.ts`](../src/web/front/render.ts).
+- **Live auto-update (CCB-S2-006)** — an open page keeps itself current with no manual
+  refresh, as progressive enhancement over the unchanged SSR/SEO baseline. Two
+  consent-gated routes ([`src/web/front/embed.ts`](../src/web/front/embed.ts)), keyed
+  by the same query filters as the page: `GET /embed/:id/state` returns published ids
+  + a version hash (`listPublishedIds`; short-TTL cache; ids/hash only, no content),
+  and `GET /embed/:id/fragment` re-renders the `#stream-list` region (`no-store`). The
+  inline `LIVE_SCRIPT` polls state every ~18s; on a hash change it swaps in the
+  fragment and re-posts the iframe height, and it pauses while the tab is hidden.
+  Because both read `published_messages`, a recalled item vanishes (and its media
+  `404`s) within one interval and a newly published one appears — consent enforced
+  live, not just at load. The only CSP change is `connect-src 'self'` (the same-origin
+  poll); the two endpoints carry their own per-IP rate limit. SSE is a recorded future
+  upgrade, not built. Verified by the extended
+  [`scripts/verify-public.ts`](../scripts/verify-public.ts).
 
 ## Appendix: divergences (code wins)
 

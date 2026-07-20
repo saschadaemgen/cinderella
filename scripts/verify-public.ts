@@ -267,10 +267,10 @@ async function main(): Promise<void> {
   // Analytics — off by default (connect-src 'none'); configured → CSP host + script.
   const noAnalytics = await app.inject({ method: 'GET', url: base });
   check(
-    'analytics: off by default (connect-src none, no script)',
+    'analytics: off by default (connect-src self for polling, no analytics host)',
     (noAnalytics.headers['content-security-policy'] ?? '')
       .toString()
-      .includes("connect-src 'none'"),
+      .includes("connect-src 'self'"),
   );
   await updateEmbedInstance(
     db,
@@ -337,6 +337,118 @@ async function main(): Promise<void> {
   const pinkPage = await app.inject({ method: 'GET', url: base });
   check('theme: operator accent override applies (#ec4899)', pinkPage.body.includes('#ec4899'));
   await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
+
+  // ===== CCB-S2-006: live auto-update (consent-gated polling) =====
+  type State = { hash: string; ids: number[] };
+  const getState = async (url: string): Promise<State> =>
+    JSON.parse((await app.inject({ method: 'GET', url })).body) as State;
+
+  // --- Page wiring: the progressive-enhancement client is present + CSP allows it ---
+  const live = await app.inject({ method: 'GET', url: base });
+  const lb = live.body;
+  check(
+    'live: CSP connect-src self (same-origin poll allowed)',
+    (live.headers['content-security-policy'] ?? '').toString().includes("connect-src 'self'"),
+  );
+  check(
+    'live: #stream-list present with data-poll interval',
+    lb.includes('id="stream-list"') && lb.includes('data-poll="'),
+  );
+  check('live: non-empty initial version hash embedded', /data-hash="[0-9a-f]{8,}"/.test(lb));
+  check(
+    'live: poll client wired (state + fragment + visibility pause)',
+    lb.includes('/state') &&
+      lb.includes('/fragment') &&
+      lb.includes('visibilitychange') &&
+      lb.includes('document.hidden'),
+  );
+  check(
+    'live: SSR content + JSON-LD still in markup (progressive enhancement)',
+    lb.includes('quick brown fox') && lb.includes('application/ld+json'),
+  );
+  check(
+    'footer: powered-by Cinderella links to the GitHub repo',
+    lb.includes('github.com/saschadaemgen/cinderella') && lb.includes('powered by'),
+  );
+
+  // --- State endpoint: consent-gated ids + hash ---
+  const st = await app.inject({ method: 'GET', url: `${base}/state` });
+  check(
+    'state: 200 + application/json',
+    st.statusCode === 200 &&
+      (st.headers['content-type'] ?? '').toString().includes('application/json'),
+  );
+  check(
+    'state: short-TTL cache (carries ids+hash only, never content)',
+    (st.headers['cache-control'] ?? '').toString().includes('max-age='),
+  );
+  const s0 = JSON.parse(st.body) as State;
+  check('state: version hash present', typeof s0.hash === 'string' && s0.hash.length > 0);
+  check(
+    'state: includes the published ids',
+    s0.ids.includes(pubTextId) && s0.ids.includes(pubImgId),
+  );
+  check(
+    'state: consent — excludes unpublished / before-opt-in ids',
+    !s0.ids.includes(unpubTextId) &&
+      !s0.ids.includes(unpubImgId) &&
+      !s0.ids.includes(beforeOptInId),
+  );
+
+  // --- Fragment endpoint: rendered region, consent-gated, partial (no <head>) ---
+  const fr = await app.inject({ method: 'GET', url: `${base}/fragment` });
+  check(
+    'fragment: 200 + text/html',
+    fr.statusCode === 200 && (fr.headers['content-type'] ?? '').toString().includes('text/html'),
+  );
+  check(
+    'fragment: is a partial (no doctype / <head>)',
+    !/<!doctype/i.test(fr.body) && !fr.body.includes('<head'),
+  );
+  check(
+    'fragment: published text + card id present',
+    fr.body.includes('quick brown fox') && fr.body.includes(`id="msg-${pubTextId}"`),
+  );
+  check('fragment: consent — no unpublished text', !fr.body.includes('SECRET unpublished'));
+
+  // --- Add-on-publish: a new opted-in message appears; hash changes ---
+  const freshId = await seed(6, A, 'text', 'FRESHLY published banana', '2026-07-18T09:00:00Z');
+  const sAdd = await getState(`${base}/state`);
+  check('add: state hash changes after publish', sAdd.hash !== s0.hash);
+  check('add: newly published id appears in state', sAdd.ids.includes(freshId));
+  const frAdd = await app.inject({ method: 'GET', url: `${base}/fragment` });
+  check(
+    'add: fragment now includes the new card',
+    frAdd.body.includes('FRESHLY published banana') && frAdd.body.includes(`id="msg-${freshId}"`),
+  );
+
+  // --- Remove-on-recall: reject a published item; it leaves state AND media 404s ---
+  const preRecallMedia = await app.inject({ method: 'GET', url: `${base}/media/${pubImgId}` });
+  check('recall: media served before recall (200)', preRecallMedia.statusCode === 200);
+  const sBefore = await getState(`${base}/state`);
+  await db.query(`UPDATE messages SET moderation_state = 'rejected' WHERE id = $1`, [pubImgId]);
+  const sAfter = await getState(`${base}/state`);
+  check('recall: state hash changes after recall', sAfter.hash !== sBefore.hash);
+  check('recall: recalled id leaves state', !sAfter.ids.includes(pubImgId));
+  const postRecallMedia = await app.inject({ method: 'GET', url: `${base}/media/${pubImgId}` });
+  check('recall: recalled media now 404s', postRecallMedia.statusCode === 404);
+  const frRecall = await app.inject({ method: 'GET', url: `${base}/fragment` });
+  check(
+    'recall: fragment drops the recalled card',
+    !frRecall.body.includes(`id="msg-${pubImgId}"`),
+  );
+  await db.query(`UPDATE messages SET moderation_state = 'none' WHERE id = $1`, [pubImgId]);
+
+  // --- Public-appropriate rate limit on the poll endpoint (run last: burns the bucket) ---
+  let got429 = false;
+  for (let i = 0; i < 200; i++) {
+    const r = await app.inject({ method: 'GET', url: `${base}/state` });
+    if (r.statusCode === 429) {
+      got429 = true;
+      break;
+    }
+  }
+  check('rate limit: /state returns 429 under a burst', got429);
 
   await app.close();
   console.log(failures === 0 ? '\nverify:public OK' : `\nverify:public FAILED (${failures})`);

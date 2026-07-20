@@ -13,6 +13,7 @@
  * editor CCB-S2-006) change rendering without touching consent logic.
  */
 
+import { createHash } from 'node:crypto';
 import type { Queryable } from './pool.js';
 
 /** Message types the archive understands (matches the `message_type` enum). */
@@ -79,18 +80,15 @@ function toLinks(v: unknown): PublicLink[] {
 }
 
 /**
- * Lists published items for the public front, newest first, applying the
- * instance's enabled media types plus the visitor's URL-driven filters. All
- * filtering runs in SQL (server-side, crawlable) against `published_messages`.
+ * Builds the shared consent-gated WHERE clause for `published_messages`: the
+ * instance's enabled types (inlined whitelist) plus the visitor's validated
+ * filters. Returned `params` are positional ($1…); a caller that appends its own
+ * (LIMIT/OFFSET) starts numbering at `params.length + 1`.
  */
-export async function listPublishedItems(
-  db: Queryable,
+function buildPublishedWhere(
   enabledTypes: readonly ArchiveType[],
-  f: PublicFilters,
-): Promise<PublicPage> {
-  // No enabled types → nothing is shown (and no query needed).
-  if (enabledTypes.length === 0) return { items: [], total: 0 };
-
+  f: Pick<PublicFilters, 'type' | 'since' | 'until' | 'q'>,
+): { whereSql: string; params: unknown[] } {
   const where: string[] = [];
   const params: unknown[] = [];
   const add = (clause: string, value: unknown): void => {
@@ -110,7 +108,23 @@ export async function listPublishedItems(
   // Full-text search over the generated 'simple' tsvector (matches migration 001).
   if (f.q) add("m.search @@ websearch_to_tsquery('simple', ?)", f.q);
 
-  const whereSql = `WHERE ${where.join(' AND ')}`;
+  return { whereSql: `WHERE ${where.join(' AND ')}`, params };
+}
+
+/**
+ * Lists published items for the public front, newest first, applying the
+ * instance's enabled media types plus the visitor's URL-driven filters. All
+ * filtering runs in SQL (server-side, crawlable) against `published_messages`.
+ */
+export async function listPublishedItems(
+  db: Queryable,
+  enabledTypes: readonly ArchiveType[],
+  f: PublicFilters,
+): Promise<PublicPage> {
+  // No enabled types → nothing is shown (and no query needed).
+  if (enabledTypes.length === 0) return { items: [], total: 0 };
+
+  const { whereSql, params } = buildPublishedWhere(enabledTypes, f);
   const countRes = await db.query<{ n: string }>(
     `SELECT count(*) AS n FROM published_messages m ${whereSql}`,
     params,
@@ -149,6 +163,71 @@ export async function listPublishedItems(
       mediaMime: r.media_mime,
     })),
   };
+}
+
+/** Cheap consent-gated fingerprint of a view (CCB-S2-006 live poll). */
+export interface PublishedState {
+  /** Published item ids for the view, newest first (same window as the page). */
+  ids: number[];
+  /** Short version hash over the id list + per-item content marker + total. */
+  hash: string;
+  total: number;
+}
+
+interface StateRow {
+  id: string;
+  /** md5 over the published text + media path — changes on edit, never leaks. */
+  marker: string;
+}
+
+/** Version hash of a view: stable for an unchanged set, differs on add/remove/edit. */
+function streamHash(rows: StateRow[], total: number): string {
+  const h = createHash('sha256');
+  h.update(String(total));
+  for (const r of rows) {
+    // Driver-dependent: PGlite returns `id` as a number, pg as a string — coerce.
+    h.update(`\n${String(r.id)}:${String(r.marker)}`);
+  }
+  return h.digest('hex').slice(0, 16);
+}
+
+/**
+ * Cheap consent-gated fingerprint of the current view (CCB-S2-006): the published
+ * item ids for the instance's active filters (same order/window as
+ * {@link listPublishedItems}) plus a version hash. Reads ONLY through
+ * `published_messages`, so a recalled / unpublished / rejected id can never appear
+ * here — when one leaves the set the hash changes, and the client drops the card.
+ * Ids + an md5 content marker only — no bodies, no links, no media bytes: this is
+ * the poll endpoint's hot path, kept as light as possible.
+ */
+export async function listPublishedIds(
+  db: Queryable,
+  enabledTypes: readonly ArchiveType[],
+  f: PublicFilters,
+): Promise<PublishedState> {
+  if (enabledTypes.length === 0) return { ids: [], hash: streamHash([], 0), total: 0 };
+
+  const { whereSql, params } = buildPublishedWhere(enabledTypes, f);
+  const countRes = await db.query<{ n: string }>(
+    `SELECT count(*) AS n FROM published_messages m ${whereSql}`,
+    params,
+  );
+
+  const offset = Math.min((f.page - 1) * f.pageSize, Number.MAX_SAFE_INTEGER);
+  const limitParam = `$${params.length + 1}`;
+  const offsetParam = `$${params.length + 2}`;
+  const res = await db.query<StateRow>(
+    `SELECT m.id,
+            md5(coalesce(m.text_body, '') || ':' || coalesce(m.media_path, '')) AS marker
+     FROM published_messages m
+     ${whereSql}
+     ORDER BY m.sent_at DESC, m.id DESC
+     LIMIT ${limitParam} OFFSET ${offsetParam}`,
+    [...params, f.pageSize, offset],
+  );
+
+  const total = Number(countRes.rows[0]?.n ?? 0);
+  return { ids: res.rows.map((r) => Number(r.id)), hash: streamHash(res.rows, total), total };
 }
 
 export interface PublishedMedia {

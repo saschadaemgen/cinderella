@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-006**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -401,11 +401,15 @@ consent:
   (`src/web/server.ts`).
 - **Embed response headers.** The front sets its own: a CSP of
   `default-src 'none'; img-src 'self'; style-src 'nonce-…'; script-src 'nonce-…';
-  frame-ancestors *; base-uri 'none'; form-action 'self'; connect-src 'none'`
+  frame-ancestors *; base-uri 'none'; form-action 'self'; connect-src 'self'`
   (embeddable anywhere, no external assets), `x-content-type-options: nosniff`,
   `referrer-policy: no-referrer`, and `cache-control: no-store` (consent freshness —
-  publish/unpublish/delete reflect immediately). The inline themed `<style>` and the
-  tiny height `<script>` carry the per-response nonce; there is no `'unsafe-inline'`.
+  publish/unpublish/delete reflect immediately). `connect-src 'self'` is the sole CSP
+  allowance for the live-update poll (CCB-S2-006) — same-origin `fetch` only, no
+  third party; a configured analytics origin is added on top for that one instance
+  (D-017). The inline themed `<style>` and the nonce'd `<script>`s (height, theme
+  toggle, and the live-update client) carry the per-response nonce; there is no
+  `'unsafe-inline'`.
 - **Indexable by design.** The public front is `index, follow` (the SEO goal); the
   admin console remains `noindex, nofollow` — unchanged. nginx sets
   `X-Robots-Tag: noindex, nofollow` at the server level (to keep the admin out of
@@ -413,8 +417,20 @@ consent:
   (and re-adds HSTS, since `add_header` in a location replaces inherited ones) —
   see [`deploy/nginx-admin.conf`](../deploy/nginx-admin.conf). Without this, the
   edge header would defeat the page's `<meta robots>`.
-- **Flagged follow-up.** SSR/media caching with invalidation on publish events, and a
-  public-appropriate rate limit, are deferred (the front renders per request today).
+- **Live auto-update inherits the gate (CCB-S2-006).** The poll endpoints
+  `GET /embed/:id/state` (published ids + a version hash) and `GET /embed/:id/fragment`
+  (the re-rendered list region) read the SAME `published_messages` view, so neither
+  can emit an unpublished / recalled id — when an item is withdrawn its id leaves the
+  state set (hash changes → the client drops the card) and its media `404`s, all
+  within one poll interval. `state` carries ids + hash only (never bodies or media),
+  so its short-TTL cache (`max-age=5`) can at most delay a removal by the TTL, never
+  leak content; `fragment` is `no-store`. Both are behind a dedicated per-IP limiter
+  (`GlobalRateLimiter`, `POLL_RATE_PER_MIN`) — the public-appropriate rate limit the
+  front previously lacked — since they are the one visitor-driven, repeatedly-hit
+  surface here.
+- **Flagged follow-up.** SSR/media caching with invalidation on publish events is
+  deferred (the page still renders per request); an SSE transport for live-update is a
+  recorded future upgrade over today's polling.
 - **SEO artifacts inherit the gate (CCB-S2-004).** The sitemap, RSS feed, JSON-LD
   structured data, and OG preview are all built in `src/web/front/seo.ts` from the
   same consent-gated data — no unpublished content is ever referenced or emitted

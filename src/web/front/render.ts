@@ -46,7 +46,25 @@ export interface RenderContext {
   seo: SeoHead;
   /** CSP nonce for the inline <style> and <script>. */
   nonce: string;
+  /**
+   * Version hash of the current view (CCB-S2-006) — the same value the
+   * `/embed/:id/state` poll endpoint returns. Embedded on `#stream-list` so the
+   * live-update client detects a change without a redundant first fetch. Optional
+   * so the fragment path (which renders only the region) can omit it.
+   */
+  streamHash?: string;
 }
+
+/**
+ * Live-update poll cadence (CCB-S2-006). "Immediately" for the archive means
+ * "within this interval": a recalled item disappears — and a newly published one
+ * appears — at most one tick after the change, with no manual refresh. Embedded on
+ * `#stream-list` (data-poll) so the client and the docs share one source of truth.
+ */
+const POLL_INTERVAL_MS = 18000;
+
+/** The subset of the render context the reconcilable stream region needs. */
+type StreamRegionCtx = Pick<RenderContext, 'items' | 'filters' | 'basePath' | 'page' | 'pageCount'>;
 
 /** Builds a query string from the active filters, with overrides (e.g. page). */
 function queryString(f: PublicFilters, overrides: Partial<PublicFilters> = {}): string {
@@ -238,17 +256,14 @@ function filterBar(ctx: RenderContext): SafeHtml {
 
 const ARCHIVE_TYPE_ENTRIES: [string, string][] = Object.entries(TYPE_LABELS);
 
-/** The single render entry point. Returns a complete HTML document. */
-export function renderEmbedPage(ctx: RenderContext): string {
-  const css = themeCss(ctx.presentation.theme, ctx.presentation.layout);
-  const seo = ctx.seo;
-  // SSR initial theme from the instance mode; the visitor toggle (localStorage)
-  // overrides on subsequent views. `auto` renders dark and lets the no-flash
-  // script honour prefers-color-scheme.
-  const mode = ctx.presentation.theme.mode;
-  const initialTheme = mode === 'light' ? 'light' : 'dark';
-  const themeColor = initialTheme === 'light' ? '#FAFBFD' : '#050A12';
-
+/**
+ * The live-reconcilable region: the item list (or empty state) plus the pager.
+ * Rendered inside `#stream-list` on the full page AND returned verbatim by the
+ * `/embed/:id/fragment` endpoint (CCB-S2-006), so a poll-triggered refresh swaps
+ * exactly this markup. Deliberately free of <head>/theme/scripts — it drops into
+ * the already-themed page, and carries only already-consent-gated items.
+ */
+function renderStreamRegion(ctx: StreamRegionCtx): SafeHtml {
   const items =
     ctx.items.length > 0
       ? html`<ul class="items">
@@ -292,6 +307,31 @@ export function renderEmbedPage(ctx: RenderContext): string {
           </span>
         </nav>`
       : html``;
+
+  return html`${items} ${pager}`;
+}
+
+/**
+ * The `/embed/:id/fragment` payload (CCB-S2-006): just {@link renderStreamRegion}
+ * as a string, for the live-update client to swap into `#stream-list`. Same
+ * consent-gated items as the full page — no head, no scripts.
+ */
+export function renderStreamFragment(ctx: StreamRegionCtx): string {
+  return renderStreamRegion(ctx).toString();
+}
+
+/** The single render entry point. Returns a complete HTML document. */
+export function renderEmbedPage(ctx: RenderContext): string {
+  const css = themeCss(ctx.presentation.theme, ctx.presentation.layout);
+  const seo = ctx.seo;
+  // SSR initial theme from the instance mode; the visitor toggle (localStorage)
+  // overrides on subsequent views. `auto` renders dark and lets the no-flash
+  // script honour prefers-color-scheme.
+  const mode = ctx.presentation.theme.mode;
+  const initialTheme = mode === 'light' ? 'light' : 'dark';
+  const themeColor = initialTheme === 'light' ? '#FAFBFD' : '#050A12';
+
+  const region = renderStreamRegion(ctx);
 
   const body = html`<!doctype html>
     <html lang="en" data-theme="${initialTheme}">
@@ -356,14 +396,25 @@ export function renderEmbedPage(ctx: RenderContext): string {
               ${raw(THEME_TOGGLE)}
             </div>
           </header>
-          ${filterBar(ctx)} ${items} ${pager}
-          <footer class="arch">Published with consent · powered by Cinderella</footer>
+          ${filterBar(ctx)}
+          <div id="stream-list" data-hash="${ctx.streamHash ?? ''}" data-poll="${POLL_INTERVAL_MS}">
+            ${region}
+          </div>
+          <footer class="arch">
+            Published with consent · powered by
+            <a href="https://github.com/saschadaemgen/cinderella" target="_blank" rel="noopener"
+              >Cinderella</a
+            >
+          </footer>
         </div>
         <script nonce="${ctx.nonce}">
           ${raw(HEIGHT_SCRIPT)};
         </script>
         <script nonce="${ctx.nonce}">
           ${raw(THEME_TOGGLE_SCRIPT)};
+        </script>
+        <script nonce="${ctx.nonce}">
+          ${raw(LIVE_SCRIPT)};
         </script>
       </body>
     </html>`;
@@ -373,6 +424,18 @@ export function renderEmbedPage(ctx: RenderContext): string {
 
 /** Posts the document height to the embedding parent (Season 1 snippet contract). */
 const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h()})();`;
+
+/**
+ * Live-update client (CCB-S2-006) — consent-gated polling, progressive
+ * enhancement. Polls `/embed/:id/state` (cheap ids+hash for the SAME URL filters
+ * as this page); on a hash change it fetches the rendered `/embed/:id/fragment`
+ * and swaps `#stream-list` — so a recalled item disappears and a newly published
+ * one appears with no manual refresh. Both fetches are same-origin (CSP
+ * connect-src 'self') and consent-gated server-side; the client never sees
+ * unpublished ids. Re-posts the iframe height after any swap, and pauses entirely
+ * while the tab is hidden (resuming — with an immediate tick — on focus).
+ */
+const LIVE_SCRIPT = `(function(){var el=document.getElementById('stream-list');if(!el||!window.fetch)return;var poll=Math.max(8000,parseInt(el.getAttribute('data-poll'),10)||18000);var hash=el.getAttribute('data-hash')||'';var base=location.pathname.replace(/\\/+$/,'');var qs=location.search;var busy=false,timer=null;function height(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}function refresh(){fetch(base+'/fragment'+qs,{credentials:'omit'}).then(function(r){return r.ok?r.text():null}).then(function(t){if(t!=null){el.innerHTML=t;height()}}).catch(function(){})}function tick(){if(busy||document.hidden)return;busy=true;fetch(base+'/state'+qs,{credentials:'omit',headers:{accept:'application/json'}}).then(function(r){return r.ok?r.json():null}).then(function(s){busy=false;if(s&&typeof s.hash==='string'&&s.hash!==hash){hash=s.hash;refresh()}}).catch(function(){busy=false})}function start(){if(!timer)timer=setInterval(tick,poll)}function stop(){if(timer){clearInterval(timer);timer=null}}document.addEventListener('visibilitychange',function(){if(document.hidden){stop()}else{start();tick()}});if(!document.hidden)start()})();`;
 
 /** Compact UTC timestamp for display (deterministic, locale-independent). */
 function fmtTime(iso: string): string {

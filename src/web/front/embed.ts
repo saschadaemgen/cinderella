@@ -22,17 +22,24 @@ import { resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import sharp from 'sharp';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { getEmbedInstance, listEmbedInstances } from '../../db/embeds.js';
+import { getEmbedInstance, listEmbedInstances, type EmbedSettings } from '../../db/embeds.js';
 import {
   ARCHIVE_TYPES,
   getPublishedMedia,
   latestPublishedImageId,
+  listPublishedIds,
   listPublishedItems,
   publishedLastmod,
   type ArchiveType,
   type PublicFilters,
 } from '../../db/public-archive.js';
-import { renderEmbedPage, type PresentationConfig, type RenderContext } from './render.js';
+import {
+  renderEmbedPage,
+  renderStreamFragment,
+  type PresentationConfig,
+  type RenderContext,
+} from './render.js';
+import { GlobalRateLimiter } from '../auth.js';
 import {
   buildFeedXml,
   buildOgSvg,
@@ -49,6 +56,13 @@ const FEED_SIZE = 40;
 const MAX_PAGE = 1_000_000;
 const MAX_Q = 200;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * Per-IP ceiling for the live-update poll endpoints (CCB-S2-006). A normal viewer
+ * polls state every ~18s (~3/min) and fetches a fragment only on a real change, so
+ * this leaves generous headroom for shared NATs while capping a script that hammers
+ * the endpoints. These routes are otherwise exempt from the admin rate limit.
+ */
+const POLL_RATE_PER_MIN = 120;
 
 /** True for any path the public front owns (skip admin headers/auth/IP/rate-limit). */
 export function isPublicFront(path: string): boolean {
@@ -82,7 +96,10 @@ interface EmbedQuery {
  */
 function applyEmbedHeaders(reply: FastifyReply, nonce: string, analyticsHost: string): void {
   const scriptSrc = analyticsHost ? `'nonce-${nonce}' ${analyticsHost}` : `'nonce-${nonce}'`;
-  const connectSrc = analyticsHost ? `${analyticsHost}` : "'none'";
+  // 'self' is required for the live-update client's same-origin poll (CCB-S2-006):
+  // fetch() to /embed/:id/state and /fragment. An analytics origin, if configured,
+  // is added on top for this instance only.
+  const connectSrc = analyticsHost ? `'self' ${analyticsHost}` : "'self'";
   reply.header(
     'content-security-policy',
     [
@@ -104,39 +121,37 @@ function applyEmbedHeaders(reply: FastifyReply, nonce: string, analyticsHost: st
 export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): void {
   const origin = ctx.adminCfg.publicOrigin.replace(/\/+$/, '');
 
+  // Per-IP limiter for the live-update poll endpoints only (state + fragment).
+  // The public front is otherwise exempt from the admin rate limit; these two
+  // endpoints are visitor-driven and cheap, so they get their own generous cap.
+  const pollLimiter = new GlobalRateLimiter(() => POLL_RATE_PER_MIN);
+  let sincePrune = 0;
+  const pollAllowed = (reply: FastifyReply, ip: string): boolean => {
+    if (++sincePrune >= 200) {
+      sincePrune = 0;
+      pollLimiter.prune();
+    }
+    if (pollLimiter.allow(ip)) return true;
+    reply.code(429).header('cache-control', 'no-store').header('retry-after', '30');
+    return false;
+  };
+
   // --- The SSR page ---
   app.get<{ Params: { id: string }; Querystring: EmbedQuery }>('/embed/:id', async (req, reply) => {
     const instance = await getEmbedInstance(ctx.db, req.params.id);
     if (!instance) return reply.code(404).type('text/plain').send('Not found');
 
     const s = instance.settings;
-    const enabledTypes = ARCHIVE_TYPES.filter((t) => s.media[t]);
     const basePath = `${origin}/embed/${instance.id}`;
+    const { enabledTypes, filters } = resolveView(s, req.query);
+    const page = filters.page;
 
-    const qs = req.query;
-    const rawType = typeof qs.type === 'string' ? qs.type : '';
-    const type: ArchiveType | undefined =
-      s.filters.byType && (ARCHIVE_TYPES as readonly string[]).includes(rawType)
-        ? (rawType as ArchiveType)
-        : undefined;
-    const since = s.filters.byTime && qs.since && validDate(qs.since) ? qs.since : undefined;
-    const until = s.filters.byTime && qs.until && validDate(qs.until) ? qs.until : undefined;
-    const q =
-      s.filters.search && typeof qs.q === 'string' && qs.q.trim().length > 0
-        ? qs.q.trim().slice(0, MAX_Q)
-        : undefined;
-    const page = Math.min(MAX_PAGE, Math.max(1, Number.parseInt(qs.page ?? '1', 10) || 1));
-
-    const filters: PublicFilters = {
-      page,
-      pageSize: PAGE_SIZE,
-      ...(type ? { type } : {}),
-      ...(since ? { since } : {}),
-      ...(until ? { until } : {}),
-      ...(q ? { q } : {}),
-    };
     const { items, total } = await listPublishedItems(ctx.db, enabledTypes, filters);
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    // Initial version hash so the live-update client's first poll is a no-op unless
+    // the set genuinely changed since render (CCB-S2-006). Same value the state
+    // endpoint returns; a cheap ids+hash query, not a re-render.
+    const { hash: streamHash } = await listPublishedIds(ctx.db, enabledTypes, filters);
     const ogImageId = await latestPublishedImageId(ctx.db, enabledTypes);
 
     const seoCtx: SeoContext = {
@@ -172,12 +187,55 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       origin,
       seo,
       nonce,
+      streamHash,
     };
 
     applyEmbedHeaders(reply, nonce, analyticsHost);
     reply.type('text/html; charset=utf-8');
     return renderEmbedPage(renderCtx);
   });
+
+  // --- Live-update state (CCB-S2-006): cheap consent-gated ids + version hash ---
+  // The poll hot path. Resolves ONLY through published_messages, so a recalled or
+  // unpublished id can never appear; the returned hash changes when the set (or an
+  // item's content) changes, which is the client's signal to fetch the fragment.
+  app.get<{ Params: { id: string }; Querystring: EmbedQuery }>(
+    '/embed/:id/state',
+    async (req, reply) => {
+      if (!pollAllowed(reply, req.ip)) return { error: 'rate_limited' };
+      const instance = await getEmbedInstance(ctx.db, req.params.id);
+      if (!instance) return reply.code(404).type('application/json').send({ error: 'not_found' });
+      const { enabledTypes, filters } = resolveView(instance.settings, req.query);
+      const state = await listPublishedIds(ctx.db, enabledTypes, filters);
+      // Short TTL: cache-friendly yet consent-fresh within the poll interval. The
+      // payload carries ids + hash only — never content — so a briefly stale hash
+      // can at most delay a card's removal by the TTL, never leak anything.
+      reply.header('cache-control', 'public, max-age=5');
+      reply.header('x-content-type-options', 'nosniff');
+      reply.type('application/json; charset=utf-8');
+      return { hash: state.hash, ids: state.ids };
+    },
+  );
+
+  // --- Live-update fragment (CCB-S2-006): the re-rendered #stream-list region ---
+  // Same consent-gated items as the full page, minus head/theme/scripts. Fetched
+  // only when the state hash changed, then swapped into the open page's DOM.
+  app.get<{ Params: { id: string }; Querystring: EmbedQuery }>(
+    '/embed/:id/fragment',
+    async (req, reply) => {
+      if (!pollAllowed(reply, req.ip)) return 'Rate limited';
+      const instance = await getEmbedInstance(ctx.db, req.params.id);
+      if (!instance) return reply.code(404).type('text/plain').send('Not found');
+      const { enabledTypes, filters } = resolveView(instance.settings, req.query);
+      const { items, total } = await listPublishedItems(ctx.db, enabledTypes, filters);
+      const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      const basePath = `${origin}/embed/${instance.id}`;
+      reply.header('cache-control', 'no-store');
+      reply.header('x-content-type-options', 'nosniff');
+      reply.type('text/html; charset=utf-8');
+      return renderStreamFragment({ items, filters, basePath, page: filters.page, pageCount });
+    },
+  );
 
   // --- Media (consent-gated per request) ---
   app.get<{ Params: { id: string; msgId: string } }>(
@@ -306,6 +364,39 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       origin,
     );
   });
+}
+
+/**
+ * Resolves the enabled media types + the validated visitor filters for a request.
+ * Shared by the page, state, and fragment routes so all three read the IDENTICAL
+ * consent-gated view — the poll's ids/hash always match what the page renders.
+ */
+function resolveView(
+  s: EmbedSettings,
+  qs: EmbedQuery,
+): { enabledTypes: ArchiveType[]; filters: PublicFilters } {
+  const enabledTypes = ARCHIVE_TYPES.filter((t) => s.media[t]);
+  const rawType = typeof qs.type === 'string' ? qs.type : '';
+  const type: ArchiveType | undefined =
+    s.filters.byType && (ARCHIVE_TYPES as readonly string[]).includes(rawType)
+      ? (rawType as ArchiveType)
+      : undefined;
+  const since = s.filters.byTime && qs.since && validDate(qs.since) ? qs.since : undefined;
+  const until = s.filters.byTime && qs.until && validDate(qs.until) ? qs.until : undefined;
+  const q =
+    s.filters.search && typeof qs.q === 'string' && qs.q.trim().length > 0
+      ? qs.q.trim().slice(0, MAX_Q)
+      : undefined;
+  const page = Math.min(MAX_PAGE, Math.max(1, Number.parseInt(qs.page ?? '1', 10) || 1));
+  const filters: PublicFilters = {
+    page,
+    pageSize: PAGE_SIZE,
+    ...(type ? { type } : {}),
+    ...(since ? { since } : {}),
+    ...(until ? { until } : {}),
+    ...(q ? { q } : {}),
+  };
+  return { enabledTypes, filters };
 }
 
 /** Images render inline; everything else downloads. */
