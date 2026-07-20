@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is *derived* from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -223,6 +223,20 @@ briefings extend it without touching consent logic:
   works; the copy-paste snippet's iframe gains `allow="fullscreen"` so the native
   fullscreen button works cross-origin. `HEIGHT_SCRIPT` re-posts iframe height on
   `loadedmetadata` + `fullscreenchange`.
+- **Content reporting (CCB-S2-009)** — a per-item no-JS `<details>` "Report" form
+  ([`renderCards`](../src/web/front/render.ts)) posts to `POST /embed/:id/report` — the
+  ONE mutating public-front route (exempt from the admin CSRF/auth preHandler; rate-limited
+  own bucket; cross-site rejected via `Sec-Fetch-Site`). It gates on `isPublished`
+  (`published_messages`, D-016) with a neutral 303 (no oracle) and NEVER changes
+  publication (visible-until-review); it stores minimal data (`migrations/008_reports.sql`
+  + [`src/db/reports.ts`](../src/db/reports.ts)) — a keyed daily-rotating `HMAC` token, no
+  raw IP. The admin side ([`src/web/views/reports.ts`](../src/web/views/reports.ts)) is a
+  grouped `/reports` queue with consent/auth-gated previews and audited take-down / resolve
+  / dismiss (takedown reuses `setModerationState`); an open-count bar is injected into every
+  admin page via an `onSend` comment marker. External alerts are an inert Settings
+  placeholder. Verified by
+  [`scripts/verify-public.ts`](../scripts/verify-public.ts) +
+  [`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
 
 ## Appendix: divergences (code wins)
 

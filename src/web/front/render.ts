@@ -63,6 +63,8 @@ export interface RenderContext {
   windowCap: number;
   /** Cursor endpoint page size (informational seed for the client). */
   cursorPageSize: number;
+  /** True after a report was filed (renders the confirmation banner; CCB-S2-009). */
+  reported?: boolean;
 }
 
 /**
@@ -176,6 +178,15 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .item .dl-btn:hover{border-color:var(--accent);color:var(--accent-bright)}
 .item .dl-btn svg{width:16px;height:16px;flex:none}
 .item .filelink{display:inline-block;margin-top:8px;color:var(--accent);font-weight:600;text-decoration:none}
+.item details.report{margin-top:8px}
+.item details.report>summary{cursor:pointer;list-style:none;color:var(--muted);font-size:.85rem}
+.item details.report>summary::-webkit-details-marker{display:none}
+.item details.report[open]{padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card)}
+.item details.report form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.item details.report .rlabel{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted)}
+.item details.report select,.item details.report textarea{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-dark);color:var(--fg);font:inherit;font-size:.85rem}
+.item details.report button{align-self:flex-start;padding:6px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:.85rem}
+.report-ok{margin:12px 0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--fg)}
 .item .links{margin:8px 0 0;padding:0;list-style:none}
 .item .links a{color:var(--accent)}
 .pager{display:flex;justify-content:space-between;align-items:center;margin:20px 0;color:var(--muted);font-size:.9rem}
@@ -340,8 +351,42 @@ export function renderCards(
         </div>
         ${it.textBody ? html`<p class="body">${it.textBody}</p>` : html``}
         ${itemMedia(it, `${basePath}/media/${it.id}`, showDownload)} ${itemLinks(it)}
+        ${reportControl(it, basePath)}
       </li>`,
   )}`;
+}
+
+const REASON_OPTIONS: [string, string][] = [
+  ['illegal', 'Illegal content'],
+  ['spam', 'Spam'],
+  ['copyright', 'Copyright infringement'],
+  ['other', 'Other'],
+];
+
+/**
+ * Per-item "Report" control (CCB-S2-009) — a no-JS `<details>` disclosure wrapping a
+ * plain POST form (works under the strict front CSP; no inline handlers). Reporting
+ * never changes publication (visible-until-review); the endpoint is consent-gated +
+ * rate-limited server-side. Lives in each card, so it survives infinite-scroll appends
+ * and the live reconcile (which removes/adds whole cards, never rewriting one in place).
+ */
+function reportControl(it: PublicItem, basePath: string): SafeHtml {
+  return html`<details class="report">
+    <summary>Report</summary>
+    <form method="post" action="${basePath}/report">
+      <input type="hidden" name="msg" value="${it.id}" />
+      <label class="rlabel"
+        >Reason
+        <select name="reason">
+          ${REASON_OPTIONS.map(([v, l]) => html`<option value="${v}">${l}</option>`)}
+        </select></label
+      >
+      <label class="rlabel"
+        >Note (optional) <textarea name="note" maxlength="1000" rows="2"></textarea>
+      </label>
+      <button type="submit">Submit report</button>
+    </form>
+  </details>`;
 }
 
 /**
@@ -466,6 +511,13 @@ export function renderEmbedPage(ctx: RenderContext): string {
             </div>
           </header>
           ${filterBar(ctx)}
+          ${
+            ctx.reported
+              ? html`<p class="report-ok">
+                  Thank you — your report was received and will be reviewed.
+                </p>`
+              : null
+          }
           <div
             id="stream-list"
             data-hash="${ctx.streamHash ?? ''}"

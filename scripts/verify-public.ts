@@ -23,6 +23,7 @@ import {
 } from '../src/db/embeds.js';
 import { embedSnippet } from '../src/web/views/embeds.js';
 import { listPublishedSpanState, decodeCursor, ARCHIVE_TYPES } from '../src/db/public-archive.js';
+import { isPublicFront } from '../src/web/front/embed.js';
 import { SettingsService } from '../src/settings/service.js';
 import { SecurityService } from '../src/security/settings.js';
 import type { Queryable } from '../src/db/pool.js';
@@ -653,6 +654,94 @@ async function main(): Promise<void> {
     !idsInOrder(pageRecall.html).includes(pubImgId),
   );
   await db.query(`UPDATE messages SET moderation_state = 'none' WHERE id = $1`, [pubImgId]);
+
+  // ===== CCB-S2-009: public content reporting =====
+  const report = (
+    msg: number | string,
+    reason: string,
+    note = '',
+  ): Promise<{ statusCode: number; headers: Record<string, unknown>; body: string }> =>
+    app.inject({
+      method: 'POST',
+      url: `${base}/report`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `msg=${msg}&reason=${reason}&note=${encodeURIComponent(note)}`,
+    }) as never;
+  const reportRows = async (id: number): Promise<{ note: string | null }[]> =>
+    (
+      await db.query<{ note: string | null }>('SELECT note FROM reports WHERE message_id = $1', [
+        id,
+      ])
+    ).rows;
+
+  check(
+    'report: per-item no-JS <details> report form present in cards',
+    lb.includes('<details class="report"') &&
+      lb.includes('/report"') &&
+      lb.includes('name="reason"'),
+  );
+  const r1 = await report(pubTextId, 'illegal', 'bad content');
+  check(
+    'report: POST → 303 to ?reported=1 with NO session/CSRF (front exempt)',
+    r1.statusCode === 303 && (r1.headers['location'] ?? '').toString().includes('reported=1'),
+  );
+  check('report: exactly one row stored', (await reportRows(pubTextId)).length === 1);
+  const stillThere = await app.inject({ method: 'GET', url: base });
+  check(
+    'report: reported item is NOT hidden (visible-until-review)',
+    stillThere.body.includes(`id="msg-${pubTextId}"`),
+  );
+  const r2 = await report(pubTextId, 'spam', 'dup');
+  check(
+    'report: dedup — repeat from same client+day absorbed (still one row)',
+    r2.statusCode === 303 && (await reportRows(pubTextId)).length === 1,
+  );
+  const banner = await app.inject({ method: 'GET', url: `${base}?reported=1` });
+  check(
+    'report: ?reported=1 renders the confirmation banner',
+    banner.body.includes('class="report-ok"'),
+  );
+
+  const rUnpub = await report(unpubTextId, 'illegal', 'x');
+  check(
+    'report consent: unpublished item → neutral 303, NO row (no oracle)',
+    rUnpub.statusCode === 303 && (await reportRows(unpubTextId)).length === 0,
+  );
+  const rBad = await report(pubImgId, 'notareason', 'x');
+  check('report: invalid reason → 400', rBad.statusCode === 400);
+  await report(pubVideoId, 'other', 'z'.repeat(1500));
+  check(
+    'report: note capped at 1000 chars',
+    ((await reportRows(pubVideoId))[0]?.note ?? '').length === 1000,
+  );
+  // The CSRF exemption is scoped to isPublicFront — pin the matcher boundary directly
+  // (the r1 POST above already proved the front's report POST needs no CSRF; the admin
+  // harness proves a session'd admin mutation without _csrf is 403'd — the two halves).
+  check(
+    'report: CSRF exemption is SCOPED to the front (isPublicFront boundary)',
+    isPublicFront('/embed/x/report') === true &&
+      isPublicFront('/embeds') === false &&
+      isPublicFront('/messages/1/takedown') === false &&
+      isPublicFront('/settings') === false,
+  );
+  const crossSite = await app.inject({
+    method: 'POST',
+    url: `${base}/report`,
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      'sec-fetch-site': 'cross-site',
+    },
+    payload: `msg=${pubTextId}&reason=spam`,
+  });
+  check(
+    'report: cross-site submission is rejected (403, anti-flood)',
+    crossSite.statusCode === 403,
+  );
+  let reportGot429 = false;
+  for (let i = 0; i < 20 && !reportGot429; i++) {
+    if ((await report(pubTextId, 'other', '')).statusCode === 429) reportGot429 = true;
+  }
+  check('report: rate-limited (429) under a burst (own strict bucket)', reportGot429);
 
   // --- Public-appropriate rate limits (run last: burns the buckets) ---
   let stateGot429 = false;

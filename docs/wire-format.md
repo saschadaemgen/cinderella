@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -152,6 +152,13 @@ to (so hosts, crawlers, and later briefings can rely on it):
     canonicalBase-consistent) alongside the unchanged `?page=N` SSR pages + sitemap.
   - The CCB-S2-006 `/fragment` route + wholesale swap are REMOVED; SSE
     (`/embed/:id/events`) remains a recorded future upgrade.
+- **Content report contract (CCB-S2-009).** `POST /embed/:id/report` — a plain same-origin
+  `<form>` POST (fields `msg`, `reason` ∈ {illegal, spam, copyright, other}, optional `note`),
+  no CSRF/session (the one exempt mutating public-front route). Always answers with a neutral
+  `303` → `?reported=1` (whether stored, deduped, or gated), so it is never an existence/publication
+  oracle; `400` only for a reason outside the enum, `403` for a `Sec-Fetch-Site: cross-site`
+  submission or over the per-IP rate limit. A report never changes publication (visible-until-review).
+  The confirmation banner renders on the follow-up `GET /embed/:id?reported=1`.
 
 ## Appendix: related file-transfer wire behaviour (context)
 

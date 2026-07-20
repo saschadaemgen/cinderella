@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -445,6 +445,24 @@ consent:
   is a cosmetic, Chromium-only hint — the real gate remains publication state. The embed
   snippet's iframe carries only `allow="fullscreen"` (allowlist defaults to its own
   origin), the minimum needed for the native fullscreen button; no wider delegation.
+- **Content reporting is minimal-data + non-hiding (CCB-S2-009).** `POST /embed/:id/report`
+  is the ONE mutating public-front route. It is exempt from the admin CSRF/step-up preHandler
+  (a public surface with no session/cookie to defend — the exemption is scoped to
+  `isPublicFront`, verified by a matcher-boundary test); its defences are: an own strict per-IP
+  rate limit (checked before any DB work), a `Sec-Fetch-Site` cross-site rejection (anti-flood
+  — the report form is always served from the archive origin, so a legit submit is same-origin
+  even inside a third-party iframe), reason-enum validation, and a note cap. It gates on
+  `isPublished` (`published_messages`) and returns the SAME neutral 303 for unpublished /
+  recalled / nonexistent ids, storing nothing — no existence/publication oracle, and a report
+  can never attach to non-public content. A report writes ONLY the `reports` table and NEVER
+  changes publication (visible-until-review — it cannot be weaponised to hide content). Stored
+  data is minimal: the only reporter-derived value is a keyed, non-reversible
+  `HMAC(sessionSecret, ip|msgId|utc-date)` — no raw IP, UA, cookie, or fingerprint — that
+  rotates daily and is per-item, so it profiles no one and self-expires; dedup is a unique
+  constraint. The note is stored raw and **escaped on admin render** (`html\`\``, never `raw()`),
+  the reason is enum-validated, so neither can XSS the queue. No data leaves the system (the
+  external-alert channels are an inert, disabled Settings placeholder). The admin queue + audited
+  actions sit behind the existing auth guard.
 - **Flagged follow-up.** SSR/media caching with invalidation on publish events is
   deferred (the page still renders per request); an SSE transport for live-update is a
   recorded future upgrade over today's polling.

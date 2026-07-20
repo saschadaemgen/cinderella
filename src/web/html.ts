@@ -100,6 +100,28 @@ function navLink(item: NavItem, active: string | undefined): SafeHtml {
  * Full page shell. Responsive by default (A5): sidebar on ≥md, top bar with a
  * details-based disclosure menu on small screens. No JS needed for the menu.
  */
+/** Inline alert-triangle glyph — icons.ts imports html.ts, so we can't call icon() here. */
+const REPORT_FLAG_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+
+/**
+ * Stable placeholder for the open-report notification bar (CCB-S2-009). The shell
+ * emits it once inside `<main>`; the server's onSend hook replaces it with
+ * {@link reportBarHtml} for authed admin pages (a reliable, request-scoped injection —
+ * simpler + more testable than threading the count through every view).
+ */
+export const REPORT_BAR_MARKER = '<!--cinderella-report-bar-->';
+
+/** The bar HTML for a given open-report count ('' when zero). Server-injected via onSend. */
+export function reportBarHtml(count: number): string {
+  if (count <= 0) return '';
+  return html`<a
+    href="/reports"
+    class="mb-4 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 hover:bg-amber-100"
+    >${raw(REPORT_FLAG_SVG)}
+    <span>${count} item${count === 1 ? '' : 's'} awaiting review — open the report queue →</span></a
+  >`.value;
+}
+
 export function page(opts: PageOptions): string {
   const chrome = opts.chrome !== false;
   const nav = html`${navItems.map((i) => navLink(i, opts.active))}`;
@@ -173,7 +195,9 @@ export function page(opts: PageOptions): string {
       >
         <div class="flex min-h-full flex-col md:flex-row">
           ${sidebar}
-          <main class="min-w-0 flex-1 p-4 md:p-8">${opts.body}</main>
+          <main class="min-w-0 flex-1 p-4 md:p-8">
+            ${chrome ? raw(REPORT_BAR_MARKER) : ''}${opts.body}
+          </main>
         </div>
       </body>
     </html>`;

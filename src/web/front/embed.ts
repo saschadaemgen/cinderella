@@ -27,6 +27,7 @@ import {
   ARCHIVE_TYPES,
   decodeCursor,
   getPublishedMedia,
+  isPublished,
   latestPublishedImageId,
   listPublishedIds,
   listPublishedItems,
@@ -37,6 +38,7 @@ import {
   type CursorDir,
   type PublicFilters,
 } from '../../db/public-archive.js';
+import { createReport, reporterHash, REPORT_REASONS, type ReportReason } from '../../db/reports.js';
 import {
   renderCards,
   renderEmbedPage,
@@ -79,6 +81,9 @@ const SPAN_CAP = WINDOW_CAP + 50;
 /** Per-IP ceiling for the cursor `/page` endpoint. Its OWN bucket (not the poll's),
  * so a scroll burst can't 429 the consent-critical `/state` poll. */
 const PAGE_RATE_PER_MIN = 240;
+/** Per-IP ceiling for the public report endpoint (CCB-S2-009) — far stricter than the
+ * poll, since a report is a rare deliberate action and the surface is abuse-prone. */
+const REPORT_RATE_PER_MIN = 10;
 
 /** True for any path the public front owns (skip admin headers/auth/IP/rate-limit). */
 export function isPublicFront(path: string): boolean {
@@ -108,6 +113,8 @@ interface EmbedQuery {
   top?: string;
   /** `/page` direction: 'older' (default) or 'newer'. */
   dir?: string;
+  /** Set to '1' after a report is filed (renders the confirmation banner). */
+  reported?: string;
 }
 
 /**
@@ -151,12 +158,14 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
   // exempt from the admin rate limit.
   const pollLimiter = new GlobalRateLimiter(() => POLL_RATE_PER_MIN);
   const pageLimiter = new GlobalRateLimiter(() => PAGE_RATE_PER_MIN);
+  const reportLimiter = new GlobalRateLimiter(() => REPORT_RATE_PER_MIN);
   let sincePrune = 0;
   const limited = (reply: FastifyReply, ip: string, limiter: GlobalRateLimiter): boolean => {
     if (++sincePrune >= 200) {
       sincePrune = 0;
       pollLimiter.prune();
       pageLimiter.prune();
+      reportLimiter.prune();
     }
     if (limiter.allow(ip)) return true;
     reply.code(429).header('cache-control', 'no-store').header('retry-after', '30');
@@ -164,6 +173,8 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
   };
   const pollAllowed = (reply: FastifyReply, ip: string): boolean => limited(reply, ip, pollLimiter);
   const pageAllowed = (reply: FastifyReply, ip: string): boolean => limited(reply, ip, pageLimiter);
+  const reportAllowed = (reply: FastifyReply, ip: string): boolean =>
+    limited(reply, ip, reportLimiter);
 
   // --- The SSR page ---
   app.get<{ Params: { id: string }; Querystring: EmbedQuery }>('/embed/:id', async (req, reply) => {
@@ -224,6 +235,7 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       hasMore: (page - 1) * PAGE_SIZE + items.length < total,
       windowCap: WINDOW_CAP,
       cursorPageSize: CURSOR_PAGE_SIZE,
+      reported: req.query.reported === '1',
     };
 
     applyEmbedHeaders(reply, nonce, analyticsHost);
@@ -306,6 +318,56 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
         nextCursor: chunk.nextCursor,
         hasMore: chunk.hasMore,
       };
+    },
+  );
+
+  // --- Public content report (CCB-S2-009): flag a published item for operator review ---
+  // The ONE mutating public-front route (exempt from the admin CSRF/auth preHandler in
+  // server.ts — a public surface with no session to defend). It NEVER changes publication
+  // (visible-until-review): it only writes the reports table. Protections: a strict rate
+  // limit, the published-only gate (no existence oracle), a per-item-per-day dedup, and
+  // enum/length validation. Same-origin plain <form> POST (CSP form-action 'self').
+  app.post<{ Params: { id: string }; Body: { msg?: string; reason?: string; note?: string } }>(
+    '/embed/:id/report',
+    async (req, reply) => {
+      if (!reportAllowed(reply, req.ip)) return 'Too many reports — please try again shortly.';
+      // Reject cross-SITE auto-submissions (CCB-S2-009 review): the report form is always
+      // served from THIS origin — even when the archive runs inside a third-party iframe —
+      // so a legitimate submit is same-origin. A malicious third-party page auto-POSTing
+      // here is cross-site; blocking it stops the queue from being flooded via drive-by
+      // forms. Modern browsers send Sec-Fetch-Site; absent (older clients) → fall through
+      // (the rate limit still applies). No item lookup happens first, so no oracle.
+      if (String(req.headers['sec-fetch-site'] ?? '') === 'cross-site') {
+        return reply.code(403).type('text/plain').send('Cross-site reports are not accepted.');
+      }
+      const instance = await getEmbedInstance(ctx.db, req.params.id);
+      if (!instance) return reply.code(404).type('text/plain').send('Not found');
+      const basePath = `${origin}/embed/${instance.id}`;
+      // PRG: identical neutral confirmation whether or not a row was stored — a reporter
+      // (or an attacker) can never tell published from unpublished/nonexistent/deduped.
+      const confirm = (): FastifyReply => reply.redirect(`${basePath}?reported=1`, 303);
+
+      const body = req.body ?? {};
+      const reason = typeof body.reason === 'string' ? body.reason : '';
+      if (!(REPORT_REASONS as readonly string[]).includes(reason)) {
+        return reply.code(400).type('text/plain').send('Invalid reason');
+      }
+      const msgId = Number.parseInt(typeof body.msg === 'string' ? body.msg : '', 10);
+      if (!Number.isInteger(msgId) || msgId < 1) return confirm();
+      // Consent gate: only currently-published items are reportable (D-016).
+      if (!(await isPublished(ctx.db, msgId))) return confirm();
+
+      const noteRaw = typeof body.note === 'string' ? body.note.trim().slice(0, 1000) : '';
+      const note = noteRaw.length > 0 ? noteRaw : null;
+      const utcDate = new Date().toISOString().slice(0, 10);
+      const hash = reporterHash(ctx.adminCfg.sessionSecret, req.ip, msgId, utcDate);
+      await createReport(ctx.db, {
+        messageId: msgId,
+        reason: reason as ReportReason,
+        note,
+        reporterHash: hash,
+      });
+      return confirm();
     },
   );
 

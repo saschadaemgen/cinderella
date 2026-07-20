@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,36 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-021 — Content reporting is visible-until-review, minimal-data, published-gated; alerts are a placeholder
+**Status: IMPLEMENTED.**
+**Decision.** The public front carries a per-item "Report" control (a no-JS `<details>` form,
+CCB-S2-009) and the admin a grouped review queue + an open-count notification bar. A report is the
+notice-and-takedown signal, NOT a moderation action: `POST /embed/:id/report` writes ONLY the
+`reports` table and NEVER changes publication — content stays **visible until the operator reviews
+it**. The endpoint (the one mutating public-front route, exempt from the admin CSRF/auth preHandler
+as a public surface) rate-limits first (its own per-IP bucket), rejects cross-site submissions
+(`Sec-Fetch-Site`, anti-flood), validates the reason against a fixed enum, and gates on `isPublished`
+through `published_messages` (D-016) — an unpublished / recalled / nonexistent id gets the SAME
+neutral 303 and stores nothing, so there is no existence/publication oracle. **Minimal data**
+(`migrations/008_reports.sql`): message id, reason, optional 1000-char note, timestamp, status, and
+the ONLY reporter-derived value — a keyed, non-reversible `HMAC(sessionSecret, ip|msgId|utc-date)`
+that rotates daily and is per-item (no raw IP, no UA/cookie/fingerprint; dedup is one row per
+item/client/day via a unique constraint). The admin queue groups by message with a consent/auth-gated
+preview and audited take-down / resolve / dismiss actions (takedown reuses `setModerationState` +
+auto-resolves the item's open reports); the open-count bar injects into every admin page via a stable
+`onSend` comment marker (an AsyncLocalStorage approach was dropped because `enterWith` didn't survive
+Fastify's hook→handler boundary). External e-mail/SMS/SimpleX alerts are an **inert, disabled Settings
+placeholder** (Part C) — no route, no key, no delivery.
+**Rationale.** Visible-until-review keeps a report from being weaponised to hide content; the
+published gate + neutral response keep the consent gate and prevent id enumeration; the daily,
+per-item HMAC is enough for abuse dedup while identifying no one and self-expiring. An adversarial
+review (4 low findings, all fixed) added the cross-site gate, a prototype-safe flash lookup, a single
+honest report count, and a real CSRF-scope test. Verified by
+[`scripts/verify-public.ts`](../scripts/verify-public.ts) +
+[`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
 
 ---
 

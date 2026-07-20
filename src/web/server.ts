@@ -19,7 +19,14 @@ import type { SettingsService } from '../settings/service.js';
 import type { SecurityService } from '../security/settings.js';
 import { log } from '../log.js';
 import { GlobalRateLimiter, LoginRateLimiter } from './auth.js';
-import { html, page, setNavItems, type SafeHtml } from './html.js';
+import {
+  html,
+  page,
+  setNavItems,
+  reportBarHtml,
+  REPORT_BAR_MARKER,
+  type SafeHtml,
+} from './html.js';
 import { icon } from './icons.js';
 import { applySecurityHeaders } from './security/headers.js';
 import { ipAllowed } from './security/access.js';
@@ -28,6 +35,7 @@ import { registerAuthRoutes, STEP_UP_WINDOW_MS } from './security/routes.js';
 import { countCredentials } from '../db/webauthn.js';
 import { SessionStore, csrfOk, readSession, type AuthedSession } from './session.js';
 import { registerPublicEmbed, isPublicFront } from './front/embed.js';
+import { countOpenReports } from '../db/reports.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -129,10 +137,23 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Security headers (configurable) on every response — EXCEPT the public archive
   // front, which must be embeddable + indexable and sets its own headers (the
   // admin strict headers are frame-DENY + noindex + no-store).
-  app.addHook('onSend', async (req, reply) => {
+  app.addHook('onSend', async (req, reply, payload) => {
     const path = req.url.split('?')[0] ?? req.url;
-    if (isPublicFront(path)) return;
+    if (isPublicFront(path)) return payload;
     applySecurityHeaders(reply, security.get());
+    // Inject the open-report notification bar into authed admin HTML shells
+    // (CCB-S2-009). The placeholder is a stable comment (not fragile class-string
+    // surgery), replaced request-scoped here so every admin page shows the bar with
+    // no per-view plumbing. Only GET HTML pages carrying the marker are touched.
+    if (
+      req.method === 'GET' &&
+      req.session &&
+      typeof payload === 'string' &&
+      payload.includes(REPORT_BAR_MARKER)
+    ) {
+      return payload.replace(REPORT_BAR_MARKER, reportBarHtml(await countOpenReports(db)));
+    }
+    return payload;
   });
 
   // Global rate limit + IP access policy + session read + auth guard.
@@ -184,6 +205,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.addHook('preHandler', async (req, reply) => {
     if (!isMutating(req.method)) return;
     const path = req.url.split('?')[0] ?? req.url;
+    // The public front is a deliberately-public surface with no session/cookie to
+    // defend; its one mutating route (POST /embed/:id/report, CCB-S2-009) is
+    // protected by a rate limit + the published-only gate + a dedup constraint.
+    if (isPublicFront(path)) return;
     if (path === '/login' || path.startsWith('/webauthn/login/')) return; // own guards
     if (!req.session || !csrfOk(req, req.session)) {
       return reply.code(403).send({ error: 'invalid csrf token' });
@@ -238,6 +263,7 @@ export function registerNav(): void {
     { key: 'settings', href: '/settings', label: 'Settings', icon: icon('settings') },
     { key: 'security', href: '/security', label: 'Security', icon: icon('shield') },
     { key: 'embeds', href: '/embeds', label: 'Embeds', icon: icon('embed') },
+    { key: 'reports', href: '/reports', label: 'Reports', icon: icon('alert') },
   ]);
 }
 

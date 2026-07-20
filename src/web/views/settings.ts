@@ -109,6 +109,46 @@ export function registerSettings(app: FastifyInstance, ctx: ViewContext): void {
             )}
           </dl>`,
         )}
+        ${card(
+          'External alerting (coming later)',
+          html`<p class="mb-3 text-sm text-slate-500">
+              Outbound notifications for new content reports (CCB-S2-009) will follow in a later
+              update. These channels are not yet active.
+            </p>
+            <div class="flex flex-col gap-3 opacity-60">
+              <label class="text-sm"
+                >E-mail
+                <input
+                  type="email"
+                  disabled
+                  placeholder="alerts@example.org"
+                  class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm sm:max-w-md"
+              /></label>
+              <label class="text-sm"
+                >SMS
+                <input
+                  type="tel"
+                  disabled
+                  placeholder="+00 000 000 0000"
+                  class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm sm:max-w-md"
+              /></label>
+              <label class="text-sm"
+                >SimpleX
+                <input
+                  type="text"
+                  disabled
+                  placeholder="SimpleX address"
+                  class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm sm:max-w-md"
+              /></label>
+              <button
+                type="button"
+                disabled
+                class="cursor-not-allowed self-start rounded-lg bg-slate-200 px-3 py-1.5 text-sm font-medium text-slate-500"
+              >
+                Coming soon
+              </button>
+            </div>`,
+        )}
       </div>
     `;
 

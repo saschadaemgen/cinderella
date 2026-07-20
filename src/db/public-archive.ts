@@ -432,6 +432,20 @@ export async function listPublishedSpanState(
   };
 }
 
+/**
+ * True iff the message is CURRENTLY published — the consent gate for the public
+ * report endpoint (CCB-S2-009). Reading through `published_messages` means an
+ * unpublished / recalled / deleted / no-consent / unknown id is non-reportable,
+ * with no existence oracle (the caller returns the same neutral confirmation).
+ */
+export async function isPublished(db: Queryable, messageId: number): Promise<boolean> {
+  const { rows } = await db.query<{ one: number }>(
+    'SELECT 1 AS one FROM published_messages WHERE id = $1',
+    [messageId],
+  );
+  return rows.length > 0;
+}
+
 export interface PublishedMedia {
   mediaPath: string;
   mediaMime: string | null;

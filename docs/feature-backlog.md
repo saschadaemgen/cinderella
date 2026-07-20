@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -113,6 +113,14 @@ the `/fragment` route is retired. Deep content stays crawlable via `?page=N` SSR
 + sitemap. Separate `/page` rate-limit bucket; SSE + full virtualization are future upgrades
 (D-020). See [`src/db/public-archive.ts`](../src/db/public-archive.ts),
 [`src/web/front/render.ts`](../src/web/front/render.ts), [`src/web/front/embed.ts`](../src/web/front/embed.ts).
+
+**Content reporting shipped (CCB-S2-009):** a public per-item "Report" button (no-JS `<details>`
+form) → `POST /embed/:id/report` (visible-until-review; published-gated with a neutral response, no
+oracle; minimal-data keyed daily-rotating HMAC token, no raw IP; own rate limit + cross-site gate),
+and an admin `/reports` grouped queue + open-count notification bar with audited take-down / resolve
+/ dismiss. External e-mail/SMS/SimpleX alerts are an inert Settings placeholder (Part C). New
+`migrations/008_reports.sql` + [`src/db/reports.ts`](../src/db/reports.ts),
+[`src/web/views/reports.ts`](../src/web/views/reports.ts) (D-021).
 
 **Remaining in Season 2:** a design editor, further templates, the Web Component, an
 SSE transport for live-update, and SSR/media caching with publish-event invalidation.

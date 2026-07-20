@@ -463,6 +463,99 @@ async function main(): Promise<void> {
     everyView.every((b) => /class="[^"]*(sm|md|lg):/.test(b)),
   );
 
+  // --- 9) Content reporting: bar + queue + actions + audit + placeholder (CCB-S2-009) ---
+  // Seed reports: 2 distinct clients on the image (id 2), 1 on the file (id 4) whose
+  // note contains <script> to prove escaping. Both messages are published (member A).
+  await pg.query(
+    `INSERT INTO reports (message_id, reason, note, reporter_hash) VALUES
+       (2, 'illegal', 'looks bad', 'hash-client-1'),
+       (2, 'spam',    NULL,        'hash-client-2'),
+       (4, 'copyright', '<script>alert(1)</script>', 'hash-client-3')`,
+  );
+  const dashBar = await getPage('/');
+  check(
+    'reports: notification bar shows "2 items awaiting review" on the dashboard',
+    dashBar.body.includes('awaiting review') &&
+      dashBar.body.includes('/reports') &&
+      dashBar.body.includes('2 item'),
+  );
+  const settingsBar = await getPage('/settings');
+  check(
+    'reports: bar appears on every admin page (settings too)',
+    settingsBar.body.includes('awaiting review'),
+  );
+
+  const reportsPage = await getPage('/reports');
+  check('reports queue renders', reportsPage.code === 200);
+  check(
+    'reports queue shows the consent-gated image preview + report count',
+    reportsPage.body.includes('/media/2026/07/2-slipper.jpg') &&
+      reportsPage.body.includes('2 report'),
+  );
+  check('reports queue: reason badges present', /Illegal|Spam|Copyright/.test(reportsPage.body));
+  check(
+    'reports queue: reporter note is ESCAPED (no XSS)',
+    reportsPage.body.includes('&lt;script&gt;') &&
+      !reportsPage.body.includes('<script>alert(1)</script>'),
+  );
+  const flashCrafted = await getPage('/reports?flash=constructor');
+  check(
+    'reports: a crafted ?flash key does not 500 the queue (own-key guard)',
+    flashCrafted.code === 200,
+  );
+  const reportsNoAuth = await app.inject({ method: 'GET', url: '/reports' });
+  check(
+    'reports queue is unreachable unauthenticated',
+    reportsNoAuth.statusCode === 302 || reportsNoAuth.statusCode === 401,
+  );
+
+  const takedown2 = await app.inject({
+    method: 'POST',
+    url: '/reports/2/takedown',
+    payload: { _csrf: csrf, back: '?status=open' },
+    headers: authed,
+  });
+  check('reports: takedown redirects', takedown2.statusCode === 302);
+  const img2Pub = await pg.query<{ n: number }>(
+    'SELECT count(*)::int AS n FROM published_messages WHERE id = 2',
+  );
+  check('reports: takedown removed the image from the published set', img2Pub.rows[0]?.n === 0);
+  const open2 = await pg.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM reports WHERE message_id = 2 AND status = 'open'`,
+  );
+  check('reports: takedown auto-resolved the item open reports', open2.rows[0]?.n === 0);
+  const tdAudit = await pg.query<{ actor: string; target: string }>(
+    `SELECT actor, target FROM audit_log WHERE action = 'report.takedown' ORDER BY id DESC LIMIT 1`,
+  );
+  check(
+    'reports: takedown wrote a report.takedown audit entry (who/item)',
+    tdAudit.rows[0]?.actor === 'operator' && tdAudit.rows[0]?.target === 'message:2',
+  );
+
+  const dismiss4 = await app.inject({
+    method: 'POST',
+    url: '/reports/4/dismiss',
+    payload: { _csrf: csrf, back: '?status=open' },
+    headers: authed,
+  });
+  check('reports: dismiss redirects', dismiss4.statusCode === 302);
+  const dismissAudit = await pg.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM audit_log WHERE action = 'report.dismiss'`,
+  );
+  check('reports: dismiss wrote an audit entry', (dismissAudit.rows[0]?.n ?? 0) >= 1);
+  const barGone = await getPage('/');
+  check(
+    'reports: bar disappears when no open reports remain (count 0)',
+    !barGone.body.includes('awaiting review'),
+  );
+
+  check(
+    'reports: Settings external-alerting placeholder is present, labelled coming-later, and disabled/inert',
+    settingsBar.body.includes('External alerting') &&
+      settingsBar.body.includes('coming later') &&
+      settingsBar.body.includes('disabled'),
+  );
+
   await app.close();
   await pg.close();
 

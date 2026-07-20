@@ -75,6 +75,8 @@ export interface MessageFilters {
   deleted?: 'yes' | 'no';
   since?: string;
   until?: string;
+  /** Deep-link to a single message (e.g. from the report queue, CCB-S2-009). */
+  id?: number;
   page: number;
   pageSize: number;
 }
@@ -137,6 +139,7 @@ export async function browseMessages(
     where.push(clause.replace('?', `$${params.length}`));
   };
 
+  if (f.id) add('m.id = ?', f.id);
   if (f.type && VALID_TYPES.has(f.type)) add('m.type = ?::message_type', f.type);
   if (f.published === 'yes') add('s.published = ?', true);
   if (f.published === 'no') add('s.published = ?', false);

@@ -45,6 +45,8 @@ interface MessagesQuery {
   until?: string;
   page?: string;
   flash?: string;
+  /** Deep-link to a single message id (from the report queue, CCB-S2-009). */
+  id?: string;
 }
 
 /** Success banners shown after an action redirect (whitelisted flash codes). */
@@ -66,6 +68,7 @@ function parseFilters(q: MessagesQuery): MessageFilters {
   if (q.deleted === 'yes' || q.deleted === 'no') f.deleted = q.deleted;
   if (q.since && validDateTime(q.since)) f.since = q.since;
   if (q.until && validDateTime(q.until)) f.until = q.until;
+  if (q.id && /^\d+$/.test(q.id)) f.id = Number.parseInt(q.id, 10);
   return f;
 }
 
@@ -94,7 +97,7 @@ function select(name: string, current: string | undefined, options: [string, str
   </select>`;
 }
 
-function mediaCell(m: {
+export function mediaCell(m: {
   type: string;
   mediaPath: string | null;
   mediaMime: string | null;
@@ -116,7 +119,7 @@ function mediaCell(m: {
   return html``;
 }
 
-function actionButton(
+export function actionButton(
   label: string,
   action: string,
   csrf: string,
