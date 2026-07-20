@@ -1,18 +1,20 @@
-# CCB-S0-017 — Season 1 Close-Out: Protocol & Handover to Season 2
+# CCB-S1-017 — Season 1 Close-Out: Protocol & Handover to Season 2
 
-- **Briefing:** CCB-S0-017
+- **Briefing:** CCB-S1-017
 - **Type:** Season close-out (protocol + handover + directive)
 - **Project:** Cinderella
 - **From:** Planning/Architecture
 - **To:** Claude Code
 
-> This document is the committed record of briefing CCB-S0-017. The five living
+> This document is the committed record of briefing CCB-S1-017. The five living
 > documents it references (`architecture`, `security`, `wire-format`,
 > `feature-backlog`, `decisions`) live under [`docs/`](../docs/).
 >
-> **Relabelled to Season 1 under CCB-S1-019** (season numbering aligned; see
-> [`../docs/decisions.md`](../docs/decisions.md) **D-014**). The original briefing
-> id `CCB-S0-017` is retained and authoritative; only the season labels changed.
+> **Relabelled to Season 1 and renumbered under CCB-S1-019** (season numbering
+> aligned; see [`../docs/decisions.md`](../docs/decisions.md) **D-014** and
+> [`CCB-REGISTER.md`](CCB-REGISTER.md)). The canonical id is now **`CCB-S1-017`**;
+> the commit that first added this document carries the pre-alignment id
+> `CCB-S0-017` in git history (a historical artifact, not rewritten).
 
 ---
 
@@ -21,7 +23,7 @@
 1. **Commit the Season 1 documentation set.** This close-out lives under
    `seasons/` (`seasons/SEASON-1-PROTOCOL.md`) and the five living documents under
    `docs/`. A `seasons/SEASON-INDEX.md` entry records Season 1. Conventional
-   Commit, with a `Briefing: CCB-S0-017` line; pre-push grep first.
+   Commit, with a `Briefing: CCB-S1-017` line; pre-push grep first.
 2. **Terminology correction (ordered by the operator).** The unit of work is the
    **Season**, numbered from one. Season 1 is this entire first block. The
    "Stages 0–7" framing used in earlier implementation reports is **deprecated**
@@ -42,28 +44,28 @@ Delivered and **live in production** at `cinderella.simplego.dev`, with the bot
 active in the real "Cyb3rD3sk" group:
 
 - **Capture pipeline** — text, image, video, voice, link and file messages
-  captured to PostgreSQL, with media downloaded to an on-disk store. (CCB-S0-001)
+  captured to PostgreSQL, with media downloaded to an on-disk store. (CCB-S1-001)
 - **Consent gating** — `/publish` / `/unpublish`, forward-only from opt-in,
-  honouring deletions; verified live (opt-in proven end to end). (CCB-S0-001, 007)
+  honouring deletions; verified live (opt-in proven end to end). (CCB-S1-001, 007)
 - **Admin console** — dashboard, Messages browser with takedown, Consent viewer,
-  Settings, and Embed management; fully responsive. (CCB-S0-002)
+  Settings, and Embed management; fully responsive. (CCB-S1-002)
 - **Appless public security** — public console over real Let's Encrypt TLS,
   passwordless passkey (WebAuthn) authentication native in the app, Argon2id
   break-glass with optional TOTP, and the full hardening suite (session policy,
   step-up, rate-limit/lockout, IP allow/deny, CSP and security headers, audit log,
   security-event feed, webhook alerting, counter-regression auto-lock).
-  (CCB-S0-005)
+  (CCB-S1-005)
 - **PostgreSQL-backed sessions** — sessions persist across restarts/deploys
-  (migration 007); resolved premature logout. (CCB-S0-008)
+  (migration 007); resolved premature logout. (CCB-S1-008)
 - **Media pipeline fixed** — XFTP download reliable after correcting the EXDEV
   cross-device rename between `/tmp` and the data volume; media served only behind
-  authentication (verified: anonymous access redirects to login). (CCB-S0-010)
+  authentication (verified: anonymous access redirects to login). (CCB-S1-010)
 - **Avatar** — set SDK-natively (image carried in the `bot.run` profile) and
   propagated to existing group members via a one-time group-message flush; renders
-  for all members. (CCB-S0-014, 015)
+  for all members. (CCB-S1-014, 015)
 - **Deployment** — non-root `cinderella` systemd service with hardening,
   PostgreSQL 17, on a shared VPS with bind-level scoping (no host-wide firewall, by
-  necessity). (CCB-S0-003)
+  necessity). (CCB-S1-003)
 
 **Key decisions** (see [`docs/decisions.md`](../docs/decisions.md)): in-process
 `simplex-chat` 6.5.4 (not the deprecated WebSocket client); appless public passkey

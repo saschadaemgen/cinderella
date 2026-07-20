@@ -8,7 +8,7 @@ whether it is **IMPLEMENTED** (present in the code / config today) or **PLANNED*
 (committed direction, not yet in code). Where a decision differs from how the code
 actually behaves today, the divergence is called out inline.
 
-Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S0-017),
+Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
 
 ---
@@ -17,9 +17,11 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S0-017),
 **Status: IMPLEMENTED. Supersedes D-011.**
 **Decision.** The unit of work is the **Season**, and the first completed block is
 **Season 1** (the next is Season 2). The retired zero-based scheme (D-011) is
-dropped. Briefing ids issued before this alignment keep their historical
-`CCB-S0-<NNN>` prefix and remain authoritative; from `CCB-S1-019` onward the id
-carries the aligned season number.
+dropped. **All briefing ids are renumbered to `CCB-S1-<NNN>`** — the canonical,
+authoritative ids (see [`../seasons/CCB-REGISTER.md`](../seasons/CCB-REGISTER.md)).
+Commit messages and planning-chat filenames created before the alignment retain
+their original `CCB-S0-<NNN>` ids as historical artifacts in git history; those are
+not rewritten.
 **Rationale.** The earlier zero-based scheme created a permanent off-by-one between
 the internal "Season 0" and the public "Season 1", which caused confusion; aligning
 them (Season 1 = first block, Season 2 = next) removes the offset.

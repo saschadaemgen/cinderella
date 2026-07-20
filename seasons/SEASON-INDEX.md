@@ -6,10 +6,10 @@ is Season 1; the next is Season 2). Each season is authorised by numbered briefi
 earlier zero-based scheme and the "Stages 0–7" framing are deprecated — see
 [`../docs/decisions.md`](../docs/decisions.md) **D-014**.
 
-> **Numbering note.** Briefing ids issued before the alignment (up to `CCB-S0-018`)
-> keep their historical `CCB-S0-<NNN>` prefix and remain authoritative; from
-> `CCB-S1-019` onward the id carries the aligned season number. See
-> [`CCB-REGISTER.md`](CCB-REGISTER.md).
+> **Numbering note.** All briefing ids are renumbered to `CCB-S1-<NNN>` (canonical
+> and authoritative — see [`CCB-REGISTER.md`](CCB-REGISTER.md)). Commit messages for
+> pre-alignment work retain their original `CCB-S0-<NNN>` ids in git history
+> (historical artifacts, not rewritten).
 
 | Season | Title | Status | Close-out |
 |--------|-------|--------|-----------|
