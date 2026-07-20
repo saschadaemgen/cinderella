@@ -1,19 +1,32 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 0. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S0-017**._
+> _Living document — Cinderella, Season 1. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S1-019**._
 
 Standing record of the architectural and operational decisions taken across
-Season 0, newest first. Each entry states the decision, a one-line rationale, and
+Season 1, newest first. Each entry states the decision, a one-line rationale, and
 whether it is **IMPLEMENTED** (present in the code / config today) or **PLANNED**
 (committed direction, not yet in code). Where a decision differs from how the code
 actually behaves today, the divergence is called out inline.
 
-Companion documents: `seasons/SEASON-0-PROTOCOL.md` (close-out CCB-S0-017),
+Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S0-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
 
 ---
 
-### D-013 — Consent to move to the private member-support scope (Season 1)
+### D-014 — Season numbering aligned to one; internal and public numbering match
+**Status: IMPLEMENTED. Supersedes D-011.**
+**Decision.** The unit of work is the **Season**, and the first completed block is
+**Season 1** (the next is Season 2). The retired zero-based scheme (D-011) is
+dropped. Briefing ids issued before this alignment keep their historical
+`CCB-S0-<NNN>` prefix and remain authoritative; from `CCB-S1-019` onward the id
+carries the aligned season number.
+**Rationale.** The earlier zero-based scheme created a permanent off-by-one between
+the internal "Season 0" and the public "Season 1", which caused confusion; aligning
+them (Season 1 = first block, Season 2 = next) removes the offset.
+
+---
+
+### D-013 — Consent to move to the private member-support scope (Season 2)
 **Status: PLANNED.**
 **Decision.** Onboarding and the `/publish` consent exchange will be conducted
 privately, per member, through SimpleX's member-support scope (knock → private
@@ -22,7 +35,7 @@ greeting → `/publish` → accept), rather than in the shared group timeline.
 timeline, so the member-support scope is the only private per-member channel for a
 one-to-one consent conversation.
 
-> **Note: the outline (and the Season 0 close-out) describe consent as "conducted
+> **Note: the outline (and the Season 1 close-out) describe consent as "conducted
 > privately via the member-support scope." The code today does consent in-group,
 > not privately.** `parseConsentCommand` handles `/publish` / `/unpublish` that
 > "arrive as plain group messages to the bot," and the confirmation is sent as an
@@ -33,7 +46,7 @@ one-to-one consent conversation.
 > (`src/bot/connect.ts:47-63`, `apiSendTextMessage`), not from `commands.ts` and
 > not privately. No member-support / support-scope code exists in `src/` (verified
 > by search: no matches for member-support / support-scope / whisper). The
-> private-scope flow is Season 1 scope — see `seasons/SEASON-0-PROTOCOL.md:100-104`.
+> private-scope flow is Season 2 scope — see `seasons/SEASON-1-PROTOCOL.md:100-104`.
 > The in-group reality is logged as D-004.
 
 ---
@@ -50,12 +63,12 @@ is small, and decouples the model host from the bot.
 
 > **Note: no AI-brain, inference, or RTX code exists in the repository yet**
 > (verified: no matches for `rtx` / `3090` / `inference` / `ai brain` under
-> `src/`). This is Season 1 direction only — `seasons/SEASON-0-PROTOCOL.md:105-108`.
+> `src/`). This is Season 2 direction only — `seasons/SEASON-1-PROTOCOL.md:105-108`.
 
 ---
 
 ### D-011 — Seasons numbered from zero; every briefing carries a `CCB-S<season>-<NNN>` id
-**Status: IMPLEMENTED (process convention).**
+**Status: Superseded by D-014** (was IMPLEMENTED; the zero-based scheme is retired — the first block is Season 1). Text kept below as history.
 **Decision.** The unit of work is the **Season**, numbered from zero; Season 0 is
 the entire first block. Each briefing carries an id of the form `CCB-S0-017`, and
 that id goes in the resulting commit message. The earlier "Stages 0–7" framing is
@@ -66,7 +79,7 @@ commits, and documents traceable to one another.
 > **Note:** the deprecated "Stage" labels still exist as *historical* artifacts —
 > e.g. the internal task list carries "Stage 0…Stage 6" items. Per the directive
 > these are left as history and simply not used for new work
-> (`seasons/SEASON-0-PROTOCOL.md:21-29`).
+> (`seasons/SEASON-1-PROTOCOL.md:21-29`).
 
 ---
 
@@ -178,7 +191,7 @@ the welcome is sent from `src/bot/connect.ts:47-63` (on `userJoinedGroup`, in th
 `npm run connect` helper).
 
 > **Note:** this is the *current, implemented* behaviour and diverges from the
-> Season 0 close-out prose, which describes consent as private via the member-support
+> Season 1 close-out prose, which describes consent as private via the member-support
 > scope (see D-013). Today it is in-group.
 
 ---
@@ -229,5 +242,5 @@ identifier is irreversible; a mechanical pre-push check is the backstop.
 
 #### Status legend
 - **IMPLEMENTED** — observable in the code or committed config referenced above.
-- **PLANNED** — committed direction recorded in `seasons/SEASON-0-PROTOCOL.md`; no
+- **PLANNED** — committed direction recorded in `seasons/SEASON-1-PROTOCOL.md`; no
   implementing code exists yet.

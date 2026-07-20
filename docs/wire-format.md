@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Season 0. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S0-017**._
+> _Living document — Cinderella, Season 1. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S1-019**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -50,7 +50,7 @@ Consent is the product's legal backbone, and the command surface is deliberately
 
 ## 4. There is no private per-member channel — consent is group-only, and confirmations are public
 
-The outline references "the member-support scope as the only private per-member channel." **That channel is not implemented in the current code.** This is a Season 1 concept, not present in the codebase.
+The outline references "the member-support scope as the only private per-member channel." **That channel is not implemented in the current code.** This is a Season 2 concept, not present in the codebase.
 
 Evidence:
 

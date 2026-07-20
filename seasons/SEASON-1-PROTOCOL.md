@@ -1,4 +1,4 @@
-# CCB-S0-017 — Season 0 Close-Out: Protocol & Handover to Season 1
+# CCB-S0-017 — Season 1 Close-Out: Protocol & Handover to Season 2
 
 - **Briefing:** CCB-S0-017
 - **Type:** Season close-out (protocol + handover + directive)
@@ -9,17 +9,21 @@
 > This document is the committed record of briefing CCB-S0-017. The five living
 > documents it references (`architecture`, `security`, `wire-format`,
 > `feature-backlog`, `decisions`) live under [`docs/`](../docs/).
+>
+> **Relabelled to Season 1 under CCB-S1-019** (season numbering aligned; see
+> [`../docs/decisions.md`](../docs/decisions.md) **D-014**). The original briefing
+> id `CCB-S0-017` is retained and authoritative; only the season labels changed.
 
 ---
 
 ## Part A — Directive to Claude Code
 
-1. **Commit the Season 0 documentation set.** This close-out lives under
-   `seasons/` (`seasons/SEASON-0-PROTOCOL.md`) and the five living documents under
-   `docs/`. A `seasons/SEASON-INDEX.md` entry records Season 0. Conventional
+1. **Commit the Season 1 documentation set.** This close-out lives under
+   `seasons/` (`seasons/SEASON-1-PROTOCOL.md`) and the five living documents under
+   `docs/`. A `seasons/SEASON-INDEX.md` entry records Season 1. Conventional
    Commit, with a `Briefing: CCB-S0-017` line; pre-push grep first.
 2. **Terminology correction (ordered by the operator).** The unit of work is the
-   **Season**, numbered from zero. Season 0 is this entire first block. The
+   **Season**, numbered from one. Season 1 is this entire first block. The
    "Stages 0–7" framing used in earlier implementation reports is **deprecated**
    and must not appear in future reports, commit messages, or documents. Where
    existing internal notes use stage labels, leave them as historical and simply
@@ -28,7 +32,7 @@
    `CCB-S<season>-<NNN>` id; that id goes in the resulting commit message.
    Professional, publication-ready tone throughout.
 
-## Part B — Season 0 Protocol (what was delivered)
+## Part B — Season 1 Protocol (what was delivered)
 
 **Project identity.** Cinderella is the central AI/identity of the system. The
 consent-based SimpleX group archive is her *first capability*, not her definition;
@@ -66,7 +70,7 @@ active in the real "Cyb3rD3sk" group:
 console with WireGuard dropped from the admin path; consent conducted privately via
 the member-support scope; no host-wide firewall on the shared box; the AI brain
 runs locally on the operator's RTX 3090 (privacy + cost), with the bot pulling
-inference over a tunnel; Seasons numbered from 0 with the CCB briefing scheme.
+inference over a tunnel; Seasons numbered from 1 with the CCB briefing scheme.
 
 **Key learnings** (see [`docs/architecture.md`](../docs/architecture.md) /
 [`docs/wire-format.md`](../docs/wire-format.md) /
@@ -84,7 +88,7 @@ inference over a tunnel; Seasons numbered from 0 with the CCB briefing scheme.
 - WebAuthn requires a secure context and a real hostname; an obscure hostname is
   not a security control (Certificate Transparency exposes it).
 
-## Part C — Open items carried into Season 1 (operator-owned)
+## Part C — Open items carried into Season 2 (operator-owned)
 
 1. Register passkeys on ≥2 devices (a YubiKey 5-series has been ordered — the
    current YubiKey 4 predates FIDO2 and cannot store passkeys), then disable
@@ -93,7 +97,7 @@ inference over a tunnel; Seasons numbered from 0 with the CCB briefing scheme.
 2. Add a read-only deploy key on the VPS so Claude Code can `git pull` normally
    instead of deploying via `git bundle` (the repo is private).
 
-## Part D — Season 1 scope (the horizon)
+## Part D — Season 2 scope (the horizon)
 
 1. **Public embed front** — implement the `/embed/<instance-id>` route that serves
    published content to visitors; the admin-side embed settings, theme, filters and
@@ -116,9 +120,9 @@ inference over a tunnel; Seasons numbered from 0 with the CCB briefing scheme.
 
 ## Part E — Status
 
-Season 0 is **content-complete and running in production**. Consent, capture,
+Season 1 is **content-complete and running in production**. Consent, capture,
 media, avatar, the secured console and its embed management, and session
 persistence are all live and verified. The public display, the AI brain, the
-command/moderation system, and multi-tenancy are planned as Season 1. The five
+command/moderation system, and multi-tenancy are planned as Season 2. The five
 living documents accompanying this briefing capture the current architecture,
 security posture, wire-format findings, backlog, and decisions in full.

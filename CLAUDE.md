@@ -66,6 +66,24 @@ PGlite harnesses (real Postgres-in-WASM, no server needed):
 `verify:db`, `verify:consent`, `verify:admin`, `verify:admin-views`.
 `scripts/admin-preview.ts` boots a seeded local admin console for browser checks.
 
+## Documentation maintenance (binding on every briefing)
+
+Documentation is maintained **per change, not per season** (CCB-S1-019). On
+completing the work of any briefing, review the five living documents —
+[`docs/architecture.md`](docs/architecture.md), [`docs/security.md`](docs/security.md),
+[`docs/wire-format.md`](docs/wire-format.md), [`docs/feature-backlog.md`](docs/feature-backlog.md),
+[`docs/decisions.md`](docs/decisions.md) — and update whichever the change affects,
+grounded in the actual code. If the change touches nothing documented, state
+**"no documentation change"** explicitly in the completion report — never skip
+silently. New decisions get a `D-<n>` entry with a Status (`IMPLEMENTED` /
+`PLANNED` / `Superseded by D-<n>`). Keep the implemented-vs-planned discipline so
+the docs never present planned work as built.
+
+Why this keeps the docs ground truth: the strategy documents (season protocol,
+decisions narrative, season plan) are authored in the planning chat and may run
+ahead of the code; the five technical docs are maintained by Claude Code **from the
+code** and are the corrective.
+
 ## Deploy (VPS) — see [deploy/RUNBOOK.md](deploy/RUNBOOK.md)
 
 Shared production host. Be **additive**: never touch neighbouring services,
