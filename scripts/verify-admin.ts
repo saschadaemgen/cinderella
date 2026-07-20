@@ -20,6 +20,7 @@ import { loadMigrationFiles } from '../src/db/migrate.js';
 import { SettingsService } from '../src/settings/service.js';
 import { SecurityService } from '../src/security/settings.js';
 import type { Queryable } from '../src/db/pool.js';
+import { validateRpConfig } from '../src/config.js';
 import type { AdminConfig, Config } from '../src/config.js';
 
 let failures = 0;
@@ -283,6 +284,32 @@ async function main(): Promise<void> {
     headers: { cookie: `cinderella_session=${'ab'.repeat(32)}.forgedsig` },
   });
   check('forged session cookie is rejected', forged.statusCode === 302);
+
+  // --- WebAuthn RP-ID/origin startup guard (CCB-S2-011) ---
+  const guardThrows = (rp: string, origin: string): boolean => {
+    try {
+      validateRpConfig(rp, origin);
+      return false;
+    } catch {
+      return true;
+    }
+  };
+  check(
+    'rp guard: rpId == origin host passes',
+    !guardThrows('admin.example.test', 'https://admin.example.test'),
+  );
+  check(
+    'rp guard: registrable-parent rpId passes',
+    !guardThrows('example.test', 'https://admin.example.test'),
+  );
+  check(
+    'rp guard: mismatched rpId is REJECTED (the silent-lockout footgun)',
+    guardThrows('other.test', 'https://admin.example.test'),
+  );
+  check(
+    'rp guard: unrelated origin is rejected',
+    guardThrows('admin.example.test', 'https://evil.test'),
+  );
 
   await app.close();
   await pg.close();

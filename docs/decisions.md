@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-011**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,28 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-022 — Fail fast on a WebAuthn RP-ID/origin mismatch (passkey-lockout guard)
+**Status: IMPLEMENTED.**
+**Decision.** `loadAdminConfig` calls `validateRpConfig(rpId, webauthnOrigin)` at startup
+(`src/config.ts`, CCB-S2-011): the server refuses to boot unless the effective
+`WEBAUTHN_RP_ID` equals the WebAuthn origin's host or is a registrable parent of it, and
+it logs the effective RP ID/origin on start. **Diagnosis context:** an operator reported a
+passkey `NotAllowedError` lockout after a run of deploys. The logs + diffs showed the RP ID
+was correct (`= PUBLIC_ORIGIN` host, unchanged), the WebAuthn ceremony code was
+byte-identical to the last working build, the options endpoint returned identical output,
+and the failing attempt came from the same client that had just succeeded — i.e. NOT a
+server regression but a client-side `get()` reject. No RP-ID/origin was restored because
+none had drifted; the guard is defense-in-depth against the *classic* cause (a future
+`WEBAUTHN_RP_ID`/`PUBLIC_ORIGIN` change) rather than a fix for this incident.
+**Rationale.** An RP-ID/origin mismatch invalidates every registered passkey with a silent
+client-side error — the worst kind of auth regression (it locks the operator out with no
+server error to point at). Converting it into a boot-time config failure + a startup log
+line makes the failure loud and the diagnosis trivial. Verified by
+[`scripts/verify-admin.ts`](../scripts/verify-admin.ts) (match/parent pass; mismatch and
+unrelated origin rejected).
 
 ---
 

@@ -166,18 +166,50 @@ export function loadAdminConfig(): AdminConfig {
     throw new ConfigError(`PUBLIC_ORIGIN must be a valid URL (got "${publicOrigin}").`);
   }
 
+  const finalRpId = optional('WEBAUTHN_RP_ID', rpId);
+  const finalOrigin = optional('WEBAUTHN_ORIGIN', webauthnOrigin);
+  // Fail fast on an RP-ID/origin mismatch — the classic silent passkey lockout
+  // (CCB-S2-011): if the RP ID isn't the origin's registrable host, every existing
+  // passkey stops working with a client-side NotAllowedError after the deploy.
+  validateRpConfig(finalRpId, finalOrigin);
+
   const cfg: AdminConfig = {
     adminPort,
     adminUsername: required('ADMIN_USERNAME'),
     adminPasswordHash,
     sessionSecret,
     publicOrigin,
-    rpId: optional('WEBAUTHN_RP_ID', rpId),
-    webauthnOrigin: optional('WEBAUTHN_ORIGIN', webauthnOrigin),
+    rpId: finalRpId,
+    webauthnOrigin: finalOrigin,
     rpName: optional('WEBAUTHN_RP_NAME', 'Cinderella Admin'),
   };
   cachedAdmin = cfg;
   return cfg;
+}
+
+/**
+ * Guards the WebAuthn RP ID / origin relationship at startup (CCB-S2-011). A passkey
+ * is bound by the authenticator to the RP ID it was created under; if the RP ID is not
+ * the WebAuthn origin's host (or a registrable parent of it), `navigator.credentials.get()`
+ * rejects every registered credential with a client-side `NotAllowedError` — the exact
+ * "operator locked out after a deploy" failure. Refusing to boot on a mismatch turns a
+ * silent lockout into a loud, actionable config error. Exported for the test harness.
+ */
+export function validateRpConfig(rpId: string, webauthnOrigin: string): void {
+  let host: string;
+  try {
+    host = new URL(webauthnOrigin).hostname;
+  } catch {
+    throw new ConfigError(`WEBAUTHN_ORIGIN must be a valid URL (got "${webauthnOrigin}").`);
+  }
+  const ok = rpId === host || host.endsWith(`.${rpId}`);
+  if (!ok) {
+    throw new ConfigError(
+      `WEBAUTHN_RP_ID "${rpId}" must equal the WebAuthn origin host "${host}" or a registrable ` +
+        `parent of it — a mismatch silently invalidates every registered passkey. ` +
+        `Check WEBAUTHN_RP_ID / WEBAUTHN_ORIGIN / PUBLIC_ORIGIN.`,
+    );
+  }
 }
 
 /**

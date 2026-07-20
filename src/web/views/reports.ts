@@ -58,39 +58,39 @@ export function registerReports(app: FastifyInstance, ctx: ViewContext): void {
 
     const body = html`
       ${pageHeader(
-          'Reports',
-          'Content flagged by the public. Reporting never hides an item — only your takedown does.',
-        )}
+        'Reports',
+        'Content flagged by the public. Reporting never hides an item — only your takedown does.',
+      )}
       ${
-          flash
-            ? html`<p
-                class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
-              >
-                ${flash}
-              </p>`
-            : null
-        }
+        flash
+          ? html`<p
+              class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+            >
+              ${flash}
+            </p>`
+          : null
+      }
       <div class="mb-4 flex flex-wrap gap-2 text-sm">
         ${STATUS_FILTERS.map(
-            (s) =>
-              html`<a
-                href="/reports?status=${s}"
-                class="rounded-lg border px-3 py-1.5 ${
+          (s) =>
+            html`<a
+              href="/reports?status=${s}"
+              class="rounded-lg border px-3 py-1.5 ${
                   s === status
                     ? 'border-slate-900 bg-slate-900 text-white'
                     : 'border-slate-300 text-slate-600 hover:bg-slate-100'
                 }"
-                >${s}</a
-              >`,
-          )}
+              >${s}</a
+            >`,
+        )}
       </div>
       ${
-          rows.length === 0
-            ? html`<p class="text-sm text-slate-500">No reports — nothing to review.</p>`
-            : html`<div class="flex flex-col gap-4">
-                ${rows.map(({ g, m }) => reportRow(g, m, csrf, back))}
-              </div>`
-        }
+        rows.length === 0
+          ? html`<p class="text-sm text-slate-500">No reports — nothing to review.</p>`
+          : html`<div class="flex flex-col gap-4">
+              ${rows.map(({ g, m }) => reportRow(g, m, csrf, back))}
+            </div>`
+      }
     `;
     reply.type('text/html');
     return page({ title: 'Reports', active: 'reports', csrfToken: csrf, body });

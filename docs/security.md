@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-011**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -64,6 +64,15 @@ Implemented natively with `@simplewebauthn/server` (`src/web/security/webauthn.t
 - **Usernameless, discoverable-credential login.** Authentication options are
   generated with an empty `allowCredentials`, so the user picks any resident key
   (`src/web/security/webauthn.ts:197-203`).
+- **RP-ID/origin startup guard (CCB-S2-011).** A passkey is bound by the authenticator
+  to the RP ID it was created under, so if the RP ID ever stops matching the WebAuthn
+  origin's host, `navigator.credentials.get()` rejects every existing credential with a
+  client-side `NotAllowedError` — a silent operator lockout. `validateRpConfig`
+  (`src/config.ts`) now runs in `loadAdminConfig` and refuses to boot unless `WEBAUTHN_RP_ID`
+  equals the `WEBAUTHN_ORIGIN`/`PUBLIC_ORIGIN` host (or a registrable parent of it),
+  turning that silent lockout into a loud config error. The effective RP ID/origin are
+  also logged at startup (public hostnames, not secrets) so a future diagnosis is one
+  `grep` away. Verified in `scripts/verify-admin.ts` (match/parent pass; mismatch rejected).
 - **Ceremonies** (all in `src/web/security/routes.ts`): login options/verify
   (`/webauthn/login/options`, `/webauthn/login/verify` — lines 188-231),
   authenticated registration (`/webauthn/register/*` — lines 311-340), and

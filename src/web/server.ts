@@ -286,5 +286,8 @@ export async function startAdminServer(deps: ServerDeps): Promise<FastifyInstanc
   log.info(
     `Admin console listening on 127.0.0.1:${deps.adminCfg.adminPort} (public via nginx TLS).`,
   );
+  // Log the effective WebAuthn RP ID / origin so a passkey-lockout diagnosis is a single
+  // grep away (CCB-S2-011). These are public hostnames, not secrets.
+  log.info(`WebAuthn RP ID "${deps.adminCfg.rpId}" @ origin "${deps.adminCfg.webauthnOrigin}".`);
   return app;
 }
