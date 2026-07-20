@@ -1,9 +1,9 @@
 {
   "name": "cinderella",
-  "version": "0.1.0",
+  "version": "0.0.1-alpha",
   "private": true,
   "description": "Consent-based SimpleX-group-to-web archive bot.",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "engines": {
     "node": ">=20"
