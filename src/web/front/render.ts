@@ -46,6 +46,8 @@ export interface RenderContext {
   seo: SeoHead;
   /** CSP nonce for the inline <style> and <script>. */
   nonce: string;
+  /** Show the media download button + native download control (CCB-S2-008). */
+  showDownload: boolean;
   /**
    * Version hash of the current view (CCB-S2-006) — the same value the
    * `/embed/:id/state` poll endpoint returns. Embedded on `#stream-list` so the
@@ -64,7 +66,10 @@ export interface RenderContext {
 const POLL_INTERVAL_MS = 18000;
 
 /** The subset of the render context the reconcilable stream region needs. */
-type StreamRegionCtx = Pick<RenderContext, 'items' | 'filters' | 'basePath' | 'page' | 'pageCount'>;
+type StreamRegionCtx = Pick<
+  RenderContext,
+  'items' | 'filters' | 'basePath' | 'page' | 'pageCount' | 'showDownload'
+>;
 
 /** Builds a query string from the active filters, with overrides (e.g. page). */
 function queryString(f: PublicFilters, overrides: Partial<PublicFilters> = {}): string {
@@ -158,6 +163,10 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .item .who{font-weight:600;color:var(--text-bright)}
 .item .body{white-space:pre-wrap;margin:0}
 .item img.media{max-width:100%;height:auto;border-radius:8px;margin-top:8px;display:block}
+.item video.media{display:block;width:100%;max-height:560px;margin-top:8px;border-radius:8px;background:#000;border:1px solid var(--border);object-fit:contain}
+.item .dl-btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--accent);font-size:.85rem;font-weight:600;text-decoration:none;transition:var(--tr)}
+.item .dl-btn:hover{border-color:var(--accent);color:var(--accent-bright)}
+.item .dl-btn svg{width:16px;height:16px;flex:none}
 .item .filelink{display:inline-block;margin-top:8px;color:var(--accent);font-weight:600;text-decoration:none}
 .item .links{margin:8px 0 0;padding:0;list-style:none}
 .item .links a{color:var(--accent)}
@@ -180,8 +189,35 @@ function noFlashScript(auto: boolean): string {
   return `(function(){try{var t=localStorage.getItem('sg-theme');if(!t&&${auto ? 'true' : 'false'})t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='light'?'#FAFBFD':'#050A12');}}catch(e){}})();`;
 }
 
+/** Download-glyph icon (inline SVG, currentColor). */
+const DL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+
+const VIDEO_EXT: Record<string, string> = {
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'video/ogg': 'ogv',
+  'video/x-matroska': 'mkv',
+};
+
+/** A friendly download filename extension from the stored mime (best-effort). */
+function mediaExt(it: PublicItem): string {
+  return (it.mediaMime && VIDEO_EXT[it.mediaMime]) || (it.type === 'video' ? 'mp4' : 'bin');
+}
+
+/** The themed "Download" button (only rendered when the instance enables it). */
+function downloadButton(it: PublicItem, mediaUrl: string): SafeHtml {
+  return html`<a
+    class="dl-btn"
+    href="${mediaUrl}"
+    download="cinderella-${it.type}-${it.id}.${mediaExt(it)}"
+    rel="noopener"
+    >${raw(DL_ICON)} Download</a
+  >`;
+}
+
 /** Renders one published item's media/body into the card. */
-function itemMedia(it: PublicItem, mediaUrl: string): SafeHtml {
+function itemMedia(it: PublicItem, mediaUrl: string, showDownload: boolean): SafeHtml {
   if (it.type === 'image' && it.hasMedia) {
     return html`<img
       class="media"
@@ -190,9 +226,22 @@ function itemMedia(it: PublicItem, mediaUrl: string): SafeHtml {
       loading="lazy"
     />`;
   }
-  if (it.hasMedia && (it.type === 'video' || it.type === 'voice' || it.type === 'file')) {
-    const label =
-      it.type === 'video' ? 'Open video' : it.type === 'voice' ? 'Play voice' : 'Download file';
+  // Video plays INLINE (CCB-S2-008): native controls (play/seek/volume/fullscreen),
+  // no autoplay, metadata-only preload so a stream of videos doesn't fetch everything.
+  // When downloads are off, hide the button AND the native download control.
+  if (it.type === 'video' && it.hasMedia) {
+    const noDl = showDownload ? '' : ' controlslist="nodownload"';
+    const player = html`<video
+      class="media video"
+      src="${mediaUrl}"
+      controls
+      preload="metadata"
+      playsinline${raw(noDl)}
+    ></video>`;
+    return showDownload ? html`${player}${downloadButton(it, mediaUrl)}` : player;
+  }
+  if (it.hasMedia && (it.type === 'voice' || it.type === 'file')) {
+    const label = it.type === 'voice' ? 'Play voice' : 'Download file';
     return html`<a class="filelink" href="${mediaUrl}" rel="noopener">${label} →</a>`;
   }
   return html``;
@@ -275,7 +324,8 @@ function renderStreamRegion(ctx: StreamRegionCtx): SafeHtml {
                   <time datetime="${it.sentAt}">${fmtTime(it.sentAt)}</time>
                 </div>
                 ${it.textBody ? html`<p class="body">${it.textBody}</p>` : html``}
-                ${itemMedia(it, `${ctx.basePath}/media/${it.id}`)} ${itemLinks(it)}
+                ${itemMedia(it, `${ctx.basePath}/media/${it.id}`, ctx.showDownload)}
+                ${itemLinks(it)}
               </li>`,
           )}
         </ul>`
@@ -422,8 +472,10 @@ export function renderEmbedPage(ctx: RenderContext): string {
   return body.toString();
 }
 
-/** Posts the document height to the embedding parent (Season 1 snippet contract). */
-const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h()})();`;
+/** Posts the document height to the embedding parent (Season 1 snippet contract).
+ * Also fires when a video's layout settles (loadedmetadata) and on fullscreen
+ * enter/exit (CCB-S2-008), so the host iframe resizes cleanly around inline video. */
+const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);document.addEventListener('loadedmetadata',h,true);document.addEventListener('fullscreenchange',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h()})();`;
 
 /**
  * Live-update client (CCB-S2-006) — consent-gated polling, progressive

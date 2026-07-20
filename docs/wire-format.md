@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-005**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -90,8 +90,18 @@ to (so hosts, crawlers, and later briefings can rely on it):
   active params, so filtered/searched views are shareable and indexable.
 - **Media URL scheme.** A published item's media is addressed as
   `GET /embed/:id/media/:messageId` — resolved through `published_messages` every
-  request (never a raw path), `404` when not published. Images render inline
-  (`content-disposition: inline`), other types download.
+  request (never a raw path), `404` when not published. Images and video render inline
+  (`content-disposition: inline`); files download. The route honours HTTP **byte-ranges**
+  (CCB-S2-008): it always sends `Accept-Ranges: bytes`, and a `Range` request gets a
+  `206` with `Content-Range` (satisfiable) or `416` (not) — required for inline `<video>`
+  on WebKit and for seeking. The consent check runs before the range branch, so an
+  unpublished id `404`s regardless of a `Range` header.
+- **Inline video + embed snippet (CCB-S2-008).** Video is a native
+  `<video controls preload="metadata" playsinline>`; a Download button (and the native
+  download control) appear only when the instance's `player.showDownload` is on, else the
+  player carries `controlsList="nodownload"`. The copy-paste host snippet's iframe now
+  carries `allow="fullscreen" allowfullscreen` so the fullscreen button works cross-origin,
+  and the page re-posts `{cinderellaEmbedHeight}` on `loadedmetadata`/`fullscreenchange`.
 - **SEO payload.** The page head emits schema.org JSON-LD as a `@graph`
   (`WebSite`, `Organization`, and an `ItemList` of `DiscussionForumPosting`), plus
   Open Graph / Twitter Card tags; `<` is escaped to `<` so message text cannot

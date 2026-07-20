@@ -105,6 +105,8 @@ function applyEmbedHeaders(reply: FastifyReply, nonce: string, analyticsHost: st
     [
       "default-src 'none'",
       "img-src 'self'",
+      // Inline <video>/<audio> playback (CCB-S2-008) — own consent-gated media only.
+      "media-src 'self'",
       `style-src 'nonce-${nonce}'`,
       `script-src ${scriptSrc}`,
       'frame-ancestors *',
@@ -187,6 +189,7 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       origin,
       seo,
       nonce,
+      showDownload: s.player.showDownload,
       streamHash,
     };
 
@@ -233,7 +236,14 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       reply.header('cache-control', 'no-store');
       reply.header('x-content-type-options', 'nosniff');
       reply.type('text/html; charset=utf-8');
-      return renderStreamFragment({ items, filters, basePath, page: filters.page, pageCount });
+      return renderStreamFragment({
+        items,
+        filters,
+        basePath,
+        page: filters.page,
+        pageCount,
+        showDownload: instance.settings.player.showDownload,
+      });
     },
   );
 
@@ -266,10 +276,38 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
         return reply.code(404).type('text/plain').send('Not found');
       }
       reply.header('content-type', media.mediaMime ?? 'application/octet-stream');
-      reply.header('content-length', String(size));
       reply.header('x-content-type-options', 'nosniff');
       reply.header('content-disposition', dispositionFor(media.type));
       reply.header('cache-control', 'no-store');
+      // Byte-range support (CCB-S2-008): WebKit REQUIRES it to play inline <video>,
+      // and it enables seeking everywhere. The consent gate (getPublishedMedia) and
+      // the path-containment guard already ran above, so a recalled/unpublished id
+      // still 404s before any bytes — the range branch only reshapes an allowed body.
+      reply.header('accept-ranges', 'bytes');
+      const rangeHeader = req.headers.range;
+      const m =
+        typeof rangeHeader === 'string' ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim()) : null;
+      if (m && (m[1] || m[2])) {
+        let start: number;
+        let end: number;
+        if (m[1]) {
+          start = Number.parseInt(m[1], 10);
+          end = m[2] ? Number.parseInt(m[2], 10) : size - 1;
+        } else {
+          // Suffix range `bytes=-N` → the last N bytes.
+          start = Math.max(0, size - Number.parseInt(m[2] as string, 10));
+          end = size - 1;
+        }
+        end = Math.min(end, size - 1);
+        if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) {
+          return reply.code(416).header('content-range', `bytes */${size}`).send();
+        }
+        reply.code(206);
+        reply.header('content-range', `bytes ${start}-${end}/${size}`);
+        reply.header('content-length', String(end - start + 1));
+        return reply.send(createReadStream(filePath, { start, end }));
+      }
+      reply.header('content-length', String(size));
       return reply.send(createReadStream(filePath));
     },
   );

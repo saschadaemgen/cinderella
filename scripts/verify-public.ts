@@ -21,6 +21,7 @@ import {
   normalizeEmbedSettings,
   DEFAULT_EMBED_SETTINGS,
 } from '../src/db/embeds.js';
+import { embedSnippet } from '../src/web/views/embeds.js';
 import { SettingsService } from '../src/settings/service.js';
 import { SecurityService } from '../src/security/settings.js';
 import type { Queryable } from '../src/db/pool.js';
@@ -96,6 +97,22 @@ async function main(): Promise<void> {
   });
 
   const beforeOptInId = await seed(5, A, 'text', 'BEFORE optin content', '2026-07-05T09:00:00Z');
+
+  // Video: one published (member A), one unpublished (member B) — CCB-S2-008.
+  const pubVideoId = await seed(10, A, 'video', null, '2026-07-15T12:00:00Z');
+  writeMedia('2026/07/10-pub.mp4', Buffer.from([0x00, 0x00, 0x00, 0x18]));
+  await updateMedia(db, 1, 10, {
+    mediaPath: '2026/07/10-pub.mp4',
+    mediaMime: 'video/mp4',
+    mediaSize: 4,
+  });
+  const unpubVideoId = await seed(11, B, 'video', null, '2026-07-16T12:00:00Z');
+  writeMedia('2026/07/11-unpub.mp4', Buffer.from([0x00, 0x00, 0x00, 0x18]));
+  await updateMedia(db, 1, 11, {
+    mediaPath: '2026/07/11-unpub.mp4',
+    mediaMime: 'video/mp4',
+    mediaSize: 4,
+  });
 
   // --- Server ---
   const adminCfg: AdminConfig = {
@@ -338,6 +355,90 @@ async function main(): Promise<void> {
   check('theme: operator accent override applies (#ec4899)', pinkPage.body.includes('#ec4899'));
   await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
 
+  // ===== CCB-S2-008: inline video player + download toggle =====
+  const vpage = await app.inject({ method: 'GET', url: base });
+  const vb = vpage.body;
+  check(
+    'video: renders inline <video> with controls (not a link)',
+    vb.includes(`id="msg-${pubVideoId}"`) &&
+      /<video[^>]*\bcontrols\b/.test(vb) &&
+      !vb.includes('Open video'),
+  );
+  check(
+    'video: metadata preload + playsinline, no autoplay',
+    /<video[^>]*preload="metadata"/.test(vb) &&
+      /<video[^>]*\bplaysinline\b/.test(vb) &&
+      !vb.includes('autoplay'),
+  );
+  check(
+    'video: rendered <video> carries the house-styled media class',
+    /<video[^>]*\bclass="[^"]*\bmedia\b[^"]*"/.test(vb) && vb.includes('.item video.media{'),
+  );
+  check(
+    'video: CSP allows inline playback (media-src self)',
+    (vpage.headers['content-security-policy'] ?? '').toString().includes("media-src 'self'"),
+  );
+  check(
+    'embed snippet: iframe grants fullscreen (allow + legacy allowfullscreen)',
+    /allow="fullscreen"/.test(embedSnippet('https://x.test', inst.id)) &&
+      /\ballowfullscreen\b/.test(embedSnippet('https://x.test', inst.id)),
+  );
+  check(
+    'video: height re-posts on loadedmetadata + fullscreenchange',
+    vb.includes('loadedmetadata') && vb.includes('fullscreenchange'),
+  );
+  check(
+    'video download: button shown by default (default ON)',
+    vb.includes('class="dl-btn"') && /download="cinderella-video-/.test(vb),
+  );
+  check('video download: no nodownload while enabled', !/controlslist="nodownload"/i.test(vb));
+
+  // Consent: unpublished video never served/rendered.
+  check('video consent: unpublished video NOT in markup', !vb.includes(`id="msg-${unpubVideoId}"`));
+  const pubVid = await app.inject({ method: 'GET', url: `${base}/media/${pubVideoId}` });
+  check('video consent: published video media → 200', pubVid.statusCode === 200);
+  const unpubVid = await app.inject({ method: 'GET', url: `${base}/media/${unpubVideoId}` });
+  check('video consent: unpublished video media → 404', unpubVid.statusCode === 404);
+
+  // Byte-range: WebKit refuses to play inline <video> without 206; seeking needs it.
+  check(
+    'video range: full 200 advertises accept-ranges',
+    (pubVid.headers['accept-ranges'] ?? '') === 'bytes',
+  );
+  const rangeReq = await app.inject({
+    method: 'GET',
+    url: `${base}/media/${pubVideoId}`,
+    headers: { range: 'bytes=0-1' },
+  });
+  check('video range: Range request → 206 Partial Content', rangeReq.statusCode === 206);
+  check(
+    'video range: 206 carries content-range + 2-byte content-length',
+    /^bytes 0-1\/\d+$/.test((rangeReq.headers['content-range'] ?? '').toString()) &&
+      (rangeReq.headers['content-length'] ?? '') === '2',
+  );
+  // The range branch must sit AFTER the consent gate: an unpublished id still 404s.
+  const unpubRange = await app.inject({
+    method: 'GET',
+    url: `${base}/media/${unpubVideoId}`,
+    headers: { range: 'bytes=0-1' },
+  });
+  check('video range consent: unpublished + Range still → 404', unpubRange.statusCode === 404);
+
+  // Download toggle OFF → button hidden AND controlsList=nodownload on the player.
+  await updateEmbedInstance(
+    db,
+    inst.id,
+    inst.name,
+    normalizeEmbedSettings({ ...D, player: { showDownload: false } }),
+  );
+  const voff = await app.inject({ method: 'GET', url: base });
+  check('video toggle off: download button hidden', !voff.body.includes('class="dl-btn"'));
+  check(
+    'video toggle off: controlsList=nodownload set',
+    /controlslist="nodownload"/i.test(voff.body),
+  );
+  await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
+
   // ===== CCB-S2-006: live auto-update (consent-gated polling) =====
   type State = { hash: string; ids: number[] };
   const getState = async (url: string): Promise<State> =>
@@ -392,6 +493,7 @@ async function main(): Promise<void> {
     'state: consent — excludes unpublished / before-opt-in ids',
     !s0.ids.includes(unpubTextId) &&
       !s0.ids.includes(unpubImgId) &&
+      !s0.ids.includes(unpubVideoId) &&
       !s0.ids.includes(beforeOptInId),
   );
 

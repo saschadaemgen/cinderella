@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-006**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,36 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-019 — Video plays inline; a media download button is per-instance, default ON; the media route serves byte-ranges
+**Status: IMPLEMENTED.**
+**Decision.** On the public stream, video renders as an INLINE native `<video controls
+preload="metadata" playsinline>` (CCB-S2-008), replacing the old "Open video" link that
+opened the raw file on a blank page. A themed **Download** button is gated by a new
+per-instance setting `player.showDownload` (**default ON**), designed to cover all
+downloadable media so it extends from video today to images later without a schema change;
+when OFF the button is hidden and the player carries `controlsList="nodownload"`. Two
+correctness requirements ride with inline playback: the consent-gated media route
+`/embed/:id/media/:msgId` now answers HTTP **`Range`** requests (`206` + `Accept-Ranges:
+bytes` + `Content-Range`) — WebKit refuses to play inline `<video>` without it and seeking
+needs it — with the range branch strictly AFTER the `getPublishedMedia` consent gate + path
+guard (a recalled id still `404`s, Range header or not); and the copy-paste embed snippet's
+iframe now carries `allow="fullscreen" allowfullscreen` so the native fullscreen button works
+in the cross-origin embed (Permissions-Policy defaults to `'self'` otherwise). The embed CSP
+gains `media-src 'self'` so inline playback isn't blocked by `default-src 'none'`. Voice/file
+remain links (out of this briefing's scope).
+**Rationale.** Video-as-link was broken UX (a bare file with ~1000px whitespace); inline
+playback matches images and the house design. The download toggle is the operator's lever for
+the notice-and-takedown posture without pretending that published content isn't, by nature,
+fetchable at its URL — the toggle is a UI affordance, not an access control (`controlsList` is
+a cosmetic, Chromium-only hint). Byte-range + the fullscreen grant are what make "plays inline
+with a working fullscreen button" TRUE on real browsers (Safari/iOS + cross-origin embeds)
+rather than only in the harness — both were caught by an adversarial review that the first
+harness pass had false-passed. Verified by [`scripts/verify-public.ts`](../scripts/verify-public.ts)
+(inline `<video>` + toggle both ways + `media-src` + `206`/`Accept-Ranges` incl.
+consent-before-range + snippet fullscreen grant).
 
 ---
 

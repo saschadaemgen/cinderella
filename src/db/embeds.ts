@@ -33,6 +33,13 @@ export interface EmbedSettings {
     file: boolean;
     link: boolean;
   };
+  /** Media player behaviour (CCB-S2-008). Governs all downloadable media so it
+   * extends from video (today) to images later without a schema change. */
+  player: {
+    /** Show a download button on media (and keep the native player's download
+     * control). Default ON. When off: button hidden + `controlsList=nodownload`. */
+    showDownload: boolean;
+  };
   /** Full SEO & marketing suite (CCB-S2-004) — all admin-configurable. */
   seo: SeoSettings;
 }
@@ -97,6 +104,7 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   layout: 'list',
   filters: { byType: true, byTime: true, search: true },
   media: { text: true, image: true, video: true, voice: true, file: true, link: true },
+  player: { showDownload: true },
   seo: {
     titleTemplate: '{instance}{section}',
     description: '',
@@ -230,6 +238,7 @@ export function normalizeEmbedSettings(input: unknown): EmbedSettings {
   const theme = asRecord(o['theme']);
   const filters = asRecord(o['filters']);
   const media = asRecord(o['media']);
+  const player = asRecord(o['player']);
 
   const modeRaw = theme['mode'];
   const mode =
@@ -257,6 +266,7 @@ export function normalizeEmbedSettings(input: unknown): EmbedSettings {
       file: bool(media['file'], d.media.file),
       link: bool(media['link'], d.media.link),
     },
+    player: { showDownload: bool(player['showDownload'], d.player.showDownload) },
     seo: normalizeSeo(o['seo']),
   };
 }

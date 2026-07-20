@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-006**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -95,6 +95,16 @@ future upgrade; "immediately" means "within the poll interval" (D-018). See
 [`src/web/front/embed.ts`](../src/web/front/embed.ts),
 [`src/web/front/render.ts`](../src/web/front/render.ts).
 
+**Inline video shipped (CCB-S2-008):** video plays inline in the card as a native
+`<video controls preload="metadata" playsinline>` (was an "Open video" link opening a
+bare file), house-styled + theme-aware, with a per-instance download button
+(`player.showDownload`, default ON; OFF → hidden + `controlsList=nodownload`). The embed
+CSP gained `media-src 'self'`; the consent-gated media route serves HTTP byte-ranges
+(`206`/`Accept-Ranges`, after the consent gate) so WebKit plays inline + seeking works;
+the copy-paste snippet's iframe grants `allow="fullscreen"` for the cross-origin fullscreen
+button (D-019). See [`src/web/front/render.ts`](../src/web/front/render.ts),
+[`src/web/front/embed.ts`](../src/web/front/embed.ts), [`src/db/embeds.ts`](../src/db/embeds.ts).
+
 **Remaining in Season 2:** a design editor, further templates, the Web Component, an
 SSE transport for live-update, and SSR/media caching with publish-event invalidation.
 The history below records the pre-CCB-S2-003 state.
@@ -108,6 +118,7 @@ The history below records the pre-CCB-S2-003 state.
 
 - [x] Implement `GET /embed/:id` serving published content, honouring per-instance theme/layout/filters/media visibility. **(CCB-S2-003)**
 - [x] Live auto-update — consent-gated `state`/`fragment` poll endpoints; recalled content disappears and new content appears without a manual refresh. **(CCB-S2-006)**
+- [x] Inline video player — native `<video>` with controls/fullscreen, byte-range serving, per-instance download toggle (default on). **(CCB-S2-008)**
 - [ ] Render the widget (and the parked Web-Component wrapper).
 
 ### 2. Command & moderation system

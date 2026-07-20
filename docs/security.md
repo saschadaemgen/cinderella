@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-006**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -400,9 +400,11 @@ consent:
   `noindex`, `no-store`) are **skipped** for it in the onSend hook
   (`src/web/server.ts`).
 - **Embed response headers.** The front sets its own: a CSP of
-  `default-src 'none'; img-src 'self'; style-src 'nonce-…'; script-src 'nonce-…';
-  frame-ancestors *; base-uri 'none'; form-action 'self'; connect-src 'self'`
-  (embeddable anywhere, no external assets), `x-content-type-options: nosniff`,
+  `default-src 'none'; img-src 'self'; media-src 'self'; style-src 'nonce-…';
+  script-src 'nonce-…'; frame-ancestors *; base-uri 'none'; form-action 'self';
+  connect-src 'self'` (embeddable anywhere, no external assets; `media-src 'self'`
+  admits only the front's own consent-gated inline `<video>`/`<audio>`, CCB-S2-008),
+  `x-content-type-options: nosniff`,
   `referrer-policy: no-referrer`, and `cache-control: no-store` (consent freshness —
   publish/unpublish/delete reflect immediately). `connect-src 'self'` is the sole CSP
   allowance for the live-update poll (CCB-S2-006) — same-origin `fetch` only, no
@@ -428,6 +430,17 @@ consent:
   (`GlobalRateLimiter`, `POLL_RATE_PER_MIN`) — the public-appropriate rate limit the
   front previously lacked — since they are the one visitor-driven, repeatedly-hit
   surface here.
+- **Inline video inherits the gate (CCB-S2-008).** Video plays inline via `<video>`
+  loading from the SAME consent-gated media route; the route now answers HTTP `Range`
+  with `206`/`Accept-Ranges` (WebKit needs it to play; seeking needs it), but the range
+  branch runs **strictly after** `getPublishedMedia` + the path-containment guard, so a
+  recalled/unpublished id still `404`s whether or not a `Range` header is present
+  (`verify:public` asserts unpublished + Range → 404). The per-instance download button
+  (`player.showDownload`, default ON) is a UI affordance, not an access control: a
+  published item's bytes are inherently fetchable at its URL, and `controlsList=nodownload`
+  is a cosmetic, Chromium-only hint — the real gate remains publication state. The embed
+  snippet's iframe carries only `allow="fullscreen"` (allowlist defaults to its own
+  origin), the minimum needed for the native fullscreen button; no wider delegation.
 - **Flagged follow-up.** SSR/media caching with invalidation on publish events is
   deferred (the page still renders per request); an SSE transport for live-update is a
   recorded future upgrade over today's polling.

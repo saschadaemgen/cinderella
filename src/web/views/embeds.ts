@@ -24,7 +24,10 @@ import { badge, card, fmtDate, pageHeader } from './ui.js';
 export function embedSnippet(publicOrigin: string, instanceId: string): string {
   const src = `${publicOrigin}/embed/${instanceId}`;
   return [
-    `<iframe src="${src}" style="width:100%;border:0" title="Archive"></iframe>`,
+    // allow="fullscreen" (allowlist defaults to the frame's own origin) + the legacy
+    // boolean grants the cross-origin embed the fullscreen the inline video player
+    // needs (CCB-S2-008); without it the Permissions-Policy default 'self' blocks it.
+    `<iframe src="${src}" style="width:100%;border:0" title="Archive" allow="fullscreen" allowfullscreen></iframe>`,
     `<script>addEventListener("message",e=>{if(e.origin==="${publicOrigin}"&&e.data&&e.data.cinderellaEmbedHeight)for(const f of document.querySelectorAll("iframe"))if(f.contentWindow===e.source)f.style.height=e.data.cinderellaEmbedHeight+"px"})</script>`,
   ].join('\n');
 }
@@ -55,6 +58,7 @@ function settingsFromForm(body: Record<string, unknown>): EmbedSettings {
       file: s('m_file') === 'on',
       link: s('m_link') === 'on',
     },
+    player: { showDownload: s('p_showDownload') === 'on' },
     seo: {
       titleTemplate: s('seo_titleTemplate'),
       description: s('seo_description'),
@@ -290,6 +294,16 @@ export function registerEmbeds(app: FastifyInstance, ctx: ViewContext): void {
               ${checkbox('m_voice', 'Voice', s.media.voice)}
               ${checkbox('m_file', 'Files', s.media.file)}
               ${checkbox('m_link', 'Links', s.media.link)}
+            </div>`,
+          )}
+          ${card(
+            'Media player',
+            html`<div class="flex flex-col gap-2">
+              ${checkbox('p_showDownload', 'Show media download button', s.player.showDownload)}
+              <p class="text-xs text-slate-500">
+                Adds a download button to videos (and images later). When off, the native video
+                player's download control is disabled too (<code>controlsList=nodownload</code>).
+              </p>
             </div>`,
           )}
           ${card(

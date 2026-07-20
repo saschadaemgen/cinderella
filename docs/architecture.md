@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-006**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-008**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is *derived* from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -202,6 +202,17 @@ briefings extend it without touching consent logic:
   poll); the two endpoints carry their own per-IP rate limit. SSE is a recorded future
   upgrade, not built. Verified by the extended
   [`scripts/verify-public.ts`](../scripts/verify-public.ts).
+- **Media playback (CCB-S2-008)** — video renders as an INLINE native `<video controls
+  preload="metadata" playsinline>` in the card (`itemMedia`,
+  [`src/web/front/render.ts`](../src/web/front/render.ts)), house-styled and theme-aware,
+  replacing the old "Open video" link. A themed Download button is gated by the new
+  per-instance `player.showDownload` (default ON; OFF → button hidden +
+  `controlsList="nodownload"`). The embed CSP adds `media-src 'self'`, and the
+  consent-gated media route now serves HTTP **byte-ranges** (`206` / `Accept-Ranges` /
+  `Content-Range`, strictly after the consent gate) so WebKit plays inline and seeking
+  works; the copy-paste snippet's iframe gains `allow="fullscreen"` so the native
+  fullscreen button works cross-origin. `HEIGHT_SCRIPT` re-posts iframe height on
+  `loadedmetadata` + `fullscreenchange`.
 
 ## Appendix: divergences (code wins)
 
