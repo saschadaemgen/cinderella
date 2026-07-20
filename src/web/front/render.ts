@@ -578,8 +578,12 @@ export function renderEmbedPage(ctx: RenderContext): string {
 
 /** Posts the document height to the embedding parent (Season 1 snippet contract).
  * Also fires when a video's layout settles (loadedmetadata) and on fullscreen
- * enter/exit (CCB-S2-008), so the host iframe resizes cleanly around inline video. */
-const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);document.addEventListener('loadedmetadata',h,true);document.addEventListener('fullscreenchange',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h()})();`;
+ * enter/exit (CCB-S2-008), so the host iframe resizes cleanly around inline video.
+ * Safety net (CCB-S2-010): when framed, `html.embedded` hides the body scrollbar
+ * (the host scrolls the auto-sized frame); if a host isn't auto-sizing us (content
+ * still overflows the frame viewport ~1.5s after load), restore `overflow-y:auto` so
+ * content is never clipped/unreachable in a misconfigured embed. */
+const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);document.addEventListener('loadedmetadata',h,true);document.addEventListener('fullscreenchange',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h();if(document.documentElement.classList.contains('embedded')){setTimeout(function(){if(document.documentElement.scrollHeight>window.innerHeight+4)document.documentElement.style.overflowY='auto';},1500);}})();`;
 
 /**
  * Stream client (CCB-S2-007) — infinite scroll + DOM windowing + live reconcile
