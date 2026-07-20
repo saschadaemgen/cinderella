@@ -1,8 +1,21 @@
-![Cinderella — a SimpleX AI Bot Suite](assets/banner.jpg)
+<div align="center">
+
+<img src="assets/banner.jpg" alt="Cinderella — SimpleX AI Bot Suite" width="100%">
 
 # Cinderella
 
-**A SimpleX AI Bot Suite.** `v0.0.1-alpha` · Licensed under [AGPL-3.0](LICENSE)
+**The AI bot suite for SimpleX communities.**<br>
+Consent-first archiving that turns a public group's chat into a permanent, searchable, self-owned knowledge base.<br>
+Opt-in only. Public groups only. No cloud, no compromises.
+
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=for-the-badge)](LICENSE)
+![Version](https://img.shields.io/badge/version-v0.0.1--alpha-orange?style=for-the-badge)
+![Network](https://img.shields.io/badge/network-SimpleX-6E56CF?style=for-the-badge)
+![Runtime](https://img.shields.io/badge/runtime-TypeScript-3178C6?style=for-the-badge)
+![Database](https://img.shields.io/badge/database-PostgreSQL-336791?style=for-the-badge)
+![Auth](https://img.shields.io/badge/auth-Passkeys-2EA44F?style=for-the-badge)
+
+</div>
 
 Cinderella is the central intelligence of a growing suite of AI-powered bots for the
 [SimpleX](https://simplex.chat/) network. Her first capability is a consent-first
@@ -96,6 +109,8 @@ Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See
 [LICENSE](LICENSE). AGPL applies because Cinderella links the AGPL-licensed
 [`simplex-chat`](https://github.com/simplex-chat/simplex-chat) library.
 
----
+<div align="center">
 
-Built on [SimpleX](https://simplex.chat/). Not affiliated with SimpleX Chat.
+Built on <a href="https://simplex.chat/">SimpleX</a>. Not affiliated with SimpleX Chat.
+
+</div>
