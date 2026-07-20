@@ -407,6 +407,11 @@ consent:
   publish/unpublish/delete reflect immediately). The inline themed `<style>` and the
   tiny height `<script>` carry the per-response nonce; there is no `'unsafe-inline'`.
 - **Indexable by design.** The public front is `index, follow` (the SEO goal); the
-  admin console remains `noindex, nofollow` — unchanged.
+  admin console remains `noindex, nofollow` — unchanged. nginx sets
+  `X-Robots-Tag: noindex, nofollow` at the server level (to keep the admin out of
+  search); a dedicated `location /embed/` block overrides it with `index, follow`
+  (and re-adds HSTS, since `add_header` in a location replaces inherited ones) —
+  see [`deploy/nginx-admin.conf`](../deploy/nginx-admin.conf). Without this, the
+  edge header would defeat the page's `<meta robots>`.
 - **Flagged follow-up.** SSR/media caching with invalidation on publish events, and a
   public-appropriate rate limit, are deferred (the front renders per request today).
