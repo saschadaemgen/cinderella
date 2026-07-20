@@ -137,6 +137,7 @@ The history below records the pre-CCB-S2-003 state.
 - [x] Live auto-update — consent-gated `state`/`fragment` poll endpoints; recalled content disappears and new content appears without a manual refresh. **(CCB-S2-006)**
 - [x] Inline video player — native `<video>` with controls/fullscreen, byte-range serving, per-instance download toggle (default on). **(CCB-S2-008)**
 - [x] Infinite scroll — cursor pagination, DOM windowing, crawlable deep pages (rel=next/prev + sitemap); coexists with live-update. **(CCB-S2-007)**
+- [x] Loading polish — kill the iframe scrollbar flash (`html.embedded{overflow:hidden}` before paint), house-themed skeleton loader (shimmer, reduced-motion safe), card fade-in, no viewport shift on append/windowing. **(CCB-S2-010)**
 - [ ] Render the widget (and the parked Web-Component wrapper).
 
 ### 2. Command & moderation system

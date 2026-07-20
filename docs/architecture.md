@@ -212,6 +212,17 @@ briefings extend it without touching consent logic:
   retired. SSE + full virtualization are recorded future upgrades. Verified by the
   extended [`scripts/verify-public.ts`](../scripts/verify-public.ts) + a windowing
   simulation.
+- **Loading polish (CCB-S2-010)** — three infinite-scroll UX fixes, all in the
+  client/CSS ([`src/web/front/render.ts`](../src/web/front/render.ts)): (1) the no-flash
+  `<head>` script marks `html.embedded` when framed, and `html.embedded{overflow:hidden}`
+  hides the iframe body's own scrollbar (the host scrolls the auto-sized frame) — killing
+  the transient scrollbar flash between an append and the height re-post, before the first
+  paint; (2) a house-themed **skeleton loader** (shimmer placeholder cards, indeterminate —
+  the chunk fetch is small so byte-progress adds no value; `prefers-reduced-motion` honoured)
+  reserves space at the bottom while a chunk fetches, replaced by the real cards on arrival,
+  with an error/retry state; (3) appended/prepended cards **fade + rise in** (`card-in`), and
+  because bottom-appends grow below the fold the viewport never shifts. Direct (top-level)
+  views keep the normal document scrollbar.
 - **Media playback (CCB-S2-008)** — video renders as an INLINE native `<video controls
   preload="metadata" playsinline>` in the card (`itemMedia`,
   [`src/web/front/render.ts`](../src/web/front/render.ts)), house-styled and theme-aware,

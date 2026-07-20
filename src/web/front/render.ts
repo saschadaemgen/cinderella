@@ -149,6 +149,10 @@ function themeCss(t: EmbedSettings['theme'], layout: EmbedSettings['layout']): s
 ${overrides}
 *{box-sizing:border-box}
 html{background:var(--bg);transition:background var(--tr),color var(--tr)}
+/* Embedded (iframe) → the host scrolls the auto-sized frame; the frame body must NOT
+   show its own scrollbar, or a transient one flashes between an append and the height
+   re-post (CCB-S2-010). Direct (top-level) views keep the normal document scrollbar. */
+html.embedded{overflow:hidden}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--font);transition:background var(--tr),color var(--tr)}
 .wrap{max-width:820px;margin:0 auto;padding:20px 16px}
 header.arch{margin-bottom:16px}
@@ -197,6 +201,19 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .stream-status{color:var(--muted);text-align:center;font-size:.85rem;padding:14px 0;margin:0}
 .stream-status button{margin-top:6px;padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--accent);font-weight:600;cursor:pointer;font-size:.85rem;transition:var(--tr)}
 .stream-status button:hover{border-color:var(--accent)}
+/* Skeleton loader (CCB-S2-010) — reserves space with shimmer placeholder cards so a
+   loading chunk never jumps the layout; an indeterminate shimmer (the chunk fetch is
+   small/fast, so byte-progress would add no value). */
+.skeleton-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin:0;list-style:none;position:relative;overflow:hidden}
+.skeleton-card .sk-line{height:12px;border-radius:6px;background:var(--bg-dark)}
+.skeleton-card .sk-line+.sk-line{margin-top:10px}
+.skeleton-card .sk-line.short{width:45%}
+.skeleton-card::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--text) 10%,transparent),transparent);animation:sk-shimmer 1.3s ease-in-out infinite}
+@keyframes sk-shimmer{100%{transform:translateX(100%)}}
+/* Appended cards fade+rise in so inserts feel smooth, not jerky (GPU opacity/transform). */
+.item.card-in{animation:card-in .28s ease both}
+@keyframes card-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.skeleton-card::after{animation:none}.item.card-in{animation:none}}
 footer.arch{margin-top:24px;color:var(--muted);font-size:.8rem;text-align:center}
 a{color:var(--accent)}
 `.trim();
@@ -207,10 +224,13 @@ const THEME_TOGGLE = `<button type="button" id="sg-theme-toggle" class="theme-to
 
 const THEME_TOGGLE_SCRIPT = `(function(){var b=document.getElementById('sg-theme-toggle');if(!b)return;function c(t){var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='light'?'#FAFBFD':'#050A12');}b.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';var n=cur==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',n);try{localStorage.setItem('sg-theme',n);}catch(e){}c(n);});})();`;
 
-/** No-flash theme script — runs in <head> before body paint. `sg-theme` shares the
- * key with the operator's site so the stream and site stay in sync on one origin. */
+/** No-flash <head> boot script — runs before body paint. Sets the stored theme
+ * (`sg-theme` shares the key with the operator's site so stream + site stay in sync),
+ * AND marks `html.embedded` when inside an iframe so the framed body hides its own
+ * scrollbar (the host scrolls the auto-sized iframe) — killing the load-time scrollbar
+ * flash before the first paint (CCB-S2-010). */
 function noFlashScript(auto: boolean): string {
-  return `(function(){try{var t=localStorage.getItem('sg-theme');if(!t&&${auto ? 'true' : 'false'})t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='light'?'#FAFBFD':'#050A12');}}catch(e){}})();`;
+  return `(function(){try{if(window.self!==window.top)document.documentElement.classList.add('embedded');}catch(e){}try{var t=localStorage.getItem('sg-theme');if(!t&&${auto ? 'true' : 'false'})t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='light'?'#FAFBFD':'#050A12');}}catch(e){}})();`;
 }
 
 /** Download-glyph icon (inline SVG, currentColor). */
@@ -611,7 +631,7 @@ const STREAM_SCRIPT = `(function(){
   Array.prototype.forEach.call(ul.querySelectorAll('li.item[data-cursor]'),function(li){
     var id=li.id.replace('msg-','');loaded.push({id:id,cursor:li.getAttribute('data-cursor'),el:li});idset[id]=1;
   });
-  var hasWindowedNewer=false,busy=false,lastLoad=0,autoBurst=0,manual=false,timer=null,backoff=800;
+  var hasWindowedNewer=false,busy=false,lastLoad=0,autoBurst=0,manual=false,timer=null,backoff=800,skeletons=[];
   // At the true stream head only when the SSR entry was page 1 AND nothing is
   // windowed above (a deep ?page=N entry must NOT auto-prepend newer cards).
   function atTop(){return atStreamTop&&!hasWindowedNewer;}
@@ -623,14 +643,19 @@ const STREAM_SCRIPT = `(function(){
     statusEl.hidden=!(msg||btn);
   }
   function parseCards(h){var t=document.createElement('template');t.innerHTML=h||'';return t.content.querySelectorAll('li.item[data-cursor]');}
-  function onError(retry){setStatus('Couldn\\u2019t load.',retry?'Retry':null,retry||null);if(retry){setTimeout(function(){if(!busy)retry();},backoff);backoff=Math.min(backoff*2,15000);}}
+  var SK_LI='<li class="skeleton-card" aria-hidden="true"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line short"></div></li>';
+  // Reserve space at the bottom with shimmer cards while a chunk fetches, so the real
+  // cards drop into place with no layout jump + a clear loading state (CCB-S2-010).
+  function showSkeleton(){if(skeletons.length)return;for(var i=0;i<3;i++){var t=document.createElement('template');t.innerHTML=SK_LI;var el=t.content.firstElementChild;ul.appendChild(el);skeletons.push(el);}postHeight();}
+  function removeSkeleton(){for(var i=0;i<skeletons.length;i++){var el=skeletons[i];if(el.parentNode)el.parentNode.removeChild(el);}skeletons=[];}
+  function onError(retry){removeSkeleton();setStatus('Couldn\\u2019t load.',retry?'Retry':null,retry||null);if(retry){setTimeout(function(){if(!busy)retry();},backoff);backoff=Math.min(backoff*2,15000);}}
   function loadOlder(auto){
     if(busy||!hasMoreOlder||!nextCursor)return;
     if(Date.now()-lastLoad<MIN_INTERVAL)return;
-    busy=true;lastLoad=Date.now();if(!manual)setStatus('Loading\\u2026');
+    busy=true;lastLoad=Date.now();if(!manual)showSkeleton();
     get(fwd('/page','dir=older&cursor='+encodeURIComponent(nextCursor))).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){
-      busy=false;backoff=800;setStatus('');
-      Array.prototype.forEach.call(parseCards(d.html),function(li){var id=li.id.replace('msg-','');if(idset[id])return;ul.appendChild(li);loaded.push({id:id,cursor:li.getAttribute('data-cursor'),el:li});idset[id]=1;});
+      busy=false;backoff=800;removeSkeleton();setStatus('');
+      Array.prototype.forEach.call(parseCards(d.html),function(li){var id=li.id.replace('msg-','');if(idset[id])return;li.className+=' card-in';ul.appendChild(li);loaded.push({id:id,cursor:li.getAttribute('data-cursor'),el:li});idset[id]=1;});
       nextCursor=d.nextCursor||'';hasMoreOlder=!!d.hasMore;
       if(!hasMoreOlder)io.unobserve(botSent);
       trimTop();postHeight();
@@ -649,11 +674,11 @@ const STREAM_SCRIPT = `(function(){
   function doPrepend(fromCursor,restore){
     if(busy||!fromCursor)return;
     if(Date.now()-lastLoad<MIN_INTERVAL)return;
-    busy=true;lastLoad=Date.now();setStatus('Loading\\u2026');
+    busy=true;lastLoad=Date.now();
     get(fwd('/page','dir=newer&cursor='+encodeURIComponent(fromCursor))).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){
       busy=false;backoff=800;setStatus('');
       var frag=document.createDocumentFragment(),fresh=[],k;
-      Array.prototype.forEach.call(parseCards(d.html),function(li){var id=li.id.replace('msg-','');if(idset[id])return;frag.appendChild(li);fresh.push({id:id,cursor:li.getAttribute('data-cursor'),el:li});idset[id]=1;});
+      Array.prototype.forEach.call(parseCards(d.html),function(li){var id=li.id.replace('msg-','');if(idset[id])return;li.className+=' card-in';frag.appendChild(li);fresh.push({id:id,cursor:li.getAttribute('data-cursor'),el:li});idset[id]=1;});
       if(fresh.length){ul.insertBefore(frag,ul.firstChild);loaded=fresh.concat(loaded);
         if(restore){var h=0;for(k=0;k<fresh.length;k++)h+=fresh[k].el.offsetHeight;spacer.style.height=Math.max(0,(parseInt(spacer.style.height,10)||0)-h)+'px';for(k=0;k<fresh.length;k++)watchMedia(fresh[k].el);}
       }

@@ -511,6 +511,21 @@ async function main(): Promise<void> {
       lb.includes('id="stream-top-sentinel"') &&
       lb.includes('id="stream-bottom-sentinel"'),
   );
+  // --- CCB-S2-010: loading polish (scrollbar flash + skeleton + smoothness) ---
+  check(
+    'polish: embedded iframe hides its own scrollbar before paint (flash fix)',
+    lb.includes('html.embedded{overflow:hidden}') &&
+      lb.includes('window.self!==window.top') &&
+      lb.includes("classList.add('embedded')"),
+  );
+  check(
+    'polish: house-themed skeleton + fade-in CSS present (reduced-motion safe)',
+    lb.includes('.skeleton-card') &&
+      lb.includes('sk-shimmer') &&
+      lb.includes('.item.card-in') &&
+      lb.includes('prefers-reduced-motion'),
+  );
+  check('polish: stream client shows the skeleton loader on fetch', lb.includes('showSkeleton'));
   check(
     'scroll: SSR page 1 has 30 cards, all carry data-cursor',
     idsInOrder(lb).length === 30 && cardCursors(lb).length === 30,
