@@ -27,7 +27,7 @@ import { ChallengeStore } from './security/webauthn.js';
 import { registerAuthRoutes, STEP_UP_WINDOW_MS } from './security/routes.js';
 import { countCredentials } from '../db/webauthn.js';
 import { SessionStore, csrfOk, readSession, type AuthedSession } from './session.js';
-import { registerPublicEmbed, isEmbedPath } from './front/embed.js';
+import { registerPublicEmbed, isPublicFront } from './front/embed.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -131,7 +131,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // admin strict headers are frame-DENY + noindex + no-store).
   app.addHook('onSend', async (req, reply) => {
     const path = req.url.split('?')[0] ?? req.url;
-    if (isEmbedPath(path)) return;
+    if (isPublicFront(path)) return;
     applySecurityHeaders(reply, security.get());
   });
 
@@ -146,7 +146,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // The public archive front is a public surface: it is exempt from the admin
     // rate limit, the admin IP allow/deny policy, and the auth guard. (A
     // public-appropriate rate limit + caching are the flagged follow-up.)
-    const isEmbed = isEmbedPath(path);
+    const isEmbed = isPublicFront(path);
 
     // Global request-rate limit (assets + public front excluded).
     if (!path.startsWith('/assets/') && !isEmbed && !globalLimiter.allow(req.ip)) {

@@ -182,6 +182,21 @@ export async function getPublishedMedia(
   return { mediaPath: r.media_path, mediaMime: r.media_mime, type: r.type as ArchiveType };
 }
 
+/** Newest published item's `sent_at` (ISO), for sitemap/feed `lastmod`. Null when
+ * nothing is published for the enabled types — the consent gate again. */
+export async function publishedLastmod(
+  db: Queryable,
+  enabledTypes: readonly ArchiveType[],
+): Promise<string | null> {
+  if (enabledTypes.length === 0) return null;
+  const list = enabledTypes.map((t) => `'${t}'`).join(', ');
+  const { rows } = await db.query<{ ts: string | null }>(
+    `SELECT max(sent_at) AS ts FROM published_messages WHERE type IN (${list})`,
+  );
+  const ts = rows[0]?.ts;
+  return ts ? new Date(ts).toISOString() : null;
+}
+
 /** The most recent published image, for OG/Twitter/`ItemList` preview imagery. */
 export async function latestPublishedImageId(
   db: Queryable,

@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -66,9 +66,19 @@ type/time/full-text filtering via URL params, core SEO (title/description,
 canonical, OG/Twitter, schema.org JSON-LD, indexable), and iframe auto-height are
 built and verified ([`src/web/front/`](../src/web/front/),
 [`src/db/public-archive.ts`](../src/db/public-archive.ts),
-[`scripts/verify-public.ts`](../scripts/verify-public.ts)). **Remaining in Season 2:**
-the full SEO/marketing suite (CCB-S2-004), multiple templates (CCB-S2-005), a design
-editor (CCB-S2-006), the Web Component, and SSR/media caching with publish-event
+[`scripts/verify-public.ts`](../scripts/verify-public.ts)).
+
+**The full SEO & marketing suite is SHIPPED too (CCB-S2-004):** per-instance
+configurable structured data (the toggle-driven schema.org `@graph` — WebSite +
+SearchAction, Organization, CollectionPage + BreadcrumbList / ItemList, postings,
+ImageObject/VideoObject), `sitemap.xml` + sitemap index, admin-defaulted `robots.txt`,
+per-instance meta (title template, description, keywords, canonical base, robots),
+full OG/Twitter + operator/auto social image, an RSS feed, and a privacy-respecting
+per-instance analytics hook (off by default, CSP-scoped — D-017). All admin-edited on
+the embed instance, all consent-gated. See [`src/web/front/seo.ts`](../src/web/front/seo.ts).
+
+**Remaining in Season 2:** multiple templates (CCB-S2-005), a design editor
+(CCB-S2-006), the Web Component, and SSR/media caching with publish-event
 invalidation. The history below records the pre-CCB-S2-003 state.
 
 - **What exists today (verified):**

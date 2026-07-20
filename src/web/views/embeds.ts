@@ -55,7 +55,52 @@ function settingsFromForm(body: Record<string, unknown>): EmbedSettings {
       file: s('m_file') === 'on',
       link: s('m_link') === 'on',
     },
+    seo: {
+      titleTemplate: s('seo_titleTemplate'),
+      description: s('seo_description'),
+      keywords: s('seo_keywords'),
+      robots: s('seo_robots'),
+      canonicalBase: s('seo_canonicalBase'),
+      og: {
+        siteName: s('seo_og_siteName'),
+        locale: s('seo_og_locale'),
+        type: s('seo_og_type'),
+        imageUrl: s('seo_og_imageUrl'),
+        autoImage: s('seo_og_autoImage') === 'on',
+        twitterSite: s('seo_og_twitterSite'),
+      },
+      org: {
+        name: s('seo_org_name'),
+        url: s('seo_org_url'),
+        logoUrl: s('seo_org_logoUrl'),
+        sameAs: s('seo_org_sameAs'),
+      },
+      jsonld: {
+        website: s('seo_jsonld_website') === 'on',
+        organization: s('seo_jsonld_organization') === 'on',
+        itemList: s('seo_jsonld_itemList') === 'on',
+        postings: s('seo_jsonld_postings') === 'on',
+        postingType: s('seo_jsonld_postingType'),
+        media: s('seo_jsonld_media') === 'on',
+      },
+      feed: { enabled: s('seo_feed_enabled') === 'on' },
+      analytics: { scriptUrl: s('seo_analytics_scriptUrl') },
+    },
   });
+}
+
+/** A labelled text input for the SEO form. */
+function textField(name: string, label: string, value: string, placeholder = ''): SafeHtml {
+  return html`<label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-slate-600">${label}</span>
+    <input
+      name="${name}"
+      value="${value}"
+      placeholder="${placeholder}"
+      maxlength="500"
+      class="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+    />
+  </label>`;
 }
 
 function checkbox(name: string, label: string, checked: boolean): SafeHtml {
@@ -245,6 +290,99 @@ export function registerEmbeds(app: FastifyInstance, ctx: ViewContext): void {
               ${checkbox('m_voice', 'Voice', s.media.voice)}
               ${checkbox('m_file', 'Files', s.media.file)}
               ${checkbox('m_link', 'Links', s.media.link)}
+            </div>`,
+          )}
+          ${card(
+            'SEO — meta',
+            html`<div class="flex flex-col gap-3 sm:max-w-2xl">
+              ${textField('seo_titleTemplate', 'Title template', s.seo.titleTemplate, '{instance}{section}')}
+              <label class="flex flex-col gap-1 text-sm">
+                <span class="font-medium text-slate-600">Meta description</span>
+                <textarea
+                  name="seo_description"
+                  rows="2"
+                  maxlength="500"
+                  class="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+${s.seo.description}</textarea>
+              </label>
+              ${textField('seo_keywords', 'Keywords (comma-separated)', s.seo.keywords)}
+              <div class="grid gap-3 sm:grid-cols-2">
+                ${textField('seo_robots', 'Robots directive', s.seo.robots, 'index, follow')}
+                ${textField('seo_canonicalBase', 'Canonical base (https, optional)', s.seo.canonicalBase)}
+              </div>
+            </div>`,
+          )}
+          ${card(
+            'SEO — social (Open Graph / Twitter)',
+            html`<div class="grid gap-3 sm:grid-cols-2 sm:max-w-2xl">
+              ${textField('seo_og_siteName', 'Site name', s.seo.og.siteName)}
+              ${textField('seo_og_locale', 'Locale', s.seo.og.locale, 'en_US')}
+              ${textField('seo_og_type', 'OG type', s.seo.og.type, 'website')}
+              ${textField('seo_og_twitterSite', 'Twitter @site', s.seo.og.twitterSite)}
+              ${textField('seo_og_imageUrl', 'Social image URL (https)', s.seo.og.imageUrl)}
+              <div class="flex items-end">
+                ${checkbox('seo_og_autoImage', 'Auto-generate preview image', s.seo.og.autoImage)}
+              </div>
+            </div>`,
+          )}
+          ${card(
+            'SEO — organization (structured data)',
+            html`<div class="grid gap-3 sm:grid-cols-2 sm:max-w-2xl">
+              ${textField('seo_org_name', 'Organization name', s.seo.org.name)}
+              ${textField('seo_org_url', 'Organization URL (https)', s.seo.org.url)}
+              ${textField('seo_org_logoUrl', 'Logo URL (https)', s.seo.org.logoUrl)}
+              <label class="flex flex-col gap-1 text-sm">
+                <span class="font-medium text-slate-600">sameAs profile URLs (one per line)</span>
+                <textarea
+                  name="seo_org_sameAs"
+                  rows="2"
+                  class="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+${s.seo.org.sameAs}</textarea>
+              </label>
+            </div>`,
+          )}
+          ${card(
+            'SEO — structured data types (JSON-LD)',
+            html`<div class="flex flex-col gap-3">
+              <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                ${checkbox('seo_jsonld_website', 'WebSite + SearchAction', s.seo.jsonld.website)}
+                ${checkbox('seo_jsonld_organization', 'Organization', s.seo.jsonld.organization)}
+                ${checkbox('seo_jsonld_itemList', 'ItemList + Breadcrumb', s.seo.jsonld.itemList)}
+                ${checkbox('seo_jsonld_postings', 'Per-message postings', s.seo.jsonld.postings)}
+                ${checkbox('seo_jsonld_media', 'Image/Video objects', s.seo.jsonld.media)}
+              </div>
+              <label class="flex flex-col gap-1 text-sm sm:max-w-xs">
+                <span class="font-medium text-slate-600">Posting type</span>
+                <select
+                  name="seo_jsonld_postingType"
+                  class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                  ${(['DiscussionForumPosting', 'Article', 'SocialMediaPosting'] as const).map(
+                    (t) =>
+                      html`<option
+                        value="${t}"
+                        ${t === s.seo.jsonld.postingType ? raw('selected') : ''}
+                      >
+                        ${t}
+                      </option>`,
+                  )}
+                </select>
+              </label>
+            </div>`,
+          )}
+          ${card(
+            'SEO — feed & analytics',
+            html`<div class="flex flex-col gap-3 sm:max-w-2xl">
+              ${checkbox('seo_feed_enabled', 'Publish an RSS feed (/feed.xml)', s.seo.feed.enabled)}
+              ${textField('seo_analytics_scriptUrl', 'Analytics script URL (https, optional)', s.seo.analytics.scriptUrl)}
+              <p class="text-xs text-amber-700">
+                Off by default. Setting an analytics script relaxes the Content-Security-Policy for
+                this instance's public pages only (its origin is added to
+                <code>script-src</code>/<code>connect-src</code>) — the global CSP is not weakened.
+                Message content is never sent to third parties.
+              </p>
             </div>`,
           )}
           <div class="flex gap-3">

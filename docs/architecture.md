@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is *derived* from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -163,6 +163,17 @@ briefings extend it without touching consent logic:
   the onSend hook. The iframe posts its height to the parent
   (`{cinderellaEmbedHeight}`), matching the Season 1 snippet. Verified end-to-end by
   [`scripts/verify-public.ts`](../scripts/verify-public.ts).
+- **SEO & marketing suite (CCB-S2-004)** — [`src/web/front/seo.ts`](../src/web/front/seo.ts)
+  holds all artifact builders (resolved head, the toggle-driven schema.org JSON-LD
+  `@graph`, sitemap, RSS feed, robots.txt, and an auto OG image via `sharp`). They
+  all consume the SAME consent-gated data and hang off the instance's `seo` config
+  ([`src/db/embeds.ts`](../src/db/embeds.ts) `SeoSettings`, admin-edited in
+  [`src/web/views/embeds.ts`](../src/web/views/embeds.ts)), so the render path stays
+  single. New public routes: `/embed/:id/sitemap.xml`, `/embed/:id/feed.xml`,
+  `/embed/:id/og.png`, and the origin-level `/robots.txt` + `/sitemap.xml` (index).
+  `isPublicFront()` now also covers `/robots.txt` and `/sitemap.xml`. Verified by the
+  extended `verify:public` (structured-data toggles, sitemap/feed/robots, OG image,
+  analytics-CSP, and the consent gate across every new output).
 
 ## Appendix: divergences (code wins)
 

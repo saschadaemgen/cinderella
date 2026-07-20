@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,22 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-017 — Analytics is per-instance, off by default, and never weakens the CSP globally
+**Status: IMPLEMENTED.**
+**Decision.** An operator may attach a privacy-respecting analytics script per embed
+instance (`seo.analytics.scriptUrl`, https-only) — **off by default**. When set, only
+THAT instance's public-page CSP adds the script's origin to `script-src` and
+`connect-src` (`applyEmbedHeaders`, [`src/web/front/embed.ts`](../src/web/front/embed.ts));
+the admin console CSP and every other instance are untouched, and the admin form
+states the tradeoff. Message content is never sent to third parties — the script runs
+in the visitor's browser; the server forwards nothing.
+**Rationale.** Analytics is a real operator need, but silently weakening CSP or piping
+content to third parties would betray the privacy posture. Scoping the allowance to
+the single instance and surfacing it in the admin keeps the operator in control and
+the default safe.
 
 ---
 

@@ -20,6 +20,7 @@
 import { html, raw, type SafeHtml } from '../html.js';
 import type { EmbedSettings } from '../../db/embeds.js';
 import type { ArchiveType, PublicFilters, PublicItem } from '../../db/public-archive.js';
+import type { SeoHead } from './seo.js';
 
 export interface PresentationConfig {
   /** Template id — only 'default' today; CCB-S2-005 adds more. */
@@ -41,10 +42,8 @@ export interface RenderContext {
   /** `${origin}/embed/${id}` — base for links, media, canonical. */
   basePath: string;
   origin: string;
-  canonicalUrl: string;
-  ogImageUrl: string | null;
-  title: string;
-  description: string;
+  /** Fully-resolved SEO head (meta/OG/Twitter/feed/analytics/JSON-LD). */
+  seo: SeoHead;
   /** CSP nonce for the inline <style> and <script>. */
   nonce: string;
 }
@@ -142,49 +141,6 @@ function itemLinks(it: PublicItem): SafeHtml {
   </ul>`;
 }
 
-/** schema.org JSON-LD `@graph`. An array so CCB-S2-004 appends more types. */
-function jsonLd(ctx: RenderContext): string {
-  const graph: unknown[] = [
-    {
-      '@type': 'WebSite',
-      '@id': `${ctx.origin}/#website`,
-      name: ctx.title,
-      url: ctx.basePath,
-      description: ctx.description,
-    },
-    {
-      '@type': 'Organization',
-      '@id': `${ctx.origin}/#org`,
-      name: 'Cinderella',
-      url: ctx.origin,
-    },
-    {
-      '@type': 'ItemList',
-      itemListOrder: 'https://schema.org/ItemListOrderDescending',
-      numberOfItems: ctx.total,
-      itemListElement: ctx.items.map((it, i) => ({
-        '@type': 'ListItem',
-        position: (ctx.page - 1) * ctx.filters.pageSize + i + 1,
-        item: {
-          '@type': 'DiscussionForumPosting',
-          '@id': `${ctx.basePath}#msg-${it.id}`,
-          url: `${ctx.basePath}#msg-${it.id}`,
-          datePublished: it.sentAt,
-          author: { '@type': 'Person', name: it.senderDisplayName },
-          text: it.textBody ?? undefined,
-          ...(it.type === 'image' && it.hasMedia
-            ? { image: `${ctx.basePath}/media/${it.id}` }
-            : {}),
-          isPartOf: { '@id': `${ctx.origin}/#website` },
-        },
-      })),
-    },
-  ];
-  const payload = { '@context': 'https://schema.org', '@graph': graph };
-  // Escape `<` so a text field can never break out of the <script> element.
-  return JSON.stringify(payload).replace(/</g, '\\u003c');
-}
-
 /** The SSR filter/search bar (only the enabled controls). */
 function filterBar(ctx: RenderContext): SafeHtml {
   const { enabledFilters: ef, filters: f } = ctx;
@@ -234,7 +190,7 @@ const ARCHIVE_TYPE_ENTRIES: [string, string][] = Object.entries(TYPE_LABELS);
 /** The single render entry point. Returns a complete HTML document. */
 export function renderEmbedPage(ctx: RenderContext): string {
   const css = themeCss(ctx.presentation.theme, ctx.presentation.layout);
-  const ld = jsonLd(ctx);
+  const seo = ctx.seo;
 
   const items =
     ctx.items.length > 0
@@ -285,31 +241,54 @@ export function renderEmbedPage(ctx: RenderContext): string {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="robots" content="index, follow" />
-        <title>${ctx.title}</title>
-        <meta name="description" content="${ctx.description}" />
-        <link rel="canonical" href="${ctx.canonicalUrl}" />
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content="${ctx.title}" />
-        <meta property="og:description" content="${ctx.description}" />
-        <meta property="og:url" content="${ctx.canonicalUrl}" />
-        ${ctx.ogImageUrl ? html`<meta property="og:image" content="${ctx.ogImageUrl}" />` : null}
-        <meta name="twitter:card" content="${ctx.ogImageUrl ? 'summary_large_image' : 'summary'}" />
-        <meta name="twitter:title" content="${ctx.title}" />
-        <meta name="twitter:description" content="${ctx.description}" />
-        ${ctx.ogImageUrl ? html`<meta name="twitter:image" content="${ctx.ogImageUrl}" />` : null}
-        <script type="application/ld+json" nonce="${ctx.nonce}">
-          ${raw(ld)}
-        </script>
+        <meta name="robots" content="${seo.robots}" />
+        <title>${seo.title}</title>
+        <meta name="description" content="${seo.description}" />
+        ${seo.keywords ? html`<meta name="keywords" content="${seo.keywords}" />` : null}
+        <link rel="canonical" href="${seo.canonicalUrl}" />
+        ${
+          seo.feedUrl
+            ? html`<link
+                rel="alternate"
+                type="application/rss+xml"
+                title="${seo.ogSiteName}"
+                href="${seo.feedUrl}"
+              />`
+            : null
+        }
+        <meta property="og:type" content="${seo.ogType}" />
+        <meta property="og:title" content="${seo.ogTitle}" />
+        <meta property="og:description" content="${seo.ogDescription}" />
+        <meta property="og:site_name" content="${seo.ogSiteName}" />
+        <meta property="og:locale" content="${seo.ogLocale}" />
+        <meta property="og:url" content="${seo.ogUrl}" />
+        ${seo.ogImageUrl ? html`<meta property="og:image" content="${seo.ogImageUrl}" />` : null}
+        <meta name="twitter:card" content="${seo.twitterCard}" />
+        ${seo.twitterSite ? html`<meta name="twitter:site" content="${seo.twitterSite}" />` : null}
+        <meta name="twitter:title" content="${seo.ogTitle}" />
+        <meta name="twitter:description" content="${seo.ogDescription}" />
+        ${seo.twitterImageUrl ? html`<meta name="twitter:image" content="${seo.twitterImageUrl}" />` : null}
+        ${
+          seo.jsonLd
+            ? html`<script type="application/ld+json" nonce="${ctx.nonce}">
+                ${raw(seo.jsonLd)}
+              </script>`
+            : null
+        }
         <style nonce="${ctx.nonce}">
           ${raw(css)}
         </style>
+        ${
+          seo.analyticsScriptUrl
+            ? html`<script src="${seo.analyticsScriptUrl}" async></script>`
+            : null
+        }
       </head>
       <body>
         <div class="wrap">
           <header class="arch">
-            <h1>${ctx.title}</h1>
-            <p>${ctx.description}</p>
+            <h1>${seo.title}</h1>
+            <p>${seo.description}</p>
           </header>
           ${filterBar(ctx)} ${items} ${pager}
           <footer class="arch">Published with consent · powered by Cinderella</footer>

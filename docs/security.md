@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -415,3 +415,17 @@ consent:
   edge header would defeat the page's `<meta robots>`.
 - **Flagged follow-up.** SSR/media caching with invalidation on publish events, and a
   public-appropriate rate limit, are deferred (the front renders per request today).
+- **SEO artifacts inherit the gate (CCB-S2-004).** The sitemap, RSS feed, JSON-LD
+  structured data, and OG preview are all built in `src/web/front/seo.ts` from the
+  same consent-gated data — no unpublished content is ever referenced or emitted
+  (feed items come from `published_messages`; the sitemap lists only public front
+  URLs; `verify:public` asserts no unpublished text appears in any of them). Every
+  operator-supplied URL (canonical base, OG image, org/logo, analytics) is validated
+  as **https-only** in `normalizeSeo` so a stored/posted value can't inject
+  `javascript:`; the JSON-LD escapes `<` so message text can't break out of the
+  script block; XML outputs are entity-escaped.
+- **Analytics (D-017).** Off by default and per-instance. A configured analytics
+  script origin is added to `script-src`/`connect-src` for **that instance's public
+  page only** (`applyEmbedHeaders`) — never the admin CSP, never globally, and the
+  admin form states this. `robots.txt` still `Disallow: /` (admin) and `Allow:
+  /embed/`; the sitemap index lists only instance sitemaps.

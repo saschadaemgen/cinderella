@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-003**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-004**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -95,6 +95,21 @@ to (so hosts, crawlers, and later briefings can rely on it):
   (`WebSite`, `Organization`, and an `ItemList` of `DiscussionForumPosting`), plus
   Open Graph / Twitter Card tags; `<` is escaped to `<` so message text cannot
   break out of the `<script type="application/ld+json">` block.
+- **SEO artifact endpoints (CCB-S2-004).** All consent-gated, all off the instance
+  `seo` config:
+  - `GET /embed/:id/sitemap.xml` — `<urlset>` of public front URLs (base, pagination,
+    per-type filters) with `<lastmod>` from the newest published `sent_at`; empty when
+    the instance is `noindex`.
+  - `GET /sitemap.xml` — origin `<sitemapindex>` referencing every instance sitemap.
+  - `GET /robots.txt` — `Allow: /embed/`, `Disallow: /`, `Sitemap: {origin}/sitemap.xml`.
+  - `GET /embed/:id/feed.xml` — RSS 2.0 of published items (linked from the page head
+    as `rel="alternate" type="application/rss+xml"`).
+  - `GET /embed/:id/og.png` — a 1200×630 PNG social preview (SVG rasterized via
+    `sharp`), only when `seo.og.autoImage` is on.
+  - JSON-LD `@graph` is toggle-driven: WebSite+SearchAction, Organization,
+    CollectionPage+BreadcrumbList wrapping an ItemList of the configured posting type
+    (`DiscussionForumPosting` / `Article` / `SocialMediaPosting`), plus
+    ImageObject/VideoObject on media items.
 
 ## Appendix: related file-transfer wire behaviour (context)
 

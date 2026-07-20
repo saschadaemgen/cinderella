@@ -15,7 +15,12 @@ import { buildServer } from '../src/web/server.js';
 import { loadMigrationFiles } from '../src/db/migrate.js';
 import { upsertMessage, updateMedia } from '../src/db/messages.js';
 import { recordOptIn } from '../src/db/consent.js';
-import { createEmbedInstance } from '../src/db/embeds.js';
+import {
+  createEmbedInstance,
+  updateEmbedInstance,
+  normalizeEmbedSettings,
+  DEFAULT_EMBED_SETTINGS,
+} from '../src/db/embeds.js';
 import { SettingsService } from '../src/settings/service.js';
 import { SecurityService } from '../src/security/settings.js';
 import type { Queryable } from '../src/db/pool.js';
@@ -180,8 +185,97 @@ async function main(): Promise<void> {
   const unknown = await app.inject({ method: 'GET', url: '/embed/does-not-exist' });
   check('unknown instance → 404', unknown.statusCode === 404);
 
-  // --- Media type disabled on the instance → media 404 even if published ---
-  // (covered by the design; the page also must not render disabled types)
+  // ===== CCB-S2-004: full SEO & marketing suite =====
+  const D = DEFAULT_EMBED_SETTINGS;
+  const withSeo = (patch: Record<string, unknown>) =>
+    normalizeEmbedSettings({ ...D, seo: { ...D.seo, ...patch } });
+
+  // Full JSON-LD @graph (defaults: all types on).
+  check('jsonld: WebSite + SearchAction', b.includes('"WebSite"') && b.includes('SearchAction'));
+  check('jsonld: Organization', b.includes('"Organization"'));
+  check(
+    'jsonld: CollectionPage + BreadcrumbList',
+    b.includes('CollectionPage') && b.includes('BreadcrumbList'),
+  );
+  check('jsonld: consent — no unpublished text in structured data', !b.includes('SECRET unpublished'));
+  check('head: OG site_name + locale', b.includes('og:site_name') && b.includes('og:locale'));
+  check('head: feed rel=alternate', b.includes('application/rss+xml'));
+
+  // Toggling a type in the admin changes the output.
+  await updateEmbedInstance(
+    db,
+    inst.id,
+    inst.name,
+    withSeo({ jsonld: { ...D.seo.jsonld, website: false } }),
+  );
+  const noWebsite = await app.inject({ method: 'GET', url: base });
+  check('jsonld toggle: disabling WebSite removes it', !noWebsite.body.includes('"WebSite"'));
+  await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
+
+  // Sitemap (per-instance) — published/public URLs only.
+  const sm = await app.inject({ method: 'GET', url: `${base}/sitemap.xml` });
+  check('sitemap: 200 + urlset', sm.statusCode === 200 && sm.body.includes('<urlset'));
+  check(
+    'sitemap: lists base + type-filter URL',
+    sm.body.includes(`/embed/${inst.id}</loc>`) && sm.body.includes('type=image'),
+  );
+
+  // Sitemap index (origin).
+  const smi = await app.inject({ method: 'GET', url: '/sitemap.xml' });
+  check(
+    'sitemap index: lists the instance sitemap',
+    smi.statusCode === 200 && smi.body.includes(`/embed/${inst.id}/sitemap.xml`),
+  );
+
+  // robots.txt (origin) — allow front, disallow admin, reference sitemap.
+  const robots = await app.inject({ method: 'GET', url: '/robots.txt' });
+  check(
+    'robots.txt: allow /embed/, disallow /, sitemap ref',
+    robots.body.includes('Allow: /embed/') &&
+      robots.body.includes('Disallow: /') &&
+      robots.body.includes('Sitemap:'),
+  );
+
+  // RSS feed — consent-gated.
+  const feed = await app.inject({ method: 'GET', url: `${base}/feed.xml` });
+  check(
+    'feed: 200 + rss + published item',
+    feed.statusCode === 200 && feed.body.includes('<rss') && feed.body.includes('quick brown fox'),
+  );
+  check('feed: consent — no unpublished item', !feed.body.includes('SECRET unpublished'));
+
+  // Auto OG image — off by default → 404; enabled → 200 png.
+  const ogOff = await app.inject({ method: 'GET', url: `${base}/og.png` });
+  check('og image: off by default → 404', ogOff.statusCode === 404);
+  await updateEmbedInstance(db, inst.id, inst.name, withSeo({ og: { ...D.seo.og, autoImage: true } }));
+  const ogOn = await app.inject({ method: 'GET', url: `${base}/og.png` });
+  check(
+    'og image: enabled → 200 image/png',
+    ogOn.statusCode === 200 && (ogOn.headers['content-type'] ?? '').toString().includes('image/png'),
+  );
+  await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
+
+  // Analytics — off by default (connect-src 'none'); configured → CSP host + script.
+  const noAnalytics = await app.inject({ method: 'GET', url: base });
+  check(
+    'analytics: off by default (connect-src none, no script)',
+    (noAnalytics.headers['content-security-policy'] ?? '').toString().includes("connect-src 'none'"),
+  );
+  await updateEmbedInstance(
+    db,
+    inst.id,
+    inst.name,
+    withSeo({ analytics: { scriptUrl: 'https://analytics.example.test/a.js' } }),
+  );
+  const withAnalytics = await app.inject({ method: 'GET', url: base });
+  check(
+    'analytics: configured → script tag + CSP host (not global)',
+    withAnalytics.body.includes('analytics.example.test/a.js') &&
+      (withAnalytics.headers['content-security-policy'] ?? '')
+        .toString()
+        .includes('https://analytics.example.test'),
+  );
+  await updateEmbedInstance(db, inst.id, inst.name, normalizeEmbedSettings(D));
 
   await app.close();
   console.log(failures === 0 ? '\nverify:public OK' : `\nverify:public FAILED (${failures})`);
