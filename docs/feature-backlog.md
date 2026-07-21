@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-013**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-016**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -157,9 +157,14 @@ The history below records the pre-CCB-S2-003 state.
 
 - [ ] Integrate the operator's local model over a secure tunnel, decoupled behind a single "AI endpoint" address; the bot forwards free-form private messages and returns replies, while commands stay deterministic. Not present in code today (source: [`seasons/SEASON-1-PROTOCOL.md`](../seasons/SEASON-1-PROTOCOL.md) Part D §3).
 
-### 4. Multi-tenancy for customer self-service
+### 4. Multi-tenancy & Pro (customer self-service)
 
 - [ ] Tenant isolation (carry a tenant key in new tables from the start), a role model (operator over all; customers scoped to their tenant), subscription/self-service management, per-customer passkey login. The current schema is single-tenant — no tenant key exists in any table yet (source: [`seasons/SEASON-1-PROTOCOL.md`](../seasons/SEASON-1-PROTOCOL.md) Part D §4).
+- [ ] **Dual-license / Pro edition (D-026)** — the open edition stays AGPL-3.0; a commercial **Pro** edition follows under separate terms. **Caveat:** Pro that still links `simplex-chat` remains AGPL-bound unless SimpleX grants a commercial library licence or Pro avoids linking it — the tenancy/Pro architecture must respect this boundary from the start. Decided, not yet built.
+
+### 4a. Retention auto-delete
+
+- [ ] **Abo-dependent, admin-configurable retention, default 10 years, auto-delete after expiry (D-027)** — nothing auto-expires today; existing takedown/`/unpublish`/in-group-deletion are unchanged. The deletion mechanism is a Season 3 build and must be disclosed in the Privacy Policy. Decided, not yet built.
 
 ### 5. Optional durable-ban identity layer
 

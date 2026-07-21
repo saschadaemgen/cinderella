@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-016**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,55 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-028 — "Done means deployed": every briefing ends committed, pushed, and live
+**Status: IMPLEMENTED (process convention).**
+**Decision.** A briefing is not complete until its result is committed to `main`, pushed to
+GitHub (`origin/main`), and deployed to the production VPS and verified live. Code changes
+deploy with build + migrate + service restart; documentation-only changes deploy by syncing the
+VPS git checkout (no build/restart needed). `main`, `origin/main`, and production are kept in
+lockstep — there is no gap between "written" and "running."
+**Rationale.** The project is a single live product on a shared host; drift between the repo and
+production is the most common source of "works on main but not in prod" confusion. Making
+deployment part of the definition of done removes that class of error. Formalised at the Season 2
+close-out (CCB-S2-016); it had governed every Season 2 briefing already but lacked a number.
+Recorded here consistent with the D-001 precedent that process conventions are logged decisions.
+
+---
+
+### D-027 — Retention model: abo-dependent, admin-configurable, default 10 years, auto-delete after expiry
+**Status: PLANNED (the deletion mechanism is a Season 3 build).**
+**Decision.** Retention of captured/published content is **subscription-dependent** and
+**admin-configurable**, defaulting to **10 years**; content is **automatically deleted** once its
+retention period expires. The auto-delete mechanism itself is **not yet built** — it is a Season 3
+deliverable (§Part D.6 of [`../seasons/SEASON-2-PROTOCOL.md`](../seasons/SEASON-2-PROTOCOL.md)).
+Until then nothing auto-expires; existing operator/member deletion (takedown, `/unpublish`,
+in-group deletion) is unchanged.
+**Rationale.** Data minimisation and GDPR alignment (content should not live forever by default)
+balanced against the archive's permanence promise — a long but bounded default (10 years),
+overridable per deployment/subscription. Deferring the deletion build to Season 3 keeps the decision
+recorded now (so the Privacy Policy and subscription tiers can reference it) without shipping a
+half-built eraser. The retention period must also be disclosed in the Privacy Policy (Season 3).
+
+---
+
+### D-026 — Dual-license: AGPL open edition now, a commercial Pro edition later (AGPL caveat)
+**Status: PLANNED.**
+**Decision.** Cinderella ships as an **open edition under AGPL-3.0** (the current, published
+edition). A future **commercial "Pro" edition** will be offered under **separate commercial
+terms**. **Caveat (load-bearing):** any Pro edition that still *links* the AGPL-licensed
+`simplex-chat` library remains **AGPL-bound** — a commercial licence for Pro is only possible if
+(a) SimpleX grants a commercial library licence for `simplex-chat`, **or** (b) Pro is architected
+to **not link** `simplex-chat` (e.g. a separate process / service boundary). This constraint is
+decided now so Season 3's multi-tenancy/Pro work (§Part D.7 of the Season 2 protocol) is built with
+the licence boundary in mind from the start.
+**Rationale.** Open-core: AGPL keeps the community edition open and trustworthy; a paid Pro tier
+funds sustainability and customer self-service. The AGPL copyleft reaches anything that links the
+covered library, so "commercial terms" for Pro are not free to assert — the caveat records the
+only two lawful paths and prevents a Season 3 architecture that quietly violates the SimpleX
+licence. No code changes yet; this governs the Pro/multi-tenancy design.
 
 ---
 
