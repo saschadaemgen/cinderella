@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-001**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -190,15 +190,19 @@ Two independent limiters (`src/web/auth.ts`), both reading live settings:
 
 ### 3.5 CSP & security headers — present
 
-- Applied to **every response** via an `onSend` hook (`src/web/server.ts:129-131`,
-  `src/web/security/headers.ts:9-23`).
+- Applied to **every response** via an `onSend` hook (`src/web/server.ts`,
+  `src/web/security/headers.ts:9-23`), with two carve-outs: the public surfaces
+  (archive front + marketing site) set their own headers, and static `/assets/*`
+  files get `Cache-Control: public, max-age=86400` + `nosniff` instead of the
+  admin `no-store` set (CCB-S3-001 — the site's self-hosted webfonts would
+  otherwise re-download on every navigation).
 - Always set: `Content-Security-Policy` (configurable), `X-Content-Type-Options:
-  nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` (configurable),
+nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` (configurable),
   `Cache-Control: no-store`, optional `Permissions-Policy`, and `Strict-Transport-Security`
   when `hstsMaxAge > 0`.
 - **Default CSP is strict** (`DEFAULT_CSP`, `src/security/settings.ts:77-79`):
   `default-src 'self'`, `script-src 'self'` (no inline JS), `frame-ancestors
-  'none'`, `form-action 'self'`, `base-uri 'none'`. `style-src` permits
+'none'`, `form-action 'self'`, `base-uri 'none'`. `style-src` permits
   `'unsafe-inline'` (Tailwind utility classes); scripts do not. The login page
   comment confirms the no-inline-JS constraint drives the external `auth.js`
   (`src/web/security/routes.ts:82`).
@@ -356,26 +360,26 @@ Two independent limiters (`src/web/auth.ts`), both reading live settings:
 
 ## 9. Control inventory (outline ↔ code)
 
-| Control (outline) | In code? | Anchor |
-| --- | --- | --- |
-| Public console over Let's Encrypt TLS (nginx → Fastify 127.0.0.1) | Yes | `deploy/nginx-admin.conf:31-61`, `src/web/server.ts:243` |
-| Passkey (WebAuthn) primary auth | Yes | `src/web/security/webauthn.ts`, `routes.ts:188-231` |
-| Argon2id break-glass password | Yes | `src/web/auth.ts:112-125`, `routes.ts:234-302` |
-| Optional TOTP (break-glass only) | Yes | `src/web/auth.ts:127-135`, `routes.ts:273-277` |
-| Session policy (idle/absolute/concurrent) | Yes | `src/web/session.ts:85-111`, `settings.ts:37-44` |
-| Step-up before sensitive actions | Yes | `src/web/server.ts:181-187`, `routes.ts:25` |
-| Rate-limit & lockout | Yes | `src/web/auth.ts:28-95`, `server.ts:141-144` |
-| IP allow/deny | Yes | `src/web/security/access.ts`, `server.ts:146-153` |
-| CSP & security headers | Yes | `src/web/security/headers.ts`, `settings.ts:77-79` |
-| Audit log | Yes | `migrations/003_admin.sql:12-21`, `src/db/audit.ts` |
-| Security-event feed | Yes | `src/web/views/security.ts:519-537` |
-| Webhook alerting | Yes (2 events only) | `src/web/security/alert.ts`, `routes.ts:217-222,291` |
-| Counter-regression auto-lock | Yes | `src/web/security/webauthn.ts:246-267` |
-| PostgreSQL-backed sessions | Yes | `migrations/007_sessions.sql`, `src/web/session.ts` |
-| Media behind auth (`/media` not public) | Yes | `src/web/server.ts:119-124,157-162` |
-| Bind-level scoping (no host firewall) | Yes | `src/web/server.ts:243`, `deploy/RUNBOOK.md:173-177` |
-| Secrets in on-VPS env (EnvironmentFile) | Yes | `src/config.ts:141-181`, `deploy/RUNBOOK.md:38-53` |
-| CSRF (header or `_csrf` body) | Yes | `src/web/session.ts:172-190` |
+| Control (outline)                                                 | In code?            | Anchor                                                   |
+| ----------------------------------------------------------------- | ------------------- | -------------------------------------------------------- |
+| Public console over Let's Encrypt TLS (nginx → Fastify 127.0.0.1) | Yes                 | `deploy/nginx-admin.conf:31-61`, `src/web/server.ts:243` |
+| Passkey (WebAuthn) primary auth                                   | Yes                 | `src/web/security/webauthn.ts`, `routes.ts:188-231`      |
+| Argon2id break-glass password                                     | Yes                 | `src/web/auth.ts:112-125`, `routes.ts:234-302`           |
+| Optional TOTP (break-glass only)                                  | Yes                 | `src/web/auth.ts:127-135`, `routes.ts:273-277`           |
+| Session policy (idle/absolute/concurrent)                         | Yes                 | `src/web/session.ts:85-111`, `settings.ts:37-44`         |
+| Step-up before sensitive actions                                  | Yes                 | `src/web/server.ts:181-187`, `routes.ts:25`              |
+| Rate-limit & lockout                                              | Yes                 | `src/web/auth.ts:28-95`, `server.ts:141-144`             |
+| IP allow/deny                                                     | Yes                 | `src/web/security/access.ts`, `server.ts:146-153`        |
+| CSP & security headers                                            | Yes                 | `src/web/security/headers.ts`, `settings.ts:77-79`       |
+| Audit log                                                         | Yes                 | `migrations/003_admin.sql:12-21`, `src/db/audit.ts`      |
+| Security-event feed                                               | Yes                 | `src/web/views/security.ts:519-537`                      |
+| Webhook alerting                                                  | Yes (2 events only) | `src/web/security/alert.ts`, `routes.ts:217-222,291`     |
+| Counter-regression auto-lock                                      | Yes                 | `src/web/security/webauthn.ts:246-267`                   |
+| PostgreSQL-backed sessions                                        | Yes                 | `migrations/007_sessions.sql`, `src/web/session.ts`      |
+| Media behind auth (`/media` not public)                           | Yes                 | `src/web/server.ts:119-124,157-162`                      |
+| Bind-level scoping (no host firewall)                             | Yes                 | `src/web/server.ts:243`, `deploy/RUNBOOK.md:173-177`     |
+| Secrets in on-VPS env (EnvironmentFile)                           | Yes                 | `src/config.ts:141-181`, `deploy/RUNBOOK.md:38-53`       |
+| CSRF (header or `_csrf` body)                                     | Yes                 | `src/web/session.ts:172-190`                             |
 
 Everything the outline claims is present in code. The material nuances to keep in
 mind are the two flagged above: **webhook alerting fires for only two event
@@ -410,8 +414,8 @@ consent:
   (`src/web/server.ts`).
 - **Embed response headers.** The front sets its own: a CSP of
   `default-src 'none'; img-src 'self'; media-src 'self'; style-src 'nonce-…';
-  script-src 'nonce-…'; frame-ancestors *; base-uri 'none'; form-action 'self';
-  connect-src 'self'` (embeddable anywhere, no external assets; `media-src 'self'`
+script-src 'nonce-…'; frame-ancestors *; base-uri 'none'; form-action 'self';
+connect-src 'self'` (embeddable anywhere, no external assets; `media-src 'self'`
   admits only the front's own consent-gated inline `<video>`/`<audio>`, CCB-S2-008),
   `x-content-type-options: nosniff`,
   `referrer-policy: no-referrer`, and `cache-control: no-store` (consent freshness —
@@ -500,7 +504,7 @@ posture:
 - **Its own headers (`applySiteHeaders`, [`src/web/site/routes.ts`](../src/web/site/routes.ts)).**
   The same strict, self-contained nonce CSP as the archive front —
   `default-src 'none'; img-src 'self' data:; style-src 'nonce-…'; script-src 'nonce-…';
-  connect-src 'self'; base-uri 'none'; form-action 'self'` — but **non-embeddable**:
+connect-src 'self'; base-uri 'none'; form-action 'self'` — but **non-embeddable**:
   `frame-ancestors 'none'` **plus** `X-Frame-Options: DENY` (the archive front is the
   opposite, `frame-ancestors *`, because it must embed). Also `nosniff`,
   `referrer-policy: no-referrer`, `cache-control: no-store` (each page carries a

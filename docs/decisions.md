@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-016**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-001**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -13,7 +13,36 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-029 — Season 3 website: the operator's template is the design source, ported 1:1 to SSR
+
+**Status: IMPLEMENTED (CCB-S3-001).**
+**Decision.** The public site's design source is the operator-authored dark-neon template
+(delivered as a self-contained HTML bundle in `tmp/`, not committed); Claude Code ports it
+**verbatim** to the existing self-contained SSR machinery — copy into `locales/*.json`
+(EN/DE), design tokens + component CSS into [`src/web/site/css.ts`](../src/web/site/css.ts),
+lucide icons inlined server-side ([`src/web/site/icons.ts`](../src/web/site/icons.ts)),
+webfonts + brand avatar vendored under `assets/site/` and served same-origin, and the
+template's React effects re-implemented as small nonce'd vanilla scripts
+([`src/web/site/client.ts`](../src/web/site/client.ts)). The site now carries its **own**
+token system (ink/cyan/magenta, dark default, `cn-theme` toggle); the shared
+`src/web/theme.ts` continues to serve the archive front unchanged. All template pages are
+real (Features, Pro, Security, Open Source, Legal); Docs stays a stub. The legal pages are
+footer-linked on every page; the Legal Notice carries a **voluntarily appointed Youth
+Protection Officer**; Privacy/Terms are rendered drafts, `noindex` and excluded from the
+sitemap until the planning chat delivers the final texts. The template's strong
+"consent + CSAM screening" copy **stands as authored** (operator decision: the site is a
+forward-looking shop window while the software is not yet distributed; the binding point is
+first distribution — before any hand-over, CSAM screening must be built or the site comes
+down). The D-017/D-023–D-025 building blocks carry over unchanged, still OFF by default.
+**Rationale.** The CCB-S2-012 foundation landing was rejected as not good enough (Season 2
+close-out Part C); porting the operator's approved design 1:1 — rather than reinterpreting
+it — keeps design authority with the operator while preserving the SSR/SEO/i18n/CSP
+architecture the foundation established.
+
+---
+
 ### D-028 — "Done means deployed": every briefing ends committed, pushed, and live
+
 **Status: IMPLEMENTED (process convention).**
 **Decision.** A briefing is not complete until its result is committed to `main`, pushed to
 GitHub (`origin/main`), and deployed to the production VPS and verified live. Code changes
@@ -29,6 +58,7 @@ Recorded here consistent with the D-001 precedent that process conventions are l
 ---
 
 ### D-027 — Retention model: abo-dependent, admin-configurable, default 10 years, auto-delete after expiry
+
 **Status: PLANNED (the deletion mechanism is a Season 3 build).**
 **Decision.** Retention of captured/published content is **subscription-dependent** and
 **admin-configurable**, defaulting to **10 years**; content is **automatically deleted** once its
@@ -45,10 +75,11 @@ half-built eraser. The retention period must also be disclosed in the Privacy Po
 ---
 
 ### D-026 — Dual-license: AGPL open edition now, a commercial Pro edition later (AGPL caveat)
+
 **Status: PLANNED.**
 **Decision.** Cinderella ships as an **open edition under AGPL-3.0** (the current, published
 edition). A future **commercial "Pro" edition** will be offered under **separate commercial
-terms**. **Caveat (load-bearing):** any Pro edition that still *links* the AGPL-licensed
+terms**. **Caveat (load-bearing):** any Pro edition that still _links_ the AGPL-licensed
 `simplex-chat` library remains **AGPL-bound** — a commercial licence for Pro is only possible if
 (a) SimpleX grants a commercial library licence for `simplex-chat`, **or** (b) Pro is architected
 to **not link** `simplex-chat` (e.g. a separate process / service boundary). This constraint is
@@ -63,6 +94,7 @@ licence. No code changes yet; this governs the Pro/multi-tenancy design.
 ---
 
 ### D-025 — Website building blocks (analytics, cookie banner, social share) ship but default OFF; analytics is consent-gated
+
 **Status: IMPLEMENTED.**
 **Decision.** The public site's three "building blocks" (CCB-S2-012) are admin-configurable and
 **all disabled by default**, persisted as one normalized blob under the `settings` table `site` key
@@ -87,6 +119,7 @@ script-free share, and an escaped-URL breakout test).
 ---
 
 ### D-024 — Website i18n via locale files + per-language URLs; adding a language is a file, not code
+
 **Status: IMPLEMENTED.**
 **Decision.** All visible site copy comes from `locales/<code>.json` keyed by string id (CCB-S2-012);
 English is primary, German second. The loader (`src/web/site/i18n.ts`, synchronous) scans the
@@ -105,6 +138,7 @@ per-locale `og:locale`).
 ---
 
 ### D-023 — A public marketing site owns the domain root; the admin moves to `/dashboard` and stays `noindex`
+
 **Status: IMPLEMENTED.**
 **Decision.** The domain root `/` now serves a public, SSR, indexable marketing site (CCB-S2-012) —
 the face of the Cinderella bot suite (the archive is one capability under it). It is built in the
@@ -126,6 +160,7 @@ public surface strictly self-contained. Verified by [`scripts/verify-site.ts`](.
 ---
 
 ### D-022 — Fail fast on a WebAuthn RP-ID/origin mismatch (passkey-lockout guard)
+
 **Status: IMPLEMENTED.**
 **Decision.** `loadAdminConfig` calls `validateRpConfig(rpId, webauthnOrigin)` at startup
 (`src/config.ts`, CCB-S2-011): the server refuses to boot unless the effective
@@ -136,7 +171,7 @@ was correct (`= PUBLIC_ORIGIN` host, unchanged), the WebAuthn ceremony code was
 byte-identical to the last working build, the options endpoint returned identical output,
 and the failing attempt came from the same client that had just succeeded — i.e. NOT a
 server regression but a client-side `get()` reject. No RP-ID/origin was restored because
-none had drifted; the guard is defense-in-depth against the *classic* cause (a future
+none had drifted; the guard is defense-in-depth against the _classic_ cause (a future
 `WEBAUTHN_RP_ID`/`PUBLIC_ORIGIN` change) rather than a fix for this incident.
 **Rationale.** An RP-ID/origin mismatch invalidates every registered passkey with a silent
 client-side error — the worst kind of auth regression (it locks the operator out with no
@@ -148,6 +183,7 @@ unrelated origin rejected).
 ---
 
 ### D-021 — Content reporting is visible-until-review, minimal-data, published-gated; alerts are a placeholder
+
 **Status: IMPLEMENTED.**
 **Decision.** The public front carries a per-item "Report" control (a no-JS `<details>` form,
 CCB-S2-009) and the admin a grouped review queue + an open-count notification bar. A report is the
@@ -178,6 +214,7 @@ honest report count, and a real CSRF-scope test. Verified by
 ---
 
 ### D-020 — Infinite scroll is cursor-paged + DOM-windowed; live-update reconciles the loaded span
+
 **Status: IMPLEMENTED.**
 **Decision.** The public stream pages by a stable `(sent_at, id)` cursor (CCB-S2-007), not by
 offset, so items don't shift/dupe when content is published/recalled between loads. The SSR
@@ -210,6 +247,7 @@ deep-page auto-prepend misfire, and a poll single-flight gap.
 ---
 
 ### D-019 — Video plays inline; a media download button is per-instance, default ON; the media route serves byte-ranges
+
 **Status: IMPLEMENTED.**
 **Decision.** On the public stream, video renders as an INLINE native `<video controls
 preload="metadata" playsinline>` (CCB-S2-008), replacing the old "Open video" link that
@@ -240,6 +278,7 @@ consent-before-range + snippet fullscreen grant).
 ---
 
 ### D-018 — Live auto-update on the public front is consent-gated polling; "immediately" = within the poll interval
+
 **Status: IMPLEMENTED (DOM mechanism revised by [D-020](#d-020)).**
 **Mechanism note (CCB-S2-007):** the wholesale `GET /embed/:id/fragment` swap and the
 `LIVE_SCRIPT` described below were REPLACED by the infinite-scroll client's surgical reconcile
@@ -274,6 +313,7 @@ incl. media 404, add-on-publish, consent-only ids, rate limit).
 ---
 
 ### D-017 — Analytics is per-instance, off by default, and never weakens the CSP globally
+
 **Status: IMPLEMENTED.**
 **Decision.** An operator may attach a privacy-respecting analytics script per embed
 instance (`seo.analytics.scriptUrl`, https-only) — **off by default**. When set, only
@@ -290,6 +330,7 @@ the default safe.
 ---
 
 ### D-016 — Consent-gating is absolute on the public archive front
+
 **Status: IMPLEMENTED.**
 **Decision.** Only published (opted-in) content is ever served, rendered, or
 indexed on the public front. Every public read goes through the
@@ -310,6 +351,7 @@ unpublished/before-opt-in → 404).
 ---
 
 ### D-015 — Public-front doctrine: maximum functionality, everything configurable in the admin
+
 **Status: IMPLEMENTED (foundation) / PLANNED (full suite).**
 **Decision.** The public archive front aims to be best-in-class and differentiated:
 the full range of options is exposed and configured in the admin, whether or not
@@ -326,6 +368,7 @@ re-architecture as later briefings land.
 ---
 
 ### D-014 — Season numbering aligned to one; internal and public numbering match
+
 **Status: IMPLEMENTED. Supersedes D-011.**
 **Decision.** The unit of work is the **Season**, and the first completed block is
 **Season 1** (the next is Season 2). The retired zero-based scheme (D-011) is
@@ -341,6 +384,7 @@ them (Season 1 = first block, Season 2 = next) removes the offset.
 ---
 
 ### D-013 — Consent to move to the private member-support scope (Season 2)
+
 **Status: PLANNED.**
 **Decision.** Onboarding and the `/publish` consent exchange will be conducted
 privately, per member, through SimpleX's member-support scope (knock → private
@@ -355,7 +399,7 @@ one-to-one consent conversation.
 > "arrive as plain group messages to the bot," and the confirmation is sent as an
 > in-group reply via `apiSendTextReply` (`src/consent/commands.ts:4-6`, `:19-24`,
 > `:61-70`). The consent-first `WELCOME_MESSAGE` is defined in
-> `src/consent/commands.ts:48-59` but is actually *sent* to the group from the
+> `src/consent/commands.ts:48-59` but is actually _sent_ to the group from the
 > one-shot `npm run connect` helper when the bot joins
 > (`src/bot/connect.ts:47-63`, `apiSendTextMessage`), not from `commands.ts` and
 > not privately. No member-support / support-scope code exists in `src/` (verified
@@ -366,6 +410,7 @@ one-to-one consent conversation.
 ---
 
 ### D-012 — Local RTX 3090 hosts the AI brain; the bot pulls inference over a tunnel
+
 **Status: PLANNED.**
 **Decision.** The conversational/AI model ("the brain") runs locally on the
 operator's RTX 3090; the bot forwards free-form private messages to it over a
@@ -382,6 +427,7 @@ is small, and decouples the model host from the bot.
 ---
 
 ### D-011 — Seasons numbered from zero; every briefing carries a `CCB-S<season>-<NNN>` id
+
 **Status: Superseded by D-014** (was IMPLEMENTED; the zero-based scheme is retired — the first block is Season 1). Text kept below as history.
 **Decision.** The unit of work is the **Season**, numbered from zero; Season 0 is
 the entire first block. Each briefing carries an id of the form `CCB-S0-017`, and
@@ -390,7 +436,7 @@ deprecated for new work.
 **Rationale.** A single, operator-mandated numbering scheme keeps briefings,
 commits, and documents traceable to one another.
 
-> **Note:** the deprecated "Stage" labels still exist as *historical* artifacts —
+> **Note:** the deprecated "Stage" labels still exist as _historical_ artifacts —
 > e.g. the internal task list carries "Stage 0…Stage 6" items. Per the directive
 > these are left as history and simply not used for new work
 > (`seasons/SEASON-1-PROTOCOL.md:21-29`).
@@ -398,6 +444,7 @@ commits, and documents traceable to one another.
 ---
 
 ### D-010 — Avatar carried inside the `bot.run` profile, then flushed to the group with one message
+
 **Status: IMPLEMENTED.**
 **Decision.** The bot avatar is passed as a data-URI `image` inside the profile
 given to `bot.run`, and `updateProfile` is enabled **only** when an avatar was
@@ -416,6 +463,7 @@ propagate the avatar to members.
 ---
 
 ### D-009 — Admin sessions persisted in PostgreSQL, not process memory
+
 **Status: IMPLEMENTED.**
 **Decision.** Admin sessions live in an `admin_sessions` table rather than
 in-process memory; the signed HttpOnly cookie carries only a stable id.
@@ -428,6 +476,7 @@ config changes), logging the operator out prematurely.
 ---
 
 ### D-008 — XFTP temp/work directory pinned to the media filesystem (EXDEV fix)
+
 **Status: IMPLEMENTED.**
 **Decision.** `TMPDIR` for the chat core is set to an `xftp-tmp` directory that
 sits on the same filesystem as the SimpleX files folder, created at boot before the
@@ -441,6 +490,7 @@ receive stalls. Same-filesystem temp makes the move a cheap rename.
 ---
 
 ### D-007 — Appless public passkey console; WireGuard dropped from the admin path
+
 **Status: IMPLEMENTED.**
 **Decision.** The admin console is public over real TLS (nginx → Fastify on
 `127.0.0.1:8787`), with WebAuthn passkeys as primary auth and an admin-toggleable
@@ -459,6 +509,7 @@ the full A4.5 hardening suite provide the real control.
 ---
 
 ### D-006 — No host-wide firewall on the shared VPS; scope at the bind level
+
 **Status: IMPLEMENTED (operational posture).**
 **Decision.** Cinderella does not impose a host-wide firewall on the shared host;
 its own surface is confined by binding to loopback (admin `127.0.0.1:8787`, Postgres
@@ -474,6 +525,7 @@ stays strictly additive.
 ---
 
 ### D-005 — In-process `simplex-chat` SDK 6.5.4, not the deprecated WebSocket client
+
 **Status: IMPLEMENTED.**
 **Decision.** Run the SimpleX chat core in-process via the `simplex-chat` npm SDK
 (`^6.5.4`), which embeds the Haskell core as a native addon; `bot.run` opens the
@@ -489,6 +541,7 @@ SimpleX DB (protected by filesystem perms) as the sensitive surface.
 ---
 
 ### D-004 — Consent conducted in-group via exact `/publish` / `/unpublish` commands
+
 **Status: IMPLEMENTED.**
 **Decision.** A member opts in/out by sending the exact ASCII commands `/publish` or
 `/unpublish` as ordinary group messages; each is recorded against the sender's
@@ -504,13 +557,14 @@ capture pipeline) and `src/index.ts:88` (`hooks.onCommand = makeConsentHandler`)
 the welcome is sent from `src/bot/connect.ts:47-63` (on `userJoinedGroup`, in the
 `npm run connect` helper).
 
-> **Note:** this is the *current, implemented* behaviour and diverges from the
+> **Note:** this is the _current, implemented_ behaviour and diverges from the
 > Season 1 close-out prose, which describes consent as private via the member-support
 > scope (see D-013). Today it is in-group.
 
 ---
 
 ### D-003 — Publication state is derived, never a stored flag
+
 **Status: IMPLEMENTED.**
 **Decision.** Whether a message is public is computed from the `consent` table,
 forward-only `sent_at` from opt-in, `deleted` / `group_deleted`, and
@@ -525,6 +579,7 @@ revocation or deletion, which a cached flag could.
 ---
 
 ### D-002 — Two logical DBs kept separate; media on disk, DB stores the path
+
 **Status: IMPLEMENTED.**
 **Decision.** Keep the SimpleX core's own SQLite state (under `state/`) separate
 from Cinderella's archive PostgreSQL (messages, links, consent, settings, audit,
@@ -540,6 +595,7 @@ directly (behind auth).
 ---
 
 ### D-001 — Work on `main`, Conventional Commits, mandatory pre-push secret grep, public repo
+
 **Status: IMPLEMENTED (process convention).**
 **Decision.** All work lands on `main` with Conventional Commit messages; before any
 push, grep for real IPs, secrets, hostnames, device ids, and member data; test and
@@ -555,6 +611,7 @@ identifier is irreversible; a mechanical pre-push check is the backstop.
 ---
 
 #### Status legend
+
 - **IMPLEMENTED** — observable in the code or committed config referenced above.
 - **PLANNED** — committed direction recorded in `seasons/SEASON-1-PROTOCOL.md`; no
   implementing code exists yet.

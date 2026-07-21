@@ -47,10 +47,10 @@ async function main(): Promise<void> {
   // --- Locale loader (adding a language is a FILE) ---
   const locales = loadLocales('locales');
   check('i18n: en + de loaded, en default first', locales.codes[0] === 'en' && locales.has('de'));
-  check('i18n: t resolves a real string', locales.t('en', 'hero.title').length > 10);
+  check('i18n: t resolves a real string', locales.t('en', 'hero.title1').length > 10);
   check(
     'i18n: de differs from en (translated)',
-    locales.t('de', 'hero.title') !== locales.t('en', 'hero.title'),
+    locales.t('de', 'hero.title1') !== locales.t('en', 'hero.title1'),
   );
   check(
     'i18n: missing key falls back to the key',
@@ -92,7 +92,8 @@ async function main(): Promise<void> {
   const codes = locales.codes;
   check('predicate: / is public', isPublicSitePath('/', codes));
   check('predicate: /en is public', isPublicSitePath('/en', codes));
-  check('predicate: /en/suite is public', isPublicSitePath('/en/suite', codes));
+  check('predicate: /en/features is public', isPublicSitePath('/en/features', codes));
+  check('predicate: /en/legal/privacy is public', isPublicSitePath('/en/legal/privacy', codes));
   check('predicate: /sitemap-site.xml is public', isPublicSitePath('/sitemap-site.xml', codes));
   check('predicate: /messages is NOT public (admin)', !isPublicSitePath('/messages', codes));
   check('predicate: /dashboard is NOT public (admin)', !isPublicSitePath('/dashboard', codes));
@@ -157,8 +158,8 @@ async function main(): Promise<void> {
   const de = await app.inject({ method: 'GET', url: '/de' });
   check('en: 200 + <html lang="en">', en.statusCode === 200 && en.body.includes('<html lang="en"'));
   check('de: 200 + <html lang="de">', de.statusCode === 200 && de.body.includes('<html lang="de"'));
-  check('en: renders the English hero title', en.body.includes(locales.t('en', 'hero.title')));
-  check('de: renders the German hero title', de.body.includes(locales.t('de', 'hero.title')));
+  check('en: renders the English hero title', en.body.includes(locales.t('en', 'hero.title1')));
+  check('de: renders the German hero title', de.body.includes(locales.t('de', 'hero.title1')));
   check(
     'lang: /en persists the choice (Set-Cookie cin-lang=en)',
     String(en.headers['set-cookie'] ?? '').includes('cin-lang=en'),
@@ -166,9 +167,58 @@ async function main(): Promise<void> {
   check('switcher: /en links to /de', en.body.includes('href="/de"'));
   check('login: discreet operator-login button links to /login', en.body.includes('href="/login"'));
   check(
-    'nav: home + all stub links present',
-    en.body.includes('/en/suite') && en.body.includes('/en/legal'),
+    'nav: main template pages linked',
+    en.body.includes('/en/features') &&
+      en.body.includes('/en/security') &&
+      en.body.includes('/en/legal'),
   );
+
+  // --- Template pages are real (CCB-S3-001) ---
+  const features = await app.inject({ method: 'GET', url: '/en/features' });
+  check(
+    'features: 200 + indexable + content',
+    features.statusCode === 200 &&
+      features.body.includes('name="robots" content="index') &&
+      features.body.includes(locales.t('en', 'features.cap1.title')),
+  );
+  const proDe = await app.inject({ method: 'GET', url: '/de/pro' });
+  check(
+    'pro: German page renders the tiers',
+    proDe.statusCode === 200 && proDe.body.includes(locales.t('de', 'pro.tier2.desc')),
+  );
+  check(
+    'footer: legal links on every page (features)',
+    features.body.includes('/en/legal/privacy') && features.body.includes('/en/legal/terms'),
+  );
+
+  // --- Legal pages (CCB-S3-001): impressum + YPO, privacy/terms drafts ---
+  const legal = await app.inject({ method: 'GET', url: '/en/legal' });
+  check(
+    'legal: 200 + indexable + Legal Notice content',
+    legal.statusCode === 200 &&
+      legal.body.includes('name="robots" content="index') &&
+      legal.body.includes(locales.t('en', 'impressum.intro')),
+  );
+  check(
+    'legal: Youth Protection Officer present (voluntary wording)',
+    legal.body.includes('Eike Keller') &&
+      legal.body.includes('e.keller@simplego.dev') &&
+      legal.body.includes(locales.t('en', 'impressum.ypo.intro')),
+  );
+  const privacy = await app.inject({ method: 'GET', url: '/en/legal/privacy' });
+  check(
+    'legal: privacy draft is 200 + noindex + marked draft',
+    privacy.statusCode === 200 &&
+      privacy.body.includes('name="robots" content="noindex') &&
+      privacy.body.includes(locales.t('en', 'legal.badge.draft')),
+  );
+  const terms = await app.inject({ method: 'GET', url: '/de/legal/terms' });
+  check(
+    'legal: German terms draft is 200',
+    terms.statusCode === 200 && terms.body.includes(locales.t('de', 'terms.s2.body')),
+  );
+  const legalNope = await app.inject({ method: 'GET', url: '/en/legal/nope' });
+  check('legal: unknown legal sub-page is 404', legalNope.statusCode === 404);
 
   // --- SEO head ---
   check('seo: canonical to /en', en.body.includes(`<link rel="canonical" href="${ORIGIN}/en"`));
@@ -193,8 +243,8 @@ async function main(): Promise<void> {
   check('seo: home is indexable', en.body.includes('name="robots" content="index'));
 
   // --- Stubs (clean, not 404) ---
-  const stub = await app.inject({ method: 'GET', url: '/en/suite' });
-  check('stub: /en/suite is 200 (not a 404)', stub.statusCode === 200);
+  const stub = await app.inject({ method: 'GET', url: '/en/docs' });
+  check('stub: /en/docs is 200 (not a 404)', stub.statusCode === 200);
   check('stub: shows the coming-soon badge', stub.body.includes(locales.t('en', 'stub.badge')));
   check('stub: thin placeholder is noindex', stub.body.includes('name="robots" content="noindex'));
   const stubDe = await app.inject({ method: 'GET', url: '/de/docs' });
@@ -330,6 +380,12 @@ async function main(): Promise<void> {
       smSite.body.includes(`${ORIGIN}/en`) &&
       smSite.body.includes(`${ORIGIN}/de`) &&
       smSite.body.includes('xhtml:link'),
+  );
+  check(
+    'sitemap: built pages in, draft legal pages out',
+    smSite.body.includes(`${ORIGIN}/en/features`) &&
+      smSite.body.includes(`${ORIGIN}/en/legal</loc>`) &&
+      !smSite.body.includes('/legal/privacy'),
   );
   const smIndex = await app.inject({ method: 'GET', url: '/sitemap.xml' });
   check('sitemap: index references the site sitemap', smIndex.body.includes('/sitemap-site.xml'));

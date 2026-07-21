@@ -33,3 +33,9 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Operator-supplied working files (website template drops etc.)
+tmp/
+
+# Local Claude Code launcher config
+.claude/

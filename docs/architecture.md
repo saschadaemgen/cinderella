@@ -1,10 +1,10 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-001**._
 
-Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is *derived* from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
+Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
-This document describes the *runtime* architecture as it exists in code. Where the task outline and the code differ, the code is treated as ground truth and the divergence is called out inline (and collected in the appendix).
+This document describes the _runtime_ architecture as it exists in code. Where the task outline and the code differ, the code is treated as ground truth and the divergence is called out inline (and collected in the appendix).
 
 ## 1. System overview
 
@@ -100,7 +100,7 @@ The avatar is carried inside the profile passed to `bot.run` (`client.ts:77-107`
 
 ## 6. Data flow: message in → parse → persist → media receive
 
-Parse (`message.ts::parseGroupMessage`, keeps only group + `groupRcv` + `rcvMsgContent`, extracts the stable `senderMemberId` and the chat-item `itemId`, which is persisted as `group_msg_id`) → scope + classify (`handler.ts`, prefers the stable `targetGroupId` resolved once at startup so a group rename doesn't stop capture; consent commands are routed to `onCommand` and **not** persisted) → persist (`persist.ts`'s `onMessage` hook, `withTransaction(upsertMessage + replaceLinks)`; a media-type message with no file transfer is recorded via `recordMediaError`) → receive media, non-blocking, only if the row persisted and a file is present (`FileReceiver.receive` registers the pending entry *before* issuing `ReceiveFile` with `storeEncrypted:false`, resolves on `rcvFileComplete`; a timeout, `rcvFileError`, or a rejecting command response reject; `rcvFileWarning` is transient) → store + record (`storeMedia` + `updateMedia`; an orphan is flagged if no row exists; `onFileFailed` records a `media_error`). Edits re-persist (overwriting pre-edit text, `chatItemUpdated`); in-group deletions route to the idempotent `markDeleted`, keyed by `(group_id, group_msg_id)`.
+Parse (`message.ts::parseGroupMessage`, keeps only group + `groupRcv` + `rcvMsgContent`, extracts the stable `senderMemberId` and the chat-item `itemId`, which is persisted as `group_msg_id`) → scope + classify (`handler.ts`, prefers the stable `targetGroupId` resolved once at startup so a group rename doesn't stop capture; consent commands are routed to `onCommand` and **not** persisted) → persist (`persist.ts`'s `onMessage` hook, `withTransaction(upsertMessage + replaceLinks)`; a media-type message with no file transfer is recorded via `recordMediaError`) → receive media, non-blocking, only if the row persisted and a file is present (`FileReceiver.receive` registers the pending entry _before_ issuing `ReceiveFile` with `storeEncrypted:false`, resolves on `rcvFileComplete`; a timeout, `rcvFileError`, or a rejecting command response reject; `rcvFileWarning` is transient) → store + record (`storeMedia` + `updateMedia`; an orphan is flagged if no row exists; `onFileFailed` records a `media_error`). Edits re-persist (overwriting pre-edit text, `chatItemUpdated`); in-group deletions route to the idempotent `markDeleted`, keyed by `(group_id, group_msg_id)`.
 
 ## 7. The admin console
 
@@ -224,7 +224,7 @@ briefings extend it without touching consent logic:
   because bottom-appends grow below the fold the viewport never shifts. Direct (top-level)
   views keep the normal document scrollbar.
 - **Media playback (CCB-S2-008)** — video renders as an INLINE native `<video controls
-  preload="metadata" playsinline>` in the card (`itemMedia`,
+preload="metadata" playsinline>` in the card (`itemMedia`,
   [`src/web/front/render.ts`](../src/web/front/render.ts)), house-styled and theme-aware,
   replacing the old "Open video" link. A themed Download button is gated by the new
   per-instance `player.showDownload` (default ON; OFF → button hidden +
@@ -240,37 +240,61 @@ briefings extend it without touching consent logic:
   own bucket; cross-site rejected via `Sec-Fetch-Site`). It gates on `isPublished`
   (`published_messages`, D-016) with a neutral 303 (no oracle) and NEVER changes
   publication (visible-until-review); it stores minimal data (`migrations/008_reports.sql`
-  + [`src/db/reports.ts`](../src/db/reports.ts)) — a keyed daily-rotating `HMAC` token, no
-  raw IP. The admin side ([`src/web/views/reports.ts`](../src/web/views/reports.ts)) is a
-  grouped `/reports` queue with consent/auth-gated previews and audited take-down / resolve
-  / dismiss (takedown reuses `setModerationState`); an open-count bar is injected into every
-  admin page via an `onSend` comment marker. External alerts are an inert Settings
-  placeholder. Verified by
-  [`scripts/verify-public.ts`](../scripts/verify-public.ts) +
-  [`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
+  - [`src/db/reports.ts`](../src/db/reports.ts)) — a keyed daily-rotating `HMAC` token, no
+    raw IP. The admin side ([`src/web/views/reports.ts`](../src/web/views/reports.ts)) is a
+    grouped `/reports` queue with consent/auth-gated previews and audited take-down / resolve
+    / dismiss (takedown reuses `setModerationState`); an open-count bar is injected into every
+    admin page via an `onSend` comment marker. External alerts are an inert Settings
+    placeholder. Verified by
+    [`scripts/verify-public.ts`](../scripts/verify-public.ts) +
+    [`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
 
-## 12. Public marketing site (CCB-S2-012)
+## 12. Public marketing site (CCB-S2-012, redesigned CCB-S3-001)
 
 The domain root `/` is a public, SSR, indexable **marketing site** — the face of the
 Cinderella bot suite (the archive is one capability under it), separate from `/embed`
 and from the admin. It is built in the **public-front style** (self-contained, inline
 nonce'd CSS/JS, `html`/`raw` escaping), NOT the Tailwind admin shell. Code lives in
-[`src/web/site/`](../src/web/site/) (`routes.ts`, `render.ts`, `seo.ts`, `i18n.ts`,
-`pages.ts`) with settings in [`src/site/settings.ts`](../src/site/settings.ts).
+[`src/web/site/`](../src/web/site/) (`routes.ts`, `render.ts`, `css.ts`, `client.ts`,
+`icons.ts`, `seo.ts`, `i18n.ts`, `pages.ts`) with settings in
+[`src/site/settings.ts`](../src/site/settings.ts).
 
-- **Shared theme.** The SimpleGo house theme (dark-default light/dark, `sg-theme`
-  toggle, no-flash boot, `theme-color` sync) was extracted to
-  [`src/web/theme.ts`](../src/web/theme.ts) as a single source of truth consumed by
-  both the archive front and the site; the front's rendered output is byte-identical
-  to before the extraction. Each surface owns its own layout CSS.
+- **Design (D-029).** The operator's approved dark-neon template ported 1:1:
+  ink/cyan/magenta token system with dark as the default theme and an optional light
+  theme (`cn-theme` in localStorage, no-flash boot, `theme-color` sync), Source Sans 3 +
+  JetBrains Mono **self-hosted** woff2 subsets (vendored in `assets/site/fonts/`, SIL
+  OFL, copied to `public/assets/site/` by `scripts/copy-assets.mjs`), the brand avatar
+  (`assets/site/cinderella-avatar.jpg`), and lucide icons **inlined server-side** from
+  the vendored `lucide-static` package ([`src/web/site/icons.ts`](../src/web/site/icons.ts))
+  — no CDN anywhere. The template's React effects (starfield canvas, scroll reveals,
+  burger menu, theme toggle, the interactive archive-demo search) are small vanilla
+  scripts under the CSP nonce ([`src/web/site/client.ts`](../src/web/site/client.ts));
+  every page is fully server-rendered and degrades cleanly without JS. The shared
+  `src/web/theme.ts` (`sg-theme`) continues to serve the **archive front** unchanged;
+  the site owns its own tokens in [`src/web/site/css.ts`](../src/web/site/css.ts).
+
+- **Pages (CCB-S3-001).** Home (cinematic hero + live archive demo with sample data +
+  pipeline tiles + suite/roadmap + security card), Features (the four firewall stages +
+  roadmap), Pro (tiles + placeholder pricing tiers + customer card), Security (CSAM
+  screening card with consent→screen→publish flow, marked "In development"), Open
+  Source (repo/AGPL rationale + self-host steps), and Legal. Docs remains a clean
+  `noindex` "coming soon" stub (never a 404). The **legal pages** are footer-linked on
+  every page: `/{lang}/legal` (Legal Notice/Impressum, indexable, includes the
+  **voluntarily appointed Youth Protection Officer**), `/{lang}/legal/privacy` and
+  `/{lang}/legal/terms` (rendered drafts, badged "Draft — pending", `noindex`, excluded
+  from the sitemap until the final texts land). Placeholder fields (operator address,
+  dates, legal-basis cites) render as accent-mono `[...]` marks.
 
 - **Routing + i18n (D-024).** Copy comes from `locales/<code>.json` (EN primary, DE
   second), loaded by scanning the `locales/` directory at startup — adding a language
-  is a file, not code. URLs are per-language (`/en`, `/de`, `/en/<slug>`), one static
-  route per loaded locale so nothing shadows the admin paths. `GET /` 302-redirects by
-  the persisted `cin-lang` cookie → `Accept-Language` → default. A header switcher and
+  is a file, not code. URLs are per-language (`/en`, `/de`, `/en/<slug>`, plus explicit
+  `/{lang}/legal/<sub>` routes for the two-segment legal slugs), one static route per
+  loaded locale so nothing shadows the admin paths. `GET /` 302-redirects by the
+  persisted `cin-lang` cookie → `Accept-Language` → default. A header switcher and
   `hreflang` alternates + `x-default` (plus a `/sitemap-site.xml` with `xhtml:link`
-  alternates, referenced from the origin sitemap index) cover multilingual SEO.
+  alternates, referenced from the origin sitemap index) cover multilingual SEO. The
+  CCB-S2-004 head machinery (canonical/OG/Twitter + JSON-LD Organization + WebSite +
+  SoftwareApplication) is reused per page via `resolveSiteHead`.
 
 - **The root moved the admin (D-023).** The admin dashboard relocated from `/` to
   `/dashboard` (post-login redirect + nav updated); the operator login is a discreet
@@ -280,27 +304,29 @@ nonce'd CSS/JS, `html`/`raw` escaping), NOT the Tailwind admin shell. Code lives
   indexable. It is exempt from the admin auth/CSRF/IP guards via `isPublicSitePath`
   (checked alongside `isPublicFront` in the three server hooks). `robots.txt` flipped
   from a blanket `Disallow: /` to `Allow: /` with explicit admin-surface disallows.
-
-- **Landing page.** Hero (positioning + GitHub / operator-login CTAs), "what it does"
-  tiles, the suite section, a security section, and a footer (AGPL-3.0, GitHub, Docs,
-  Legal, "Built on SimpleX"). The not-yet-built pages (Suite/Pro/Security/Open Source/
-  Docs/Legal) are clean `noindex` "coming soon" stubs — never a 404. Copy is
-  **placeholder** (marked in the locale `_meta` + an HTML comment) pending final copy.
+  Static `/assets/*` responses are cached (`public, max-age=86400` + `nosniff`) instead
+  of the admin `no-store` set, so the site's webfonts don't re-download per navigation.
 
 - **Building blocks, OFF by default (D-025).** Three admin-configurable features on the
   Website page (`/website`): visitor analytics (consent-gated — loads only after the
   cookie banner grants consent, via `shouldLoadAnalytics`), a self-hosted cookie/consent
-  banner, and script-free social-share links. All default off; the operator opts in and
-  carries the legal responsibility (noted in the admin). Verified by
-  [`scripts/verify-site.ts`](../scripts/verify-site.ts).
+  banner (now in the template's `cn-cookiebar` style), and script-free social-share
+  links. All default off; the operator opts in and carries the legal responsibility
+  (noted in the admin). Verified by [`scripts/verify-site.ts`](../scripts/verify-site.ts).
+
+- **Copy note (CCB-S3-001, operator decision).** The site's strong "consent + CSAM
+  screening" messaging stands as authored in the template: the software is not yet
+  distributed, so the site is a forward-looking shop window; the binding point is first
+  distribution (screening must be built before any hand-over, or the site comes down).
+  CSAM screening itself carries "In development" badges on Features/Security.
 
 ## Appendix: divergences (code wins)
 
 Each divergence below is also noted inline at the relevant section. In every case the **code is treated as ground truth** and the conflicting outline/comment is flagged as stale.
 
-1. **XFTP temp dir location.** Outline: the temp dir must share the *media* filesystem (`MEDIA_ROOT`). Code: `ensureDirs` pins `process.env['TMPDIR']` to `dirname(cfg.simplexFilesFolder)/xftp-tmp` — next to the **files folder**, not `MEDIA_ROOT` (`client.ts:41-44`). The `EXDEV` risk solved there is the core's internal temp→files-folder rename; the separate files-folder→media-store move tolerates `EXDEV` via copy+unlink (`media.ts:69-81`).
+1. **XFTP temp dir location.** Outline: the temp dir must share the _media_ filesystem (`MEDIA_ROOT`). Code: `ensureDirs` pins `process.env['TMPDIR']` to `dirname(cfg.simplexFilesFolder)/xftp-tmp` — next to the **files folder**, not `MEDIA_ROOT` (`client.ts:41-44`). The `EXDEV` risk solved there is the core's internal temp→files-folder rename; the separate files-folder→media-store move tolerates `EXDEV` via copy+unlink (`media.ts:69-81`).
 
-2. **Avatar re-application.** Outline and `config.ts:35-39` docstring: the avatar is re-applied every startup because `bot.run` blanks it otherwise. Code: the image is carried in the boot profile and `updateProfile` is set to `image !== undefined` (`client.ts:103`) *specifically so the SDK does not reconcile/blank the avatar when the file is absent*; it self-heals only when an image is loaded and differs. The `config.ts` comment is stale.
+2. **Avatar re-application.** Outline and `config.ts:35-39` docstring: the avatar is re-applied every startup because `bot.run` blanks it otherwise. Code: the image is carried in the boot profile and `updateProfile` is set to `image !== undefined` (`client.ts:103`) _specifically so the SDK does not reconcile/blank the avatar when the file is absent_; it self-heals only when an image is loaded and differs. The `config.ts` comment is stale.
 
 3. **Migration 004 label.** `CLAUDE.md` calls 004 the "moderation gate." The file (`migrations/004_moderation.sql:1`) is headed "admin views support — Stage 5"; its concrete changes are `messages.media_error` and folding `moderation_state='rejected'` into the publish views.
 

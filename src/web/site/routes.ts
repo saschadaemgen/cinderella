@@ -137,9 +137,16 @@ export function registerSiteRoutes(
   for (const code of locales.codes) {
     app.get(`/${code}`, (_req, reply) => renderPage(reply, code, ''));
     app.get<{ Params: { slug: string } }>(`/${code}/:slug`, (req, reply) => {
-      const stub = pageBySlug(req.params.slug);
-      if (!stub) return reply.code(404).type('text/plain').send('Not found');
+      const page = pageBySlug(req.params.slug);
+      if (!page) return reply.code(404).type('text/plain').send('Not found');
       return renderPage(reply, code, req.params.slug);
+    });
+    // Legal sub-pages (CCB-S3-001): two-segment slugs, registered explicitly so
+    // nothing greedy exists beyond the catalog.
+    app.get<{ Params: { sub: string } }>(`/${code}/legal/:sub`, (req, reply) => {
+      const page = pageBySlug(`legal/${req.params.sub}`);
+      if (!page) return reply.code(404).type('text/plain').send('Not found');
+      return renderPage(reply, code, page.slug);
     });
   }
 

@@ -159,6 +159,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // indexable/self-contained; the site is frame-DENY, the front is embeddable) — the
     // admin strict header set (frame-DENY + noindex + no-store) must not apply to them.
     if (isPublicFront(path) || isSite(path)) return payload;
+    // Static assets (fonts, css, vendored js) are public immutable-ish files: cache
+    // them instead of the admin no-store set (CCB-S3-001 — the site's webfonts would
+    // otherwise re-download on every navigation).
+    if (path.startsWith('/assets/')) {
+      reply.header('cache-control', 'public, max-age=86400');
+      reply.header('x-content-type-options', 'nosniff');
+      return payload;
+    }
     applySecurityHeaders(reply, security.get());
     // Inject the open-report notification bar into authed admin HTML shells
     // (CCB-S2-009). The placeholder is a stable comment (not fragile class-string

@@ -77,9 +77,9 @@ export function resolveSiteHead(c: SiteSeoContext): SiteSeoHead {
   const title = c.t(`meta.${c.page.key}.title`);
   const description = c.t(`meta.${c.page.key}.description`);
   const canonicalUrl = `${c.origin}${pagePath(c.locale, c.page)}`;
-  // Home is indexable; thin stubs are noindex (still followable) so placeholders
-  // don't dilute the index while their links stay crawlable.
-  const robots = c.page.built ? 'index, follow' : 'noindex, follow';
+  // Built pages are indexable; thin stubs AND draft legal texts are noindex (still
+  // followable) so placeholders don't dilute the index while links stay crawlable.
+  const robots = c.page.built && !c.page.noindex ? 'index, follow' : 'noindex, follow';
   const ogLocale = c.locales.meta[c.locale]?.ogLocale ?? 'en_US';
   const siteName = c.t('brand.name');
 
@@ -136,7 +136,7 @@ function buildSiteJsonLd(c: SiteSeoContext): string {
  * each with xhtml:link hreflang alternates. Referenced from the origin sitemap index.
  */
 export function buildSiteSitemapXml(origin: string, locales: LocaleSet): string {
-  const built = NAV_PAGES.filter((p) => p.built);
+  const built = NAV_PAGES.filter((p) => p.built && !p.noindex);
   const urls: string[] = [];
   for (const page of built) {
     for (const code of locales.codes) {

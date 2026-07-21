@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-016**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-001**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -116,9 +116,10 @@ stable `(sent_at, id)` cursor (no offset drift), with DOM windowing (bounded mem
 live reconcile that coexists with CCB-S2-006 (recalled content disappears wherever it sits;
 new head publishes prepend). New `GET /page` (cursor chunks) + ranged `GET /state?cursor=&top=`;
 the `/fragment` route is retired. Deep content stays crawlable via `?page=N` SSR + `rel=next/prev`
-+ sitemap. Separate `/page` rate-limit bucket; SSE + full virtualization are future upgrades
-(D-020). See [`src/db/public-archive.ts`](../src/db/public-archive.ts),
-[`src/web/front/render.ts`](../src/web/front/render.ts), [`src/web/front/embed.ts`](../src/web/front/embed.ts).
+
+- sitemap. Separate `/page` rate-limit bucket; SSE + full virtualization are future upgrades
+  (D-020). See [`src/db/public-archive.ts`](../src/db/public-archive.ts),
+  [`src/web/front/render.ts`](../src/web/front/render.ts), [`src/web/front/embed.ts`](../src/web/front/embed.ts).
 
 **Content reporting shipped (CCB-S2-009):** a public per-item "Report" button (no-JS `<details>`
 form) → `POST /embed/:id/report` (visible-until-review; published-gated with a neutral response, no
@@ -137,6 +138,7 @@ The history below records the pre-CCB-S2-003 state.
   - Admin CRUD + theme/layout/filter/media config + audit ([`src/web/views/embeds.ts`](../src/web/views/embeds.ts)).
   - The snippet generator `embedSnippet()` that emits `<iframe src="{publicOrigin}/embed/{instanceId}">` plus an auto-height `postMessage` listener ([`src/web/views/embeds.ts:24`](../src/web/views/embeds.ts)). `publicOrigin` comes from `AdminConfig.publicOrigin` ([`src/config.ts:62`](../src/config.ts)).
 - **What is missing (verified absent):** there is **no `GET /embed/:id` route anywhere in the codebase.** A repo-wide search finds `/embed/<instance-id>` only in comments, the snippet string, and season/schema docs — the only registered routes are the admin `/embeds` family. The iframe the operator can already copy today points at an endpoint that returns nothing. The source says so explicitly: "The public `/embed/<instance-id>` route and the widget rendering itself are a later season" ([`src/web/views/embeds.ts:5`](../src/web/views/embeds.ts)); "The `/embed` route goes live with the public-front season" ([`src/web/views/embeds.ts:265`](../src/web/views/embeds.ts)); and the schema comment "The `/embed/<instance-id>` route and widget rendering are a later season" ([`migrations/003_admin.sql:24`](../migrations/003_admin.sql)).
+
   > This matches the outline's suspicion exactly: the embed **admin settings** exist, the **public `/embed` endpoint is not implemented.** Season 2 must add the route that resolves an instance id → its settings → the `published_messages` projection and renders the widget (plus the Web Component, per [`CLAUDE.md`](../CLAUDE.md)).
 
 - [x] Implement `GET /embed/:id` serving published content, honouring per-instance theme/layout/filters/media visibility. **(CCB-S2-003)**
@@ -151,7 +153,7 @@ The history below records the pre-CCB-S2-003 state.
 - [ ] Private join + consent flow over the member-support scope (knocking → private greeting → `/publish` → accept).
 - [ ] Role-gated moderation with confirmation and audit.
 - [ ] Admission hardening: knocking + bot-generated captcha + observer-by-default.
-  > Hook already in place: the `moderation_state` enum is defined ([`migrations/001_init.sql:9`](../migrations/001_init.sql)) and enforced *negatively* by the publish views and the manual takedown button, but nothing drives it automatically — every captured row stays `'none'` until this track is built (comment at [`migrations/001_init.sql:7`](../migrations/001_init.sql)).
+  > Hook already in place: the `moderation_state` enum is defined ([`migrations/001_init.sql:9`](../migrations/001_init.sql)) and enforced _negatively_ by the publish views and the manual takedown button, but nothing drives it automatically — every captured row stays `'none'` until this track is built (comment at [`migrations/001_init.sql:7`](../migrations/001_init.sql)).
 
 ### 3. Local AI brain over a tunnel
 
@@ -172,32 +174,31 @@ The history below records the pre-CCB-S2-003 state.
 
 ### 6. Public marketing website — the domain root
 
-**Status: FOUNDATION + LANDING PAGE SHIPPED (CCB-S2-012).** The domain root `/` now
-serves a public, SSR, indexable marketing site — the face of the Cinderella bot suite —
-built in the public-front style ([`src/web/site/`](../src/web/site/)); the admin dashboard
-moved to `/dashboard` and the operator login is a discreet header button to the unchanged,
-`noindex`, hardened admin.
+**Status: REDESIGN SHIPPED (CCB-S3-001, superseding the CCB-S2-012 foundation landing).**
+The domain root `/` serves the operator's approved dark-neon design (D-029), SSR and
+indexable, with all template pages real; the admin dashboard stays at `/dashboard` and the
+operator login remains a discreet header button to the unchanged, `noindex`, hardened admin.
 
-- [x] Site scaffold + routing at `/`, shared header/nav + footer, reused house theme
-  (extracted to [`src/web/theme.ts`](../src/web/theme.ts)) with the light/dark toggle. **(CCB-S2-012)**
-- [x] i18n — `locales/en.json` + `locales/de.json`, per-language URLs (`/en`, `/de`,
-  `/<lang>/<slug>`), root negotiation + a switcher + `hreflang`; adding a language is a
-  file, not code. **(CCB-S2-012)**
-- [x] Landing page — hero, "what it does" tiles, the suite, security, footer; clean
-  `noindex` "coming soon" stubs for the not-yet-built pages (no 404s). **(CCB-S2-012)**
+- [x] Site scaffold + routing at `/`, per-language URLs, negotiation + switcher +
+      `hreflang`; adding a language is a file, not code. **(CCB-S2-012)**
 - [x] Full per-page SEO — title/description/canonical/OG/Twitter + JSON-LD
-  (Organization + WebSite + SoftwareApplication); site indexable, admin `noindex`;
-  `robots.txt` + a marketing sitemap. **(CCB-S2-012)**
+      (Organization + WebSite + SoftwareApplication); site indexable, admin `noindex`;
+      `robots.txt` + a marketing sitemap. **(CCB-S2-012)**
 - [x] Building blocks shipped but OFF by default — visitor analytics (consent-gated),
-  cookie/consent banner, script-free social share — admin-configurable on `/website`
-  with the operator-responsibility note. **(CCB-S2-012)**
-- [ ] **Real pages** for Suite/Features, Pro, Security, Open Source, Docs, Legal (currently
-  clean stubs) — each its own later briefing.
-- [ ] **Design pass** — refine visuals beyond the faithful house-style baseline.
-
-> **Follow-up (copy):** all visible site copy is **placeholder** (marked in the locale
-> `_meta` blocks and an HTML comment in the rendered page), pending final copy authored by
-> the planning chat. Replacing it is a locale-file edit, no code change.
+      cookie/consent banner, script-free social share — admin-configurable on `/website`
+      with the operator-responsibility note. **(CCB-S2-012, carried through CCB-S3-001)**
+- [x] **Template redesign** — the operator's dark-neon template ported 1:1 to SSR:
+      own token system (dark default + light), self-hosted fonts, inlined lucide icons,
+      starfield/reveal/demo effects as nonce'd vanilla JS. **(CCB-S3-001)**
+- [x] **Real pages** — Home (with the interactive archive-demo preview), Features, Pro,
+      Security, Open Source, Legal; EN + DE. Docs remains a clean `noindex` stub. **(CCB-S3-001)**
+- [x] **Legal pages wired** — footer-linked on every page; the Legal Notice includes the
+      voluntarily appointed Youth Protection Officer; Privacy/Terms render as drafts
+      (badged, `noindex`, out of the sitemap). **(CCB-S3-001)**
+- [ ] **Final legal texts** — the German Impressum operator fields, the full Privacy
+      Policy and Terms (planning chat + counsel); replacing them is a locale-file edit
+      plus removing the `noindex` flags in [`src/web/site/pages.ts`](../src/web/site/pages.ts).
+- [ ] **Docs page** — real documentation content (currently a stub).
 
 ---
 
