@@ -50,7 +50,12 @@ function analyticsOrigin(scriptUrl: string): string {
  * and indexable. When analytics is consent-gated on, its origin is added to
  * script-src + connect-src (the injected snippet only runs after the visitor accepts).
  */
-export function applySiteHeaders(reply: FastifyReply, nonce: string, analyticsHost: string): void {
+export function applySiteHeaders(
+  reply: FastifyReply,
+  nonce: string,
+  analyticsHost: string,
+  robots: string,
+): void {
   const scriptSrc = analyticsHost ? `'nonce-${nonce}' ${analyticsHost}` : `'nonce-${nonce}'`;
   const connectSrc = analyticsHost ? `'self' ${analyticsHost}` : "'self'";
   reply.header(
@@ -70,6 +75,10 @@ export function applySiteHeaders(reply: FastifyReply, nonce: string, analyticsHo
   reply.header('x-content-type-options', 'nosniff');
   reply.header('x-frame-options', 'DENY');
   reply.header('referrer-policy', 'no-referrer');
+  // Robots policy at the HTTP layer, mirroring the page's <meta name="robots">
+  // (home indexable; thin stubs noindex). The app owns robots policy so the origin's
+  // nginx never needs to blanket-noindex the whole host (CCB-S2-012).
+  reply.header('x-robots-tag', robots);
   reply.header('cache-control', 'no-store');
 }
 
@@ -105,7 +114,7 @@ export function registerSiteRoutes(
       ? analyticsOrigin(site.analytics.scriptUrl)
       : '';
     const view: SitePageView = { locale, locales, page, origin, nonce, seo, site, t };
-    applySiteHeaders(reply, nonce, analyticsHost);
+    applySiteHeaders(reply, nonce, analyticsHost, seo.robots);
     reply.type('text/html; charset=utf-8');
     // Persist the language as a functional (essential) cookie — no consent required.
     reply.setCookie(LANG_COOKIE, locale, {

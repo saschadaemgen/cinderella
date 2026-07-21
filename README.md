@@ -19,13 +19,13 @@ Opt-in only. Public groups only. No cloud, no compromises.
 
 Cinderella is the central intelligence of a growing suite of AI-powered bots for the
 [SimpleX](https://simplex.chat/) network. Her first capability is a consent-first
-archive for public SimpleX communities: the goal is to turn the fleeting stream of a
-public group into a permanent, searchable, web-findable knowledge base — but only for
-the groups that want it, and only for the members who opt in.
+archive for public SimpleX communities: it turns the fleeting stream of a public group
+into a permanent, searchable, web-findable knowledge base — but only for the groups
+that want it, and only for the members who opt in.
 
-What ships today is the **foundation**: consent-gated capture and the hardened
-operator console. The searchable, web-findable public archive — and a team of further
-bots and functions — follow from here. This is the first drop, not the whole ocean.
+The consent-gated capture, the hardened operator console, and the **public, searchable
+web archive** are live today. A team of further bots and functions follows from here —
+this is the first of many capabilities, not the whole ocean.
 
 ## What Cinderella is for
 
@@ -48,8 +48,7 @@ Two gates, always:
 Send `/publish` to opt your messages into the archive, `/unpublish` to withdraw at
 any time. Only what you send **after** opting in is ever eligible — nothing from
 before, and nothing at all without opt-in. This is enforced at the core, not bolted
-on. *(Consent is recorded and enforced today; the public front-end that renders the
-archive to the web is on the [roadmap](#roadmap).)*
+on.
 
 ## What's in the suite today
 
@@ -58,40 +57,51 @@ archive to the web is on the [roadmap](#roadmap).)*
 - **Per-member consent** — `/publish` / `/unpublish`, forward-only from opt-in,
   revocable, with publication state *derived* from consent rather than a stale stored
   flag.
+- **Public web archive** — a server-rendered, searchable, browsable public front:
+  media-type and time filters, full-text search, infinite scroll, light/dark theme,
+  inline video, live updates, and full SEO (schema.org structured data, sitemaps,
+  feeds, social previews).
+- **Content reporting & moderation** — visitors can report content on the public
+  archive; the operator reviews reports in a notification queue and can take down or
+  remove items, with every action audit-logged.
 - **Hardened operator console** — a passwordless, passkey-secured admin console over
-  real TLS, with the full defensive stack (see [Security](#security-by-design)).
+  real TLS, with the full defensive stack (see [Security & safety](#security--safety)).
 - **Embed management** — configure the public archive's theme, filters and embed
-  snippet from the console. *(The public front-end that renders those embeds to
-  visitors is on the [roadmap](#roadmap).)*
+  snippet from the console.
 
 ## Roadmap
 
 Cinderella grows. Planned next:
 
-- **Public archive front** — an embeddable, browsable, indexable stream of the
-  published archive.
-- **Command & moderation system** — private per-member onboarding and moderation
-  through SimpleX's member-support scope.
 - **Per-community categorized highlights** — automatic categorization, tuned per
   community, so a code community's archive is organized like one.
+- **Video gallery** — a browsable, categorized gallery of published video.
+- **Command & moderation system** — private per-member onboarding and moderation
+  through SimpleX's member-support scope.
 - **Local AI brain** — inference on our own hardware, so no conversation ever leaves
   our control.
 - **Multi-tenancy & self-service** — communities managing their own archives and
   subscriptions.
 
-## Security by design
+## Security & safety
 
 Security is the point, not a feature:
 
 - **Passwordless passkeys (WebAuthn/FIDO2)** — device-bound, phishing- and
   brute-force-resistant.
 - **Real TLS** with strict security headers and HSTS.
-- **Least-privilege, isolated service** — the bot exposes no public network surface;
-  captured media and content are served only behind authentication.
+- **Least-privilege, isolated service** — captured media served only behind
+  authentication; published media through a separate, consent-gated public path
+  (unpublished media is never publicly reachable).
 - **PostgreSQL-backed sessions, a full audit log, rate-limiting**, and a configurable
   hardening suite — all steerable from the console.
+- **Content reporting & takedown** — public reporting with an operator review queue
+  and audit-logged takedowns.
 - **Your data stays yours** — and with the planned local AI brain, conversations
   never leave your infrastructure.
+
+*In progress:* received media is screened against known child-abuse image (CSAM)
+hashes via Cloudflare before it can surface publicly.
 
 ## Tech
 

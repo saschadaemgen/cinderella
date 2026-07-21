@@ -220,11 +220,26 @@ async function main(): Promise<void> {
       en.headers['x-content-type-options'] === 'nosniff' &&
       en.headers['cache-control'] === 'no-store',
   );
-  check('headers: site is NOT noindex (no X-Robots-Tag)', en.headers['x-robots-tag'] === undefined);
+  // The app is authoritative for robots policy (CCB-S2-012) so the origin nginx never
+  // has to blanket-noindex the host: home is indexable at the HTTP layer, thin stubs
+  // are noindex, and every admin response is noindex.
+  const enRobots = String(en.headers['x-robots-tag'] ?? '');
+  check(
+    'headers: home is indexable (X-Robots-Tag: index, follow)',
+    enRobots.includes('index') && !enRobots.includes('noindex'),
+  );
+  check(
+    'headers: stub carries X-Robots-Tag noindex',
+    String(stub.headers['x-robots-tag'] ?? '').includes('noindex'),
+  );
   const adminHome = await app.inject({ method: 'GET', url: '/dashboard' });
   check(
     'admin: /dashboard still gated (302 → /login)',
     adminHome.statusCode === 302 && adminHome.headers.location === '/login',
+  );
+  check(
+    'admin: response carries X-Robots-Tag noindex (app-authoritative)',
+    String(adminHome.headers['x-robots-tag'] ?? '').includes('noindex'),
   );
   const adminCfgPage = await app.inject({ method: 'GET', url: '/website' });
   check('admin: /website config is gated (302 → /login)', adminCfgPage.statusCode === 302);
