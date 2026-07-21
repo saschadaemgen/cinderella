@@ -370,9 +370,9 @@ function demoRow(v: SitePageView, m: DemoMessage): SafeHtml {
         m.media
           ? html`<div class="ad-chip">
               ${siteIcon(AD_MEDIA_ICON[m.media] ?? 'file-text', {
-              size: 13,
-              tone: 'accent',
-            })}<span>${mediaLabel}</span>${siteIcon('lock', { size: 11, tone: 'faint' })}
+                size: 13,
+                tone: 'accent',
+              })}<span>${mediaLabel}</span>${siteIcon('lock', { size: 11, tone: 'faint' })}
             </div>`
           : null
       }
@@ -870,12 +870,10 @@ function securityBody(v: SitePageView): SafeHtml {
   `;
 }
 
+// The template's "Self-hosting / Run it yourself" section is intentionally NOT
+// rendered while the product is v0.0.1-alpha (operator decision, CCB-S3-001):
+// no self-host instructions until there is a distributable release.
 function openSourceBody(v: SitePageView): SafeHtml {
-  const steps: Array<[string, string]> = [
-    [v.t('os.step1'), `git clone ${GITHUB_URL}`],
-    [v.t('os.step2'), 'cp .env.example .env  # bot address, archive domain'],
-    [v.t('os.step3'), 'docker compose up -d'],
-  ];
   return html`
     ${pageHero({
       badge: badge('neutral', v.t('badge.agpl')),
@@ -905,24 +903,6 @@ function openSourceBody(v: SitePageView): SafeHtml {
           <p class="card-para-tight">${v.t('os.why.body')}</p>
         </div>
       </div>
-    </section>
-    <section class="band wrap" data-reveal>
-      ${sectionHeader({
-        eyebrow: v.t('os.self.eyebrow'),
-        title: v.t('os.self.title'),
-        lede: v.t('os.self.lede'),
-      })}
-      <div class="grid3 mt36">
-        ${steps.map(
-          ([t, code], i) =>
-            html`<div class="cn-card cn-card-default cn-card-pad-md">
-              <div class="step-num">0${i + 1}</div>
-              <div class="step-title">${t}</div>
-              <div class="mono-block mono-sm">${code}</div>
-            </div>`,
-        )}
-      </div>
-      <p class="note-faint">${v.t('os.self.note')}</p>
     </section>
   `;
 }

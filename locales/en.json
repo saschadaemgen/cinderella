@@ -198,13 +198,6 @@
   "os.repo.cta": "View on GitHub",
   "os.why.title": "Why AGPL-3.0",
   "os.why.body": "An archive asks for trust. The AGPL guarantees that anyone operating a modified Cinderella must publish those modifications — the public can always inspect the code that handles public conversations.",
-  "os.self.eyebrow": "Self-hosting",
-  "os.self.title": "Run it yourself",
-  "os.self.lede": "Three steps to your own archive. Details in the docs.",
-  "os.step1": "Clone",
-  "os.step2": "Configure",
-  "os.step3": "Run",
-  "os.self.note": "Placeholder commands — the repository README is authoritative.",
 
   "legal.eyebrow": "Legal",
   "legal.title": "Legal information",
