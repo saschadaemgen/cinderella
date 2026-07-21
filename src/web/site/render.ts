@@ -490,7 +490,14 @@ function homeBody(v: SitePageView): SafeHtml {
     ['cpu', v.t('trust.localai')],
     ['git-branch', 'AGPL-3.0'],
   ];
-  const roadmap = ['categorization', 'videogallery', 'moderation', 'localai', 'multitenancy'];
+  const roadmap = [
+    'matrix',
+    'categorization',
+    'videogallery',
+    'moderation',
+    'localai',
+    'multitenancy',
+  ];
   const secPoints: Array<[string, string]> = [
     ['key-round', v.t('home.sec.point1')],
     ['lock', v.t('home.sec.point2')],
@@ -634,6 +641,7 @@ function featuresBody(v: SitePageView): SafeHtml {
     { icon: 'flag', k: 'cap4', dev: false },
   ];
   const roadmap = [
+    ['network', 'matrix'],
     ['tags', 'categorization'],
     ['clapperboard', 'videogallery'],
     ['gavel', 'moderation'],

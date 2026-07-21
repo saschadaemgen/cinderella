@@ -9,7 +9,7 @@
   },
 
   "brand.name": "Cinderella",
-  "brand.tagline": "The AI bot suite for SimpleX communities",
+  "brand.tagline": "The AI bot suite for SimpleX and Matrix communities",
 
   "a11y.skip": "Skip to content",
   "a11y.menu": "Menu",
@@ -61,11 +61,12 @@
   "home.tile.archived.body": "Only what clears screening becomes a permanent, searchable public record.",
   "home.suite.eyebrow": "The suite",
   "home.suite.title": "The archive is the first capability",
-  "home.suite.lede": "Cinderella is a growing suite of SimpleX bots. More is on the roadmap.",
+  "home.suite.lede": "Cinderella is a growing suite of SimpleX and Matrix bots. More is on the roadmap.",
   "home.suite.archive.title": "Public web archive",
   "home.suite.archive.body": "Consent-gated capture, full-text search, filters, infinite scroll, video playback, and SEO-friendly public pages.",
   "home.suite.archive.cta": "See all capabilities",
   "home.suite.roadmap.title": "On the roadmap",
+  "roadmap.matrix": "Matrix support",
   "roadmap.categorization": "Categorization",
   "roadmap.videogallery": "Video gallery",
   "roadmap.moderation": "Moderation tooling",
@@ -122,6 +123,7 @@
   "features.roadmap.eyebrow": "Roadmap",
   "features.roadmap.title": "Planned capabilities",
   "features.roadmap.lede": "In development or design. Order and scope may change — this is alpha software.",
+  "features.rm.matrix.body": "The same consent-first archive and bot suite for Matrix rooms.",
   "features.rm.categorization.body": "Automatic topic grouping across archived content.",
   "features.rm.videogallery.body": "A dedicated browsing surface for archived video.",
   "features.rm.moderation.body": "Bulk actions, policies, and reviewer queues.",
@@ -254,7 +256,7 @@
   "terms.s5.h": "5. Liability",
   "terms.s5.ph": "Liability clause to be provided by counsel",
 
-  "footer.blurb": "The AI bot suite for SimpleX communities. Consent-first, permanent, searchable. Open source under AGPL-3.0.",
+  "footer.blurb": "The AI bot suite for SimpleX and Matrix communities. Consent-first, permanent, searchable. Open source under AGPL-3.0.",
   "footer.product": "Product",
   "footer.opensource": "Open Source",
   "footer.legal": "Legal",
@@ -266,7 +268,7 @@
   "footer.privacy": "Privacy policy",
   "footer.terms": "Terms",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
-  "footer.built": "Built on SimpleX. Not affiliated with SimpleX Chat.",
+  "footer.built": "Built on SimpleX and Matrix. Not affiliated with SimpleX Chat or the Matrix Foundation.",
 
   "share.label": "Share this page",
 
@@ -281,7 +283,7 @@
   "stub.body": "We're still writing this one. In the meantime, the archive capability is live and the code is open — take a look on GitHub.",
   "stub.back": "Back to home",
 
-  "meta.home.title": "Cinderella — SimpleX AI bot suite",
+  "meta.home.title": "Cinderella — AI bot suite for SimpleX & Matrix",
   "meta.home.description": "Cinderella is a firewall in front of the public archive: every message and file passes through consent checks and CSAM screening before anything goes live. Open source under AGPL-3.0.",
   "meta.features.title": "Features — Cinderella",
   "meta.features.description": "A firewall pipeline: consent-gated capture, CSAM and content screening, a searchable public web archive, and first-class reporting & moderation.",

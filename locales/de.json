@@ -9,7 +9,7 @@
   },
 
   "brand.name": "Cinderella",
-  "brand.tagline": "Die KI-Bot-Suite für SimpleX-Communitys",
+  "brand.tagline": "Die KI-Bot-Suite für SimpleX- und Matrix-Communitys",
 
   "a11y.skip": "Zum Inhalt springen",
   "a11y.menu": "Menü",
@@ -61,11 +61,12 @@
   "home.tile.archived.body": "Nur was die Prüfung besteht, wird zu einem dauerhaften, durchsuchbaren öffentlichen Archiv.",
   "home.suite.eyebrow": "Die Suite",
   "home.suite.title": "Das Archiv ist die erste Fähigkeit",
-  "home.suite.lede": "Cinderella ist eine wachsende Suite von SimpleX-Bots. Weiteres steht auf der Roadmap.",
+  "home.suite.lede": "Cinderella ist eine wachsende Suite von SimpleX- und Matrix-Bots. Weiteres steht auf der Roadmap.",
   "home.suite.archive.title": "Öffentliches Web-Archiv",
   "home.suite.archive.body": "Zustimmungspflichtige Erfassung, Volltextsuche, Filter, endloses Scrollen, Videowiedergabe und SEO-freundliche öffentliche Seiten.",
   "home.suite.archive.cta": "Alle Funktionen ansehen",
   "home.suite.roadmap.title": "Auf der Roadmap",
+  "roadmap.matrix": "Matrix-Unterstützung",
   "roadmap.categorization": "Kategorisierung",
   "roadmap.videogallery": "Videogalerie",
   "roadmap.moderation": "Moderationswerkzeuge",
@@ -122,6 +123,7 @@
   "features.roadmap.eyebrow": "Roadmap",
   "features.roadmap.title": "Geplante Fähigkeiten",
   "features.roadmap.lede": "In Entwicklung oder Konzeption. Reihenfolge und Umfang können sich ändern — dies ist Alpha-Software.",
+  "features.rm.matrix.body": "Dasselbe Consent-first-Archiv und dieselbe Bot-Suite für Matrix-Räume.",
   "features.rm.categorization.body": "Automatische thematische Gruppierung archivierter Inhalte.",
   "features.rm.videogallery.body": "Eine eigene Oberfläche zum Durchstöbern archivierter Videos.",
   "features.rm.moderation.body": "Massenaktionen, Richtlinien und Prüf-Warteschlangen.",
@@ -254,7 +256,7 @@
   "terms.s5.h": "5. Haftung",
   "terms.s5.ph": "Haftungsklausel — durch Rechtsberatung zu ergänzen",
 
-  "footer.blurb": "Die KI-Bot-Suite für SimpleX-Communities. Zustimmung zuerst, dauerhaft, durchsuchbar. Open Source unter AGPL-3.0.",
+  "footer.blurb": "Die KI-Bot-Suite für SimpleX- und Matrix-Communities. Zustimmung zuerst, dauerhaft, durchsuchbar. Open Source unter AGPL-3.0.",
   "footer.product": "Produkt",
   "footer.opensource": "Open Source",
   "footer.legal": "Rechtliches",
@@ -266,7 +268,7 @@
   "footer.privacy": "Datenschutzerklärung",
   "footer.terms": "Nutzungsbedingungen",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
-  "footer.built": "Basiert auf SimpleX. Nicht mit SimpleX Chat verbunden.",
+  "footer.built": "Basiert auf SimpleX und Matrix. Nicht mit SimpleX Chat oder der Matrix Foundation verbunden.",
 
   "share.label": "Diese Seite teilen",
 
@@ -281,7 +283,7 @@
   "stub.body": "Wir schreiben noch daran. In der Zwischenzeit ist das Archiv live und der Code offen — werfen Sie einen Blick auf GitHub.",
   "stub.back": "Zurück zur Startseite",
 
-  "meta.home.title": "Cinderella — SimpleX-KI-Bot-Suite",
+  "meta.home.title": "Cinderella — KI-Bot-Suite für SimpleX & Matrix",
   "meta.home.description": "Cinderella ist eine Firewall vor dem öffentlichen Archiv: Jede Nachricht und jede Datei durchläuft Zustimmungs- und CSAM-Prüfung, bevor irgendetwas online geht. Open Source unter AGPL-3.0.",
   "meta.features.title": "Funktionen — Cinderella",
   "meta.features.description": "Eine Firewall-Pipeline: zustimmungspflichtige Erfassung, CSAM- und Inhaltsprüfung, ein durchsuchbares öffentliches Web-Archiv sowie Meldung & Moderation.",

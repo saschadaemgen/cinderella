@@ -199,6 +199,11 @@ operator login remains a discreet header button to the unchanged, `noindex`, har
       Policy and Terms (planning chat + counsel); replacing them is a locale-file edit
       plus removing the `noindex` flags in [`src/web/site/pages.ts`](../src/web/site/pages.ts).
 - [ ] **Docs page** — real documentation content (currently a stub).
+- [ ] **Matrix support** — operator decision (CCB-S3-001 follow-up): the site now
+      positions Cinderella as the bot suite **for SimpleX and Matrix** and lists
+      "Matrix support" first on the public roadmap (badged _Planned_). Nothing
+      Matrix-related is designed or built yet — this records the publicly announced
+      direction so the docs and the site stay in sync.
 
 ---
 
