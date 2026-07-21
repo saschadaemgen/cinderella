@@ -17,6 +17,10 @@ Opt-in only. Public groups only. No cloud, no compromises.
 
 </div>
 
+> **Status: active alpha.** Cinderella is under active development. Features may change,
+> and not all described capabilities are in production yet — items still in progress are
+> marked as such.
+
 Cinderella is the central intelligence of a growing suite of AI-powered bots for the
 [SimpleX](https://simplex.chat/) network. Her first capability is a consent-first
 archive for public SimpleX communities: it turns the fleeting stream of a public group
@@ -100,8 +104,9 @@ Security is the point, not a feature:
 - **Your data stays yours** — and with the planned local AI brain, conversations
   never leave your infrastructure.
 
-*In progress (not yet built):* received media **will be** screened against known
-child-abuse image (CSAM) hashes via Cloudflare before it can surface publicly.
+*In progress (alpha):* Automated CSAM screening of received media before it can surface
+publicly is in active development; we are currently evaluating providers (e.g. Cloudflare)
+for this. Not yet in production.
 
 ## Tech
 
