@@ -170,7 +170,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AdminContext): voi
 
   // --- Login page ---
   app.get('/login', async (req, reply) => {
-    if (req.session) return reply.redirect('/');
+    if (req.session) return reply.redirect('/dashboard');
     reply.type('text/html');
     // Reuse an existing valid login-CSRF token rather than always minting a new
     // one. Otherwise a concurrent/background GET /login — e.g. the browser's
@@ -227,7 +227,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AdminContext): voi
     }
     ctx.loginLimiter.recordSuccess(client);
     await startSession(ctx, reply, req, adminCfg.adminUsername, 'passkey');
-    return reply.send({ ok: true, redirect: '/' });
+    return reply.send({ ok: true, redirect: '/dashboard' });
   });
 
   // --- Break-glass password path (gated by settings) ---
@@ -298,7 +298,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AdminContext): voi
     ctx.loginLimiter.recordSuccess(client);
     reply.clearCookie(LOGIN_CSRF_COOKIE, { path: '/login' });
     await startSession(ctx, reply, req, username, 'password');
-    return reply.redirect('/');
+    return reply.redirect('/dashboard');
   });
 
   app.post('/logout', async (req, reply) => {

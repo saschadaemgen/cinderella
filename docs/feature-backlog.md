@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -158,6 +158,35 @@ The history below records the pre-CCB-S2-003 state.
 ### 5. Optional durable-ban identity layer
 
 - [ ] An application-level verified-identity layer binding bans to an external key — **only if** admission-gate friction proves insufficient. SimpleX has no persistent identity, so removed members otherwise rejoin instantly. Explicitly conditional/optional in [`seasons/SEASON-1-PROTOCOL.md`](../seasons/SEASON-1-PROTOCOL.md) Part D §5.
+
+### 6. Public marketing website — the domain root
+
+**Status: FOUNDATION + LANDING PAGE SHIPPED (CCB-S2-012).** The domain root `/` now
+serves a public, SSR, indexable marketing site — the face of the Cinderella bot suite —
+built in the public-front style ([`src/web/site/`](../src/web/site/)); the admin dashboard
+moved to `/dashboard` and the operator login is a discreet header button to the unchanged,
+`noindex`, hardened admin.
+
+- [x] Site scaffold + routing at `/`, shared header/nav + footer, reused house theme
+  (extracted to [`src/web/theme.ts`](../src/web/theme.ts)) with the light/dark toggle. **(CCB-S2-012)**
+- [x] i18n — `locales/en.json` + `locales/de.json`, per-language URLs (`/en`, `/de`,
+  `/<lang>/<slug>`), root negotiation + a switcher + `hreflang`; adding a language is a
+  file, not code. **(CCB-S2-012)**
+- [x] Landing page — hero, "what it does" tiles, the suite, security, footer; clean
+  `noindex` "coming soon" stubs for the not-yet-built pages (no 404s). **(CCB-S2-012)**
+- [x] Full per-page SEO — title/description/canonical/OG/Twitter + JSON-LD
+  (Organization + WebSite + SoftwareApplication); site indexable, admin `noindex`;
+  `robots.txt` + a marketing sitemap. **(CCB-S2-012)**
+- [x] Building blocks shipped but OFF by default — visitor analytics (consent-gated),
+  cookie/consent banner, script-free social share — admin-configurable on `/website`
+  with the operator-responsibility note. **(CCB-S2-012)**
+- [ ] **Real pages** for Suite/Features, Pro, Security, Open Source, Docs, Legal (currently
+  clean stubs) — each its own later briefing.
+- [ ] **Design pass** — refine visuals beyond the faithful house-style baseline.
+
+> **Follow-up (copy):** all visible site copy is **placeholder** (marked in the locale
+> `_meta` blocks and an HTML comment in the rendered page), pending final copy authored by
+> the planning chat. Replacing it is a locale-file edit, no code change.
 
 ---
 

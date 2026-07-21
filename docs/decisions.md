@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-011**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,69 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-025 — Website building blocks (analytics, cookie banner, social share) ship but default OFF; analytics is consent-gated
+**Status: IMPLEMENTED.**
+**Decision.** The public site's three "building blocks" (CCB-S2-012) are admin-configurable and
+**all disabled by default**, persisted as one normalized blob under the `settings` table `site` key
+(`src/site/settings.ts`, `SiteService` — cloned from `SecurityService`, so no migration), audited on
+every change (`site.update`), edited on the admin **Website** page (`/website`,
+`src/web/views/site.ts`). (1) **Visitor analytics** — an operator-supplied HTTPS snippet URL
+(first-party preferred); (2) **cookie/consent banner** — self-hosted, inline, nonce'd; (3) **social
+share** — pure link builders (X/Facebook/Reddit/WhatsApp/LinkedIn/Email), no third-party script. The
+**consent invariant** lives in one predicate, `shouldLoadAnalytics(site)` = analytics enabled **AND**
+a script URL **AND** the banner enabled: analytics loads NOTHING until the visitor accepts (the
+inline boot injects the `<script src>` only on `cin-consent=granted`), and with the banner off there
+is no banner and no tracking at all. The analytics origin is added to the site CSP's
+`script-src`/`connect-src` only when consent-gated on. Essential storage — the theme (`sg-theme`) and
+the language cookie (`cin-lang`) — needs no consent. The admin page carries the operator-responsibility
+note (legal requirements differ by country) and warns if analytics is on with the banner off.
+**Rationale.** Max-configurability with a safe default: the operator opts in and owns the legal call,
+but the product can never track before consent, and share never phones home. Share/banner being
+self-hosted keeps the strict nonce CSP intact. Verified by
+[`scripts/verify-site.ts`](../scripts/verify-site.ts) (off-by-default, consent-gate, banner-required,
+script-free share, and an escaped-URL breakout test).
+
+---
+
+### D-024 — Website i18n via locale files + per-language URLs; adding a language is a file, not code
+**Status: IMPLEMENTED.**
+**Decision.** All visible site copy comes from `locales/<code>.json` keyed by string id (CCB-S2-012);
+English is primary, German second. The loader (`src/web/site/i18n.ts`, synchronous) scans the
+`locales/` directory at startup, so **adding a language is dropping in a file** (with an `_meta`
+block) — no code change. URLs are per-language (`/en`, `/de`, `/en/<slug>`), one static route per
+loaded locale so nothing greedily shadows the admin paths. `GET /` 302-redirects by the persisted
+`cin-lang` cookie → `Accept-Language` → default. A header switcher links the same page across
+locales, and every page emits `hreflang` alternates + `x-default` (and an i18n sitemap with
+`xhtml:link` alternates). The visitor's choice persists as the functional (essential) `cin-lang`
+cookie — no consent needed, like the theme.
+**Rationale.** File-driven i18n keeps translation out of the code path and makes new languages a
+content task. Per-language URLs + hreflang are the SEO-correct multilingual shape. Verified by
+[`scripts/verify-site.ts`](../scripts/verify-site.ts) (negotiation, persistence, switcher, hreflang,
+per-locale `og:locale`).
+
+---
+
+### D-023 — A public marketing site owns the domain root; the admin moves to `/dashboard` and stays `noindex`
+**Status: IMPLEMENTED.**
+**Decision.** The domain root `/` now serves a public, SSR, indexable marketing site (CCB-S2-012) —
+the face of the Cinderella bot suite (the archive is one capability under it). It is built in the
+**public-front style** (self-contained, inline nonce'd CSS/JS, `html`/`raw` escaping,
+`src/web/site/`), NOT the Tailwind admin shell. The shared SimpleGo theme (dark-default light/dark,
+`sg-theme` toggle, no-flash boot) was extracted to `src/web/theme.ts` as a single source of truth
+consumed by both the archive front and the site (the front's output stayed byte-identical). The admin
+dashboard relocated from `/` to `/dashboard` (post-login redirect + nav updated); the operator login
+became a discreet header button → the unchanged, hardened, `noindex` admin. The site sets its OWN
+headers (indexable + `frame-ancestors 'none'`/`X-Frame-Options: DENY`, unlike the embeddable archive
+front) and is exempt from the admin auth/CSRF/IP guards via `isPublicSitePath`. `robots.txt` flipped
+from a blanket root `Disallow: /` to `Allow: /` with explicit admin-surface disallows.
+**Rationale.** Cinderella is the product identity, not a bot behind a login; the root should sell it
+and index. Reusing the front's nonce-CSP shape (not the admin's `unsafe-inline` Tailwind) keeps the
+public surface strictly self-contained. Verified by [`scripts/verify-site.ts`](../scripts/verify-site.ts)
+(root routing, indexable site vs gated admin) and the unchanged [`scripts/verify-admin.ts`](../scripts/verify-admin.ts) /
+[`scripts/verify-public.ts`](../scripts/verify-public.ts).
 
 ---
 

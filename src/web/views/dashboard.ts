@@ -27,7 +27,9 @@ function botStateBadge(): SafeHtml {
 }
 
 export function registerDashboard(app: FastifyInstance, ctx: ViewContext): void {
-  app.get('/', async (req, reply) => {
+  // The admin dashboard moved off '/' when the public marketing site took over the
+  // domain root (CCB-S2-012). Nav + post-login redirect point here.
+  app.get('/dashboard', async (req, reply) => {
     const alertHours = ctx.settings.get().fileAlertHours;
     const stats = await dashboardStats(ctx.db, alertHours);
     const audit = await recentAudit(ctx.db, 10);

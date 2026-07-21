@@ -153,7 +153,7 @@ async function main(): Promise<void> {
   }
 
   // --- 1) Dashboard renders real data ---
-  const dash = await getPage('/');
+  const dash = await getPage('/dashboard');
   check('dashboard renders', dash.code === 200);
   check(
     'dashboard shows counts from PostgreSQL',
@@ -472,7 +472,7 @@ async function main(): Promise<void> {
        (2, 'spam',    NULL,        'hash-client-2'),
        (4, 'copyright', '<script>alert(1)</script>', 'hash-client-3')`,
   );
-  const dashBar = await getPage('/');
+  const dashBar = await getPage('/dashboard');
   check(
     'reports: notification bar shows "2 items awaiting review" on the dashboard',
     dashBar.body.includes('awaiting review') &&
@@ -543,7 +543,7 @@ async function main(): Promise<void> {
     `SELECT count(*)::int AS n FROM audit_log WHERE action = 'report.dismiss'`,
   );
   check('reports: dismiss wrote an audit entry', (dismissAudit.rows[0]?.n ?? 0) >= 1);
-  const barGone = await getPage('/');
+  const barGone = await getPage('/dashboard');
   check(
     'reports: bar disappears when no open reports remain (count 0)',
     !barGone.body.includes('awaiting review'),

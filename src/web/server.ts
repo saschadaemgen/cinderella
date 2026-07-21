@@ -17,6 +17,7 @@ import type { AdminConfig, Config } from '../config.js';
 import type { Queryable } from '../db/pool.js';
 import type { SettingsService } from '../settings/service.js';
 import type { SecurityService } from '../security/settings.js';
+import { SiteService } from '../site/settings.js';
 import { log } from '../log.js';
 import { GlobalRateLimiter, LoginRateLimiter } from './auth.js';
 import {
@@ -35,6 +36,8 @@ import { registerAuthRoutes, STEP_UP_WINDOW_MS } from './security/routes.js';
 import { countCredentials } from '../db/webauthn.js';
 import { SessionStore, csrfOk, readSession, type AuthedSession } from './session.js';
 import { registerPublicEmbed, isPublicFront } from './front/embed.js';
+import { loadLocales } from './site/i18n.js';
+import { registerSiteRoutes, isPublicSitePath } from './site/routes.js';
 import { countOpenReports } from '../db/reports.js';
 
 declare module 'fastify' {
@@ -50,6 +53,7 @@ export interface AdminContext {
   cfg: Config;
   settings: SettingsService;
   security: SecurityService;
+  site: SiteService;
   sessions: SessionStore;
   loginLimiter: LoginRateLimiter;
   challenges: ChallengeStore;
@@ -61,6 +65,7 @@ export interface ViewContext {
   cfg: Config;
   settings: SettingsService;
   security: SecurityService;
+  site: SiteService;
   sessions: SessionStore;
 }
 
@@ -70,6 +75,9 @@ export interface ServerDeps {
   cfg: Config;
   settings: SettingsService;
   security: SecurityService;
+  /** Website settings (CCB-S2-012). Optional — buildServer falls back to all-OFF
+   * defaults so harnesses need not seed a `site` row. */
+  site?: SiteService;
   mediaRoot: string;
   registerViews?: (app: FastifyInstance, ctx: ViewContext) => void;
 }
@@ -88,7 +96,15 @@ function isSensitive(method: string, path: string): boolean {
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const { db, adminCfg, cfg, settings, security } = deps;
+  const site = deps.site ?? SiteService.withDefaults(db);
   const app = Fastify({ trustProxy: 'loopback', logger: false });
+
+  // The public marketing site (CCB-S2-012). Locales are loaded once so the routes
+  // and the public-path predicate (used in the hooks below) share one source of
+  // truth; adding a language is a file in locales/, not code here.
+  const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const locales = loadLocales(join(projectRoot, 'locales'));
+  const isSite = (path: string): boolean => isPublicSitePath(path, locales.codes);
 
   const sessions = new SessionStore(db, () => {
     const s = security.get().session;
@@ -111,6 +127,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     cfg,
     settings,
     security,
+    site,
     sessions,
     loginLimiter,
     challenges,
@@ -119,7 +136,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   void app.register(fastifyCookie, { secret: adminCfg.sessionSecret });
   void app.register(fastifyFormbody);
 
-  const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
   void app.register(fastifyStatic, {
     root: join(projectRoot, 'public', 'assets'),
     prefix: '/assets/',
@@ -139,7 +155,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // admin strict headers are frame-DENY + noindex + no-store).
   app.addHook('onSend', async (req, reply, payload) => {
     const path = req.url.split('?')[0] ?? req.url;
-    if (isPublicFront(path)) return payload;
+    // The public archive front AND the marketing site set their own headers (both are
+    // indexable/self-contained; the site is frame-DENY, the front is embeddable) — the
+    // admin strict header set (frame-DENY + noindex + no-store) must not apply to them.
+    if (isPublicFront(path) || isSite(path)) return payload;
     applySecurityHeaders(reply, security.get());
     // Inject the open-report notification bar into authed admin HTML shells
     // (CCB-S2-009). The placeholder is a stable comment (not fragile class-string
@@ -164,19 +183,21 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
     const path = req.url.split('?')[0] ?? req.url;
 
-    // The public archive front is a public surface: it is exempt from the admin
-    // rate limit, the admin IP allow/deny policy, and the auth guard. (A
-    // public-appropriate rate limit + caching are the flagged follow-up.)
+    // The public archive front AND the marketing site are public surfaces: exempt
+    // from the admin rate limit, the admin IP allow/deny policy, and the auth guard.
+    // (A public-appropriate rate limit + caching are the flagged follow-up.)
     const isEmbed = isPublicFront(path);
+    const isPublicMarketing = isSite(path);
+    const isPublicSurface = isEmbed || isPublicMarketing;
 
-    // Global request-rate limit (assets + public front excluded).
-    if (!path.startsWith('/assets/') && !isEmbed && !globalLimiter.allow(req.ip)) {
+    // Global request-rate limit (assets + public surfaces excluded).
+    if (!path.startsWith('/assets/') && !isPublicSurface && !globalLimiter.allow(req.ip)) {
       return reply.code(429).send({ error: 'rate limit exceeded' });
     }
 
     // Optional IP allow/deny for the ADMIN surface only (health + assets + public
-    // front exempt — the public archive must reach everyone).
-    if (path !== '/healthz' && !path.startsWith('/assets/') && !isEmbed) {
+    // surfaces exempt — the archive and the site must reach everyone).
+    if (path !== '/healthz' && !path.startsWith('/assets/') && !isPublicSurface) {
       const { mode, list } = security.get().ipAccess;
       if (!ipAllowed(req.ip, mode, list)) {
         log.warn(`Blocked admin request from ${req.ip} by IP ${mode}list.`);
@@ -187,7 +208,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     req.session = await readSession(req, sessions);
 
     const isPublic =
-      isEmbed ||
+      isPublicSurface ||
       path === '/login' ||
       path === '/healthz' ||
       path === '/favicon.ico' ||
@@ -208,7 +229,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // The public front is a deliberately-public surface with no session/cookie to
     // defend; its one mutating route (POST /embed/:id/report, CCB-S2-009) is
     // protected by a rate limit + the published-only gate + a dedup constraint.
-    if (isPublicFront(path)) return;
+    if (isPublicFront(path) || isSite(path)) return;
     if (path === '/login' || path.startsWith('/webauthn/login/')) return; // own guards
     if (!req.session || !csrfOk(req, req.session)) {
       return reply.code(403).send({ error: 'invalid csrf token' });
@@ -233,15 +254,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerAuthRoutes(app, ctx);
 
   // Public archive front (CCB-S2-003) — no auth; consent-gated data + media.
-  const viewCtx: ViewContext = { db, adminCfg, cfg, settings, security, sessions };
+  const viewCtx: ViewContext = { db, adminCfg, cfg, settings, security, site, sessions };
   registerPublicEmbed(app, viewCtx);
+
+  // Public marketing site (CCB-S2-012) — no auth; owns the domain root '/'.
+  registerSiteRoutes(app, viewCtx, locales);
 
   if (deps.registerViews) {
     deps.registerViews(app, viewCtx);
   } else {
     // Minimal authed landing (used by the foundation harness; production always
-    // registers the full views).
-    app.get('/', (req, reply) => {
+    // registers the full views). Lives at /dashboard — '/' is now the public site.
+    app.get('/dashboard', (req, reply) => {
       reply.type('text/html');
       return page({
         title: 'Home',
@@ -257,12 +281,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
 export function registerNav(): void {
   setNavItems([
-    { key: 'dashboard', href: '/', label: 'Dashboard', icon: icon('dashboard') },
+    { key: 'dashboard', href: '/dashboard', label: 'Dashboard', icon: icon('dashboard') },
     { key: 'messages', href: '/messages', label: 'Messages', icon: icon('messages') },
     { key: 'consent', href: '/consent', label: 'Consent', icon: icon('consent') },
     { key: 'settings', href: '/settings', label: 'Settings', icon: icon('settings') },
     { key: 'security', href: '/security', label: 'Security', icon: icon('shield') },
     { key: 'embeds', href: '/embeds', label: 'Embeds', icon: icon('embed') },
+    { key: 'site', href: '/website', label: 'Website', icon: icon('site') },
     { key: 'reports', href: '/reports', label: 'Reports', icon: icon('alert') },
   ]);
 }

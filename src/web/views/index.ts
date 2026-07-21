@@ -9,6 +9,7 @@ import { registerSettings } from './settings.js';
 import { registerEmbeds } from './embeds.js';
 import { registerSecurity } from './security.js';
 import { registerReports } from './reports.js';
+import { registerSiteAdmin } from './site.js';
 
 export function registerAdminViews(app: FastifyInstance, ctx: ViewContext): void {
   registerDashboard(app, ctx);
@@ -17,5 +18,6 @@ export function registerAdminViews(app: FastifyInstance, ctx: ViewContext): void
   registerSettings(app, ctx);
   registerSecurity(app, ctx);
   registerEmbeds(app, ctx);
+  registerSiteAdmin(app, ctx);
   registerReports(app, ctx);
 }

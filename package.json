@@ -26,7 +26,8 @@
     "verify:admin": "tsx scripts/verify-admin.ts",
     "verify:admin-views": "tsx scripts/verify-admin-views.ts",
     "verify:security": "tsx scripts/verify-security.ts",
-    "verify:public": "tsx scripts/verify-public.ts"
+    "verify:public": "tsx scripts/verify-public.ts",
+    "verify:site": "tsx scripts/verify-site.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

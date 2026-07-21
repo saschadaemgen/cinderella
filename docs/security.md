@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-011**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -487,5 +487,46 @@ consent:
 - **Analytics (D-017).** Off by default and per-instance. A configured analytics
   script origin is added to `script-src`/`connect-src` for **that instance's public
   page only** (`applyEmbedHeaders`) — never the admin CSP, never globally, and the
-  admin form states this. `robots.txt` still `Disallow: /` (admin) and `Allow:
-  /embed/`; the sitemap index lists only instance sitemaps.
+  admin form states this. (Since CCB-S2-012, `robots.txt` is `Allow: /` with explicit
+  admin-surface disallows — see §11 — and the sitemap index also lists the marketing
+  site's sitemap.)
+
+## 11. Public marketing site — indexable, non-embeddable, consent-gated add-ons (CCB-S2-012)
+
+The domain root `/` serves a public SSR marketing site ([`src/web/site/`](../src/web/site/)),
+a THIRD public surface alongside the archive front and the (private) admin. Its security
+posture:
+
+- **Its own headers (`applySiteHeaders`, [`src/web/site/routes.ts`](../src/web/site/routes.ts)).**
+  The same strict, self-contained nonce CSP as the archive front —
+  `default-src 'none'; img-src 'self' data:; style-src 'nonce-…'; script-src 'nonce-…';
+  connect-src 'self'; base-uri 'none'; form-action 'self'` — but **non-embeddable**:
+  `frame-ancestors 'none'` **plus** `X-Frame-Options: DENY` (the archive front is the
+  opposite, `frame-ancestors *`, because it must embed). Also `nosniff`,
+  `referrer-policy: no-referrer`, `cache-control: no-store` (each page carries a
+  per-request nonce, so it is inherently uncacheable). No inline event handlers or inline
+  `style=` attributes — everything runs under the nonce.
+- **Indexable; the admin is not.** The site emits `robots: index, follow` (thin "coming
+  soon" stubs are `noindex, follow`); the admin shell stays hardcoded `noindex, nofollow`.
+  The admin dashboard moved off `/` to `/dashboard`; the operator login is a discreet link
+  to the unchanged, hardened admin. `robots.txt` is now `Allow: /` with explicit
+  `Disallow:` for every admin surface (`/login`, `/dashboard`, `/messages`, `/consent`,
+  `/settings`, `/security`, `/embeds`, `/website`, `/reports`, `/webauthn/`, `/healthz`).
+- **Public-surface exemptions.** `isPublicSitePath` (root, `/<lang>*`, the site sitemap)
+  is checked alongside `isPublicFront` in the three server hooks, so the site is exempt
+  from the admin auth guard, CSRF, IP allow/deny, and the admin rate limit (it has no
+  mutating routes and no session). The admin config page `/website` is NOT public — it
+  stays behind auth.
+- **Consent-gated analytics (D-025).** The three building blocks default OFF and are
+  admin-configurable ([`src/site/settings.ts`](../src/site/settings.ts), audited under
+  `site.update`). Analytics loads **nothing** until the visitor accepts the cookie banner:
+  the operator's HTTPS snippet URL is injected client-side only on `cin-consent=granted`,
+  and the analytics origin is added to the site CSP `script-src`/`connect-src` only when
+  `shouldLoadAnalytics` (analytics on **and** a URL **and** the banner on) — so with the
+  banner off there is no tracking at all. Operator input is https-validated
+  (`normalizeSite`), and in the inline bootstrap the URL is JSON-escaped with its
+  less-than characters unicode-escaped, so a hostile value can't break out of the
+  script tag (`verify:site` asserts this). Social share
+  is script-free anchors (no vendor widget, no third-party origin). Essential storage —
+  the theme (`sg-theme`) and the language cookie (`cin-lang`, HttpOnly, SameSite=Lax) —
+  needs no consent. Verified by [`scripts/verify-site.ts`](../scripts/verify-site.ts).

@@ -25,6 +25,7 @@ import {
   KeyRound,
   Smartphone,
   Trash,
+  Globe,
 } from 'lucide-static';
 import { raw, type SafeHtml } from './html.js';
 
@@ -63,6 +64,7 @@ const ICONS = {
   passkey: KeyRound,
   device: Smartphone,
   trash: Trash,
+  site: Globe,
 } as const;
 
 /** Icon for a message type. */

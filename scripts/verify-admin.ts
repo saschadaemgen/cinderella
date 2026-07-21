@@ -88,15 +88,15 @@ async function main(): Promise<void> {
   await app.ready();
 
   // --- 1) Unauthenticated access ---
-  const unauthed = await app.inject({ method: 'GET', url: '/' });
+  const unauthed = await app.inject({ method: 'GET', url: '/dashboard' });
   check(
-    'unauthenticated GET / redirects to /login',
+    'unauthenticated GET /dashboard redirects to /login',
     unauthed.statusCode === 302 && unauthed.headers.location === '/login',
     `status=${unauthed.statusCode}`,
   );
   const unauthedApi = await app.inject({
     method: 'GET',
-    url: '/',
+    url: '/dashboard',
     headers: { 'hx-request': 'true' },
   });
   check('unauthenticated htmx GET is 401', unauthedApi.statusCode === 401);
@@ -196,8 +196,8 @@ async function main(): Promise<void> {
     remoteAddress: '203.0.113.9',
   });
   check(
-    'correct credentials log in (302 to /)',
-    loginRes.statusCode === 302 && loginRes.headers.location === '/',
+    'correct credentials log in (302 to /dashboard)',
+    loginRes.statusCode === 302 && loginRes.headers.location === '/dashboard',
   );
   const sessionSetCookie = rawCookie(loginRes.headers['set-cookie'], 'cinderella_session');
   check('session cookie is set', sessionSetCookie !== null);
@@ -213,8 +213,8 @@ async function main(): Promise<void> {
   const sessionPair = cookieOf(loginRes.headers['set-cookie'], 'cinderella_session') ?? '';
 
   // --- 5) Session persists across requests ---
-  const home1 = await app.inject({ method: 'GET', url: '/', headers: { cookie: sessionPair } });
-  const home2 = await app.inject({ method: 'GET', url: '/', headers: { cookie: sessionPair } });
+  const home1 = await app.inject({ method: 'GET', url: '/dashboard', headers: { cookie: sessionPair } });
+  const home2 = await app.inject({ method: 'GET', url: '/dashboard', headers: { cookie: sessionPair } });
   check(
     'session persists across requests',
     home1.statusCode === 200 && home2.statusCode === 200,
@@ -243,7 +243,7 @@ async function main(): Promise<void> {
 
   const stillAuthed = await app.inject({
     method: 'GET',
-    url: '/',
+    url: '/dashboard',
     headers: { cookie: sessionPair },
   });
   check('session survived the refused mutation', stillAuthed.statusCode === 200);
@@ -272,7 +272,7 @@ async function main(): Promise<void> {
   );
   const afterLogout = await app.inject({
     method: 'GET',
-    url: '/',
+    url: '/dashboard',
     headers: { cookie: sessionPair },
   });
   check('session is invalid after logout', afterLogout.statusCode === 302);
@@ -280,7 +280,7 @@ async function main(): Promise<void> {
   // --- 8) Forged session cookie is rejected (signature check) ---
   const forged = await app.inject({
     method: 'GET',
-    url: '/',
+    url: '/dashboard',
     headers: { cookie: `cinderella_session=${'ab'.repeat(32)}.forgedsig` },
   });
   check('forged session cookie is rejected', forged.statusCode === 302);

@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-009**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -111,8 +111,10 @@ to (so hosts, crawlers, and later briefings can rely on it):
   - `GET /embed/:id/sitemap.xml` — `<urlset>` of public front URLs (base, pagination,
     per-type filters) with `<lastmod>` from the newest published `sent_at`; empty when
     the instance is `noindex`.
-  - `GET /sitemap.xml` — origin `<sitemapindex>` referencing every instance sitemap.
-  - `GET /robots.txt` — `Allow: /embed/`, `Disallow: /`, `Sitemap: {origin}/sitemap.xml`.
+  - `GET /sitemap.xml` — origin `<sitemapindex>` referencing the marketing-site sitemap
+    (`/sitemap-site.xml`, CCB-S2-012) + every instance sitemap.
+  - `GET /robots.txt` — since CCB-S2-012, `Allow: /` with explicit `Disallow:` for each
+    admin surface, `Sitemap: {origin}/sitemap.xml` (§7).
   - `GET /embed/:id/feed.xml` — RSS 2.0 of published items (linked from the page head
     as `rel="alternate" type="application/rss+xml"`).
   - `GET /embed/:id/og.png` — a 1200×630 PNG social preview (SVG rasterized via
@@ -159,6 +161,39 @@ to (so hosts, crawlers, and later briefings can rely on it):
   oracle; `400` only for a reason outside the enum, `403` for a `Sec-Fetch-Site: cross-site`
   submission or over the per-IP rate limit. A report never changes publication (visible-until-review).
   The confirmation banner renders on the follow-up `GET /embed/:id?reported=1`.
+
+## 7. Public marketing site — routing & i18n wire contract (CCB-S2-012)
+
+The domain root is a public SSR site ([`src/web/site/`](../src/web/site/)), separate from
+`/embed` and the admin. Routes and the language contract:
+
+- `GET /` → `302` to `/<lang>`, where `<lang>` is the persisted `cin-lang` cookie if a
+  supported locale, else the first supported `Accept-Language`, else the default (`en`).
+  `cache-control: no-store`.
+- `GET /<lang>` → the localized landing page; `GET /<lang>/<slug>` → a localized page
+  (built pages render content; the not-yet-built ones render a `noindex` "coming soon"
+  stub — never a 404; an unknown slug is a `404`). One static route per **loaded** locale
+  (`locales/<code>.json`), so adding a language is a file, not code.
+- **Language persistence.** Serving any `/<lang>*` page sets `cin-lang=<lang>`
+  (`HttpOnly`, `SameSite=Lax`, `Path=/`, 1-year) — a functional/essential cookie, no
+  consent required (like the theme).
+- **SEO head.** Per page: `<title>`, meta description, `<link rel="canonical">`,
+  `hreflang` alternates for every locale + `x-default`, Open Graph + Twitter (per-locale
+  `og:locale`), and JSON-LD `@graph` = Organization + WebSite + SoftwareApplication (stable
+  `@id`s cross-linked by `publisher`). Home is `index, follow`; thin stubs `noindex, follow`.
+- `GET /sitemap-site.xml` → `<urlset>` of the indexable pages, one `<url>` per locale each
+  carrying `xhtml:link rel="alternate"` hreflang entries; referenced from the origin
+  `/sitemap.xml` index. `cache-control: public, max-age=3600`.
+- **Headers** (`applySiteHeaders`): the same nonce CSP as the archive front but
+  `frame-ancestors 'none'` + `X-Frame-Options: DENY` (non-embeddable), indexable,
+  `cache-control: no-store` (per-request nonce). No mutating routes.
+- **Theme sync.** Reuses the same `localStorage['sg-theme']` key + `data-theme`/no-flash
+  contract as §6 (shared via `src/web/theme.ts`).
+- **Consent-gated add-ons (D-025).** When the operator enables analytics AND the cookie
+  banner, an inline nonce'd bootstrap shows the banner and, only on `cin-consent=granted`
+  (localStorage), injects the operator's analytics `<script src>`; the analytics origin is
+  added to `script-src`/`connect-src`. With the banner off, nothing loads. Social share is
+  script-free `<a>` links to each network's share endpoint (title + canonical URL params).
 
 ## Appendix: related file-transfer wire behaviour (context)
 

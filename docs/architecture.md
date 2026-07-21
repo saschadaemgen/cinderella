@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-011**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is *derived* from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -248,6 +248,51 @@ briefings extend it without touching consent logic:
   placeholder. Verified by
   [`scripts/verify-public.ts`](../scripts/verify-public.ts) +
   [`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
+
+## 12. Public marketing site (CCB-S2-012)
+
+The domain root `/` is a public, SSR, indexable **marketing site** — the face of the
+Cinderella bot suite (the archive is one capability under it), separate from `/embed`
+and from the admin. It is built in the **public-front style** (self-contained, inline
+nonce'd CSS/JS, `html`/`raw` escaping), NOT the Tailwind admin shell. Code lives in
+[`src/web/site/`](../src/web/site/) (`routes.ts`, `render.ts`, `seo.ts`, `i18n.ts`,
+`pages.ts`) with settings in [`src/site/settings.ts`](../src/site/settings.ts).
+
+- **Shared theme.** The SimpleGo house theme (dark-default light/dark, `sg-theme`
+  toggle, no-flash boot, `theme-color` sync) was extracted to
+  [`src/web/theme.ts`](../src/web/theme.ts) as a single source of truth consumed by
+  both the archive front and the site; the front's rendered output is byte-identical
+  to before the extraction. Each surface owns its own layout CSS.
+
+- **Routing + i18n (D-024).** Copy comes from `locales/<code>.json` (EN primary, DE
+  second), loaded by scanning the `locales/` directory at startup — adding a language
+  is a file, not code. URLs are per-language (`/en`, `/de`, `/en/<slug>`), one static
+  route per loaded locale so nothing shadows the admin paths. `GET /` 302-redirects by
+  the persisted `cin-lang` cookie → `Accept-Language` → default. A header switcher and
+  `hreflang` alternates + `x-default` (plus a `/sitemap-site.xml` with `xhtml:link`
+  alternates, referenced from the origin sitemap index) cover multilingual SEO.
+
+- **The root moved the admin (D-023).** The admin dashboard relocated from `/` to
+  `/dashboard` (post-login redirect + nav updated); the operator login is a discreet
+  header button → the unchanged, hardened, `noindex` admin. The site sets its OWN
+  headers via `applySiteHeaders`: the same nonce CSP as the archive front but
+  **non-embeddable** (`frame-ancestors 'none'` + `X-Frame-Options: DENY`) and
+  indexable. It is exempt from the admin auth/CSRF/IP guards via `isPublicSitePath`
+  (checked alongside `isPublicFront` in the three server hooks). `robots.txt` flipped
+  from a blanket `Disallow: /` to `Allow: /` with explicit admin-surface disallows.
+
+- **Landing page.** Hero (positioning + GitHub / operator-login CTAs), "what it does"
+  tiles, the suite section, a security section, and a footer (AGPL-3.0, GitHub, Docs,
+  Legal, "Built on SimpleX"). The not-yet-built pages (Suite/Pro/Security/Open Source/
+  Docs/Legal) are clean `noindex` "coming soon" stubs — never a 404. Copy is
+  **placeholder** (marked in the locale `_meta` + an HTML comment) pending final copy.
+
+- **Building blocks, OFF by default (D-025).** Three admin-configurable features on the
+  Website page (`/website`): visitor analytics (consent-gated — loads only after the
+  cookie banner grants consent, via `shouldLoadAnalytics`), a self-hosted cookie/consent
+  banner, and script-free social-share links. All default off; the operator opts in and
+  carries the legal responsibility (noted in the admin). Verified by
+  [`scripts/verify-site.ts`](../scripts/verify-site.ts).
 
 ## Appendix: divergences (code wins)
 

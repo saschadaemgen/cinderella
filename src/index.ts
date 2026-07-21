@@ -24,6 +24,7 @@ import { assertDbReachable, closePool, getPool } from './db/pool.js';
 import { markInterruptedMediaReceipts } from './db/messages.js';
 import { SettingsService } from './settings/service.js';
 import { SecurityService } from './security/settings.js';
+import { SiteService } from './site/settings.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
 import { registerAdminViews } from './web/views/index.js';
@@ -136,6 +137,7 @@ async function runApp(cfg: Config): Promise<void> {
   }
 
   const security = await SecurityService.load(getPool());
+  const site = await SiteService.load(getPool());
 
   // One process (A2): the admin web server and the capture worker together.
   const adminCfg = loadAdminConfig();
@@ -145,6 +147,7 @@ async function runApp(cfg: Config): Promise<void> {
     mediaRoot: cfg.mediaRoot,
     settings,
     security,
+    site,
     cfg,
     registerViews: registerAdminViews,
   });

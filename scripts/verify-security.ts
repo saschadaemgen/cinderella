@@ -130,7 +130,7 @@ async function main(): Promise<void> {
       registerViews: registerAdminViews,
     });
     await app2.ready();
-    const afterRestart = await app2.inject({ method: 'GET', url: '/', headers: authed });
+    const afterRestart = await app2.inject({ method: 'GET', url: '/dashboard', headers: authed });
     check(
       'session survives a simulated restart (new server instance, same DB)',
       afterRestart.statusCode === 200,

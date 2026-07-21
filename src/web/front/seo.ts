@@ -317,13 +317,14 @@ export function buildSitemapXml(s: SitemapContext): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
 }
 
-/** Root sitemap index listing every instance's sitemap. */
+/** Root sitemap index: the marketing-site sitemap (CCB-S2-012) + every instance's. */
 export function buildSitemapIndexXml(instanceIds: string[], origin: string): string {
-  const body = instanceIds
-    .map(
-      (id) =>
-        `  <sitemap>\n    <loc>${xml(`${origin}/embed/${id}/sitemap.xml`)}</loc>\n  </sitemap>`,
-    )
+  const locs = [
+    `${origin}/sitemap-site.xml`,
+    ...instanceIds.map((id) => `${origin}/embed/${id}/sitemap.xml`),
+  ];
+  const body = locs
+    .map((loc) => `  <sitemap>\n    <loc>${xml(loc)}</loc>\n  </sitemap>`)
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</sitemapindex>\n`;
 }
@@ -380,15 +381,29 @@ export function buildFeedXml(f: FeedContext): string {
 
 // ---------- robots.txt ----------
 
-/** Origin robots.txt: allow the public front, disallow the admin, point at the
- * sitemap index. Never lists a non-published path. */
+/** Admin surfaces that must never be indexed (CCB-S2-012 opened the root to the
+ * public marketing site, so the root can no longer be blanket-disallowed). */
+const ADMIN_DISALLOW = [
+  '/login',
+  '/logout',
+  '/dashboard',
+  '/messages',
+  '/consent',
+  '/settings',
+  '/security',
+  '/embeds',
+  '/website',
+  '/reports',
+  '/webauthn/',
+  '/healthz',
+];
+
+/** Origin robots.txt: allow the public marketing site + archive front, disallow the
+ * admin console, point at the sitemap index. Never lists a non-published path. */
 export function buildRobotsTxt(origin: string): string {
+  const disallow = ADMIN_DISALLOW.map((p) => `Disallow: ${p}`).join('\n');
   return (
-    `User-agent: *\n` +
-    `Allow: /embed/\n` +
-    `Disallow: /\n` +
-    `\n` +
-    `Sitemap: ${origin}/sitemap.xml\n`
+    `User-agent: *\n` + `Allow: /\n` + `${disallow}\n` + `\n` + `Sitemap: ${origin}/sitemap.xml\n`
   );
 }
 

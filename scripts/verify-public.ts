@@ -259,12 +259,17 @@ async function main(): Promise<void> {
     smi.statusCode === 200 && smi.body.includes(`/embed/${inst.id}/sitemap.xml`),
   );
 
-  // robots.txt (origin) — allow front, disallow admin, reference sitemap.
+  // robots.txt (origin) — allow the public site + front, disallow admin surfaces,
+  // reference the sitemap. Since CCB-S2-012 opened the root to the marketing site,
+  // the root is Allow: / with explicit admin Disallow entries (never a blanket root
+  // disallow, or the marketing pages wouldn't index).
   const robots = await app.inject({ method: 'GET', url: '/robots.txt' });
   check(
-    'robots.txt: allow /embed/, disallow /, sitemap ref',
-    robots.body.includes('Allow: /embed/') &&
-      robots.body.includes('Disallow: /') &&
+    'robots.txt: allow root, disallow admin surfaces, sitemap ref',
+    robots.body.includes('Allow: /') &&
+      robots.body.includes('Disallow: /security') &&
+      robots.body.includes('Disallow: /website') &&
+      !/Disallow: \/\n/.test(robots.body) &&
       robots.body.includes('Sitemap:'),
   );
 
