@@ -100,8 +100,8 @@ Security is the point, not a feature:
 - **Your data stays yours** — and with the planned local AI brain, conversations
   never leave your infrastructure.
 
-*In progress:* received media is screened against known child-abuse image (CSAM)
-hashes via Cloudflare before it can surface publicly.
+*In progress (not yet built):* received media **will be** screened against known
+child-abuse image (CSAM) hashes via Cloudflare before it can surface publicly.
 
 ## Tech
 

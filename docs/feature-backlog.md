@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
+> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-013**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -44,6 +44,7 @@ survives only in historical task labels and in-code comments).
 
 - [x] **Passkeys (WebAuthn) as primary auth** with an Argon2id break-glass path and optional TOTP; counter-regression auto-locks a credential (cloned-authenticator signal — the `locked` column). Schema: [`migrations/006_webauthn.sql`](../migrations/006_webauthn.sql). Routes/ceremonies: [`src/web/security/routes.ts`](../src/web/security/routes.ts) and [`src/web/security/webauthn.ts`](../src/web/security/webauthn.ts).
 - [x] **Full A4.5 hardening suite, admin-configurable and persisted** — passkey attestation policy, session idle/absolute timeouts, step-up for sensitive mutations, login rate-limit/lockout, global per-minute limit, IP allow/deny, configurable CSP + security headers, and webhook alerting (https-only URL validation). See [`src/security/settings.ts`](../src/security/settings.ts) and the enforcement hooks in [`src/web/server.ts`](../src/web/server.ts): security headers on `onSend` ([`:129`](../src/web/server.ts)), global rate-limit + IP allow/deny + session/auth guard on `onRequest` ([`:134`](../src/web/server.ts)), CSRF + step-up on `preHandler` ([`:172`](../src/web/server.ts)). Security page + TOTP enroll/enable/disable + logout-others: [`src/web/views/security.ts`](../src/web/views/security.ts).
+- [x] **WebAuthn RP-ID/origin startup guard (CCB-S2-011)** — `loadAdminConfig` calls `validateRpConfig` so the server refuses to boot unless the effective `WEBAUTHN_RP_ID` matches the origin host (or a registrable parent), and logs the effective RP ID/origin — converting the silent passkey-lockout footgun into a loud config failure. See [`src/config.ts`](../src/config.ts), verified in [`scripts/verify-admin.ts`](../scripts/verify-admin.ts); rationale in decisions D-022.
 
 ### PostgreSQL-backed sessions
 
@@ -56,7 +57,12 @@ survives only in historical task labels and in-code comments).
 
 ---
 
-## Planned — Season 2 (scoped, not yet in code)
+## Season 2 — shipped and scoped
+
+Season 2 is partly built: the **public embed front** (§1, CCB-S2-003…010) and the
+**public marketing website** (§6, CCB-S2-012) have shipped; §2–5 remain scoped and
+not-yet-in-code. Each item below carries its own status line — trust the per-item
+status, not a blanket one.
 
 ### 1. Public embed front — the `/embed/<instance-id>` route
 
