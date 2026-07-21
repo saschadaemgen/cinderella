@@ -50,10 +50,14 @@ function iconInner(name: string): string {
   return inner;
 }
 
+/** Icon color as a CLASS (`.ic-<tone>` in css.ts) — never a style attribute: the
+ * site CSP (`style-src 'nonce-…'`) blocks inline style attributes. */
+export type IconTone = 'accent' | 'muted' | 'faint' | 'neon' | 'success';
+
 export interface SiteIconOpts {
   size?: number;
-  /** CSS color value; defaults to currentColor. */
-  color?: string;
+  /** Color tone class; defaults to currentColor (inherit). */
+  tone?: IconTone;
   className?: string;
   /** Accessible label; icons are aria-hidden without one. */
   label?: string;
@@ -63,11 +67,11 @@ export interface SiteIconOpts {
 export function siteIcon(name: string, opts: SiteIconOpts = {}): SafeHtml {
   const size = opts.size ?? 20;
   const inner = iconInner(name);
-  const cls = opts.className ? ` class="${opts.className}"` : '';
-  const style = opts.color ? ` style="color:${opts.color}"` : '';
+  const classes = [opts.className, opts.tone ? `ic-${opts.tone}` : ''].filter(Boolean).join(' ');
+  const cls = classes ? ` class="${classes}"` : '';
   const a11y = opts.label ? ` role="img" aria-label="${opts.label}"` : ' aria-hidden="true"';
   return raw(
-    `<svg${cls}${style}${a11y} width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`,
+    `<svg${cls}${a11y} width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`,
   );
 }
 

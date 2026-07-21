@@ -141,7 +141,7 @@ function render(){
   var htmlOut='';
   for(var i=0;i<rs.length;i++){var m=rs[i];
     htmlOut+='<div class="ad-msg"><span class="ad-avatar" aria-hidden="true">'+esc(m.a[0].toUpperCase())+'</span>'+
-      '<div style="flex:1;min-width:0"><div class="ad-meta"><b>'+hl(m.a)+'</b><span class="ad-grp">'+hl(m.g)+'</span>'+
+      '<div class="ad-msg-body"><div class="ad-meta"><b>'+hl(m.a)+'</b><span class="ad-grp">'+hl(m.g)+'</span>'+
       '<span class="ad-time">'+esc(m.t)+'</span><span class="ad-arch">'+CFG.icons.check+esc(CFG.i18n.archived)+'</span></div>'+
       '<div class="ad-text">'+hl(m.text)+'</div>'+mediaChip(m)+'</div></div>';
   }
@@ -152,7 +152,7 @@ function render(){
   }
   var total=CFG.messages.length;
   var base=rs.length===total?CFG.i18n.messages.replace('{n}',String(total)):CFG.i18n.of.replace('{n}',String(rs.length)).replace('{total}',String(total));
-  countEl.innerHTML=esc(base)+(q?' <span style="color:var(--text-accent)">· \\u201C'+esc(q)+'\\u201D</span>':'');
+  countEl.innerHTML=esc(base)+(q?' <span class="ad-q">· \\u201C'+esc(q)+'\\u201D</span>':'');
   if(clearBtn)clearBtn.style.display=q?'inline-flex':'none';
   if(urlEl)urlEl.textContent=group==='all'?urlEl.getAttribute('data-all'):group;
   root.querySelectorAll('.ad-g').forEach(function(b){

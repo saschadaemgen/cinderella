@@ -404,7 +404,118 @@ button.cn-tag-selected:hover{border-color:var(--accent);color:var(--accent-hover
 `;
 }
 
+/**
+ * Layout classes replacing the template's inline styles. The site CSP is
+ * `style-src 'nonce-…'`, and a nonce covers only <style> ELEMENTS — style
+ * ATTRIBUTES are blocked. So every layout rule the React template carried as
+ * `style={{…}}` lives here as a class; render.ts emits NO style attributes
+ * (verify:site asserts this). Defined last so these win the cascade where they
+ * override earlier component rules (e.g. section padding).
+ */
+const NO_INLINE_CSS = `
+.hdr-row{display:flex;align-items:center;gap:20px;height:64px}
+.hdr-nav{gap:2px;flex:1;margin-left:14px}
+.hdr-controls{gap:10px}
+.hdr-spacer{flex:1}
+.hdr-iconbtn.burger{display:none}
+@media (max-width:959px){.hdr-iconbtn.burger{display:inline-flex}}
+.mobile-panel{border-top:1px solid var(--border-neutral);background:var(--surface-raised);padding:12px 24px 18px}
+.mm-nav{display:flex;flex-direction:column;gap:2px}
+.mm-controls{display:flex;gap:10px;align-items:center;margin-top:14px}
+.wm-name{font-weight:700;font-size:20px;letter-spacing:-.03em;color:var(--text-bright)}
+.wordmark-lg .wm-name{font-size:22px}
+.wordmark-lg .wm-av{width:34px;height:34px}
+.page-hero{padding:80px 24px 64px;max-width:900px;position:relative}
+.hero-badge{margin-bottom:16px}
+.eyebrow-neon{font-size:12px;font-weight:700;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-neon);margin-bottom:14px}
+.page-h1{font-size:var(--size-display);margin:0;letter-spacing:-.025em;line-height:1.06}
+.page-lede{font-size:18px;line-height:1.6;color:var(--text-muted);max-width:640px;margin:18px 0 0}
+.site-footer{margin-top:120px;border-top:1px solid var(--border-neutral);background:var(--surface-raised);position:relative}
+.foot-grid{display:flex;gap:48px;padding:64px 24px 44px;flex-wrap:wrap}
+.foot-brand{flex:1 1 280px}
+.foot-blurb{font-size:14px;color:var(--text-muted);margin:14px 0 16px;max-width:320px;line-height:1.65}
+.foot-badges{display:flex;gap:8px}
+.fcol{min-width:150px}
+.fcol-title{font-size:12px;font-weight:700;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-neon);margin-bottom:14px}
+.fcol-links{display:flex;flex-direction:column;gap:10px}
+.foot-bottom{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 24px;border-top:1px solid var(--border-neutral);font-size:13px;color:var(--text-faint)}
+.home-h1{margin:18px 0 22px;letter-spacing:-.03em}
+.hline{display:block;white-space:nowrap}
+.home-lede{font-size:18px;line-height:1.6;color:var(--text-muted);max-width:500px;margin:0}
+.home-cta{display:flex;gap:12px;margin-top:26px;flex-wrap:wrap}
+.trust-left{justify-content:flex-start}
+.row-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.card-title{font-size:18px;font-weight:700;color:var(--text-bright)}
+.card-title-sm{font-size:17px;font-weight:700;color:var(--text-bright)}
+.card-title-lg{font-size:20px;font-weight:700;color:var(--text-bright)}
+.card-lede{font-size:15px;line-height:1.65;color:var(--text-muted);margin:12px 0 18px}
+.card-note{font-size:14px;color:var(--text-muted);margin:8px 0 0;line-height:1.6}
+.card-para{font-size:14px;line-height:1.7;color:var(--text-muted);margin:10px 0 16px}
+.card-para-tight{font-size:14px;line-height:1.7;color:var(--text-muted);margin:10px 0 0}
+.list-col{display:flex;flex-direction:column;gap:11px;margin-top:16px}
+.roadmap-row{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-neutral);padding-bottom:10px;font-size:14px}
+.card-split{display:flex;gap:48px;align-items:center;flex-wrap:wrap}
+.card-row{display:flex;gap:32px;align-items:center;flex-wrap:wrap}
+.split-main{flex:1 1 340px}
+.split-320{flex:1 1 320px}
+.split-side{flex:1 1 300px;display:flex;flex-direction:column;gap:12px}
+.icon-line{display:flex;gap:11px;align-items:center;font-size:15px;color:var(--text-body)}
+.chip-row{display:flex;gap:8px;flex-wrap:wrap}
+.cap-list{display:flex;flex-direction:column;gap:16px}
+.cap-card{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.cap-icon{position:relative;width:44px;height:44px;flex:none;border-radius:var(--radius-sm);background:var(--neon-weak);border:1px solid rgba(232,56,159,.2);display:flex;align-items:center;justify-content:center;color:var(--text-neon)}
+.cap-num{position:absolute;top:-9px;left:-9px;width:20px;height:20px;border-radius:99px;background:var(--surface-card);border:1px solid var(--border-neutral);font-family:var(--font-mono);font-size:10px;color:var(--text-faint);display:flex;align-items:center;justify-content:center}
+.cap-main{flex:1 1 420px}
+.cap-title{font-size:19px;font-weight:700;color:var(--text-bright)}
+.cap-body{font-size:14px;line-height:1.7;color:var(--text-muted);margin:8px 0 14px;max-width:660px}
+.pro-form{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.pro-email{width:220px}
+.sec-csam{display:flex;gap:36px;flex-wrap:wrap;align-items:center}
+.sec-icon{width:44px;height:44px;border-radius:var(--radius-sm);background:var(--neon-weak);border:1px solid rgba(232,56,159,.28);display:flex;align-items:center;justify-content:center;color:var(--text-neon);box-shadow:var(--edge-lit),var(--glow-neon-sm)}
+.sec-main{flex:1 1 360px}
+.sec-title{font-size:22px;font-weight:700;color:var(--text-bright)}
+.sec-body{font-size:15px;line-height:1.65;color:var(--text-muted);margin:10px 0 0;max-width:520px}
+.sec-flow{flex:1 1 280px;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.flow-node{text-align:center;padding:16px 14px;border-radius:var(--radius-md);border:1px solid var(--border-neutral);background:var(--surface-field);min-width:92px;color:var(--text-muted)}
+.flow-node.on{border-color:rgba(232,56,159,.45);background:var(--neon-weak);box-shadow:var(--glow-neon-sm);color:var(--text-neon)}
+.flow-label{font-family:var(--font-mono);font-size:11px;margin-top:8px}
+.step-num{font-family:var(--font-mono);font-size:11px;color:var(--text-accent);margin-bottom:8px}
+.step-title{font-size:15px;font-weight:700;color:var(--text-bright);margin-bottom:10px}
+.mono-sm{font-size:12px}
+.note-faint{font-size:13px;color:var(--text-faint);margin-top:16px}
+.legal-card{margin-top:24px;max-width:860px}
+.ad-dot-r{background:#E5646E}
+.ad-dot-y{background:#E0B454}
+.ad-dot-g{background:#4ADE9E}
+.ad-msg-body{flex:1;min-width:0}
+.ad-q{color:var(--text-accent)}
+.ic-accent{color:var(--text-accent)}
+.ic-muted{color:var(--text-muted)}
+.ic-faint{color:var(--text-faint)}
+.ic-neon{color:var(--text-neon)}
+.ic-success{color:var(--success)}
+section.pt40{padding-top:40px}
+section.pt48{padding-top:48px}
+section.pt64{padding-top:64px}
+.mt16{margin-top:16px!important}
+.mt22{margin-top:22px!important}
+.mt36{margin-top:36px!important}
+.mt40{margin-top:40px!important}
+.mt48{margin-top:48px!important}
+.grid-stretch{align-items:stretch}
+.grid-start{align-items:start}
+.d40{animation-delay:40ms}
+.d120{animation-delay:120ms}
+.d220{animation-delay:220ms}
+.d240{animation-delay:240ms}
+.d380{animation-delay:380ms}
+.d480{animation-delay:480ms}
+.d580{animation-delay:580ms}
+`;
+
 /** The complete site stylesheet (emitted once per page under the CSP nonce). */
 export function siteCss(): string {
-  return [fontFacesCss(), TOKENS_CSS, LAYOUT_CSS, DEMO_CSS, componentsCss()].join('\n').trim();
+  return [fontFacesCss(), TOKENS_CSS, LAYOUT_CSS, DEMO_CSS, componentsCss(), NO_INLINE_CSS]
+    .join('\n')
+    .trim();
 }

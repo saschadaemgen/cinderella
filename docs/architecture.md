@@ -272,6 +272,10 @@ nonce'd CSS/JS, `html`/`raw` escaping), NOT the Tailwind admin shell. Code lives
   every page is fully server-rendered and degrades cleanly without JS. The shared
   `src/web/theme.ts` (`sg-theme`) continues to serve the **archive front** unchanged;
   the site owns its own tokens in [`src/web/site/css.ts`](../src/web/site/css.ts).
+  **No style attributes anywhere:** the site CSP (`style-src 'nonce-…'`) covers only
+  `<style>` elements — browsers block inline style ATTRIBUTES under it — so every
+  layout rule the template carried as `style={{…}}` lives as a class (`NO_INLINE_CSS`
+  in css.ts); `verify:site` asserts rendered pages contain zero `style="`.
 
 - **Pages (CCB-S3-001).** Home (cinematic hero + live archive demo with sample data +
   pipeline tiles + suite/roadmap + security card), Features (the four firewall stages +

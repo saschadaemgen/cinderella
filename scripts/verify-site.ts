@@ -225,6 +225,20 @@ async function main(): Promise<void> {
   const legalNope = await app.inject({ method: 'GET', url: '/en/legal/nope' });
   check('legal: unknown legal sub-page is 404', legalNope.statusCode === 404);
 
+  // --- CSP: no style ATTRIBUTES anywhere (style-src nonce covers only <style>
+  // elements — browsers BLOCK style attributes, which broke the header/footer
+  // layout in production; CCB-S3-001 regression guard) ---
+  for (const [name, res] of [
+    ['home', en],
+    ['features', features],
+    ['pro', proDe],
+    ['legal', legal],
+    ['privacy', privacy],
+    ['stub', await app.inject({ method: 'GET', url: '/en/docs' })],
+  ] as const) {
+    check(`csp: ${name} page renders zero style="" attributes`, !res.body.includes('style="'));
+  }
+
   // --- SEO head ---
   check('seo: canonical to /en', en.body.includes(`<link rel="canonical" href="${ORIGIN}/en"`));
   check('seo: hreflang de alternate', en.body.includes(`hreflang="de" href="${ORIGIN}/de"`));

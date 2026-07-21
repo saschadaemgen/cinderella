@@ -10,6 +10,11 @@
  * script-free links. Essential storage — the theme (`cn-theme`) and the language
  * cookie — needs no consent.
  *
+ * NO STYLE ATTRIBUTES: the site CSP is `style-src 'nonce-…'`, and a nonce covers
+ * only <style> elements — browsers block style ATTRIBUTES under it. Every layout
+ * rule the template carried inline lives as a class in css.ts (NO_INLINE_CSS);
+ * verify:site asserts rendered pages contain no `style="`.
+ *
  * Copy note (CCB-S3-001, operator decision): the strong "consent + CSAM screening"
  * messaging is a forward-looking shop window; the binding point is first
  * distribution. Do not weaken it here — the copy lives in locales/*.json.
@@ -180,19 +185,10 @@ function btnLink(
   return html`<a class="cn-btn cn-btn-${variant} cn-btn-${size}" href="${href}">${inner}</a>`;
 }
 
-function wordmark(v: SitePageView, size = 20): SafeHtml {
-  return html`<a class="wordmark" href="${pagePath(v.locale, HOME)}">
-    <img
-      class="wm-av"
-      src="${AVATAR_SRC}"
-      alt=""
-      aria-hidden="true"
-      width="${size + 12}"
-      height="${size + 12}"
-    />
-    <span style="font-weight:700;font-size:${size}px;letter-spacing:-.03em;color:var(--text-bright)"
-      >${v.t('brand.name')}</span
-    >
+function wordmark(v: SitePageView, large = false): SafeHtml {
+  return html`<a class="wordmark${large ? ' wordmark-lg' : ''}" href="${pagePath(v.locale, HOME)}">
+    <img class="wm-av" src="${AVATAR_SRC}" alt="" aria-hidden="true" width="32" height="32" />
+    <span class="wm-name">${v.t('brand.name')}</span>
   </a>`;
 }
 
@@ -203,32 +199,11 @@ function pageHero(o: {
   lede?: string;
 }): SafeHtml {
   return html`<section class="hero-bg fx-hero">
-    <div class="wrap" style="padding:80px 24px 64px;max-width:900px;position:relative">
-      ${o.badge ? html`<div style="margin-bottom:16px">${o.badge}</div>` : null}
-      ${
-        o.eyebrow
-          ? html`<div
-              style="font-size:12px;font-weight:700;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-neon);margin-bottom:14px"
-            >
-              ${o.eyebrow}
-            </div>`
-          : null
-      }
-      <h1
-        class="hero-h1"
-        style="font-size:var(--size-display);margin:0;letter-spacing:-.025em;line-height:1.06"
-      >
-        ${o.title}
-      </h1>
-      ${
-        o.lede
-          ? html`<p
-              style="font-size:18px;line-height:1.6;color:var(--text-muted);max-width:640px;margin:18px 0 0"
-            >
-              ${o.lede}
-            </p>`
-          : null
-      }
+    <div class="wrap page-hero">
+      ${o.badge ? html`<div class="hero-badge">${o.badge}</div>` : null}
+      ${o.eyebrow ? html`<div class="eyebrow-neon">${o.eyebrow}</div>` : null}
+      <h1 class="hero-h1 page-h1">${o.title}</h1>
+      ${o.lede ? html`<p class="page-lede">${o.lede}</p>` : null}
     </div>
   </section>`;
 }
@@ -278,13 +253,11 @@ function headerControls(v: SitePageView): SafeHtml {
 
 function header(v: SitePageView): SafeHtml {
   return html`<header class="site-header">
-    <div class="wrap" style="display:flex;align-items:center;gap:20px;height:64px">
+    <div class="wrap hdr-row">
       ${wordmark(v)}
-      <nav class="nav-desktop" style="gap:2px;flex:1;margin-left:14px" aria-label="Primary">
-        ${navLinks(v)}
-      </nav>
-      <span class="nav-desktop" style="gap:10px">${headerControls(v)}</span>
-      <span style="flex:1" class="mobile-menu"></span>
+      <nav class="nav-desktop hdr-nav" aria-label="Primary">${navLinks(v)}</nav>
+      <span class="nav-desktop hdr-controls">${headerControls(v)}</span>
+      <span class="mobile-menu hdr-spacer"></span>
       <button
         type="button"
         id="cn-burger"
@@ -299,28 +272,17 @@ function header(v: SitePageView): SafeHtml {
         })}
       </button>
     </div>
-    <div
-      id="cn-mobile-menu"
-      class="mobile-menu"
-      hidden
-      style="border-top:1px solid var(--border-neutral);background:var(--surface-raised);padding:12px 24px 18px"
-    >
-      <nav style="display:flex;flex-direction:column;gap:2px" aria-label="Menu">${navLinks(v)}</nav>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
-        ${headerControls(v)}
-      </div>
+    <div id="cn-mobile-menu" class="mobile-menu mobile-panel" hidden>
+      <nav class="mm-nav" aria-label="Menu">${navLinks(v)}</nav>
+      <div class="mm-controls">${headerControls(v)}</div>
     </div>
   </header>`;
 }
 
 function footerCol(title: string, items: Array<[string, string, boolean?]>): SafeHtml {
-  return html`<div class="fcol" style="min-width:150px">
-    <div
-      style="font-size:12px;font-weight:700;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-neon);margin-bottom:14px"
-    >
-      ${title}
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px">
+  return html`<div class="fcol">
+    <div class="fcol-title">${title}</div>
+    <div class="fcol-links">
       ${items.map(
         ([label, href, external]) =>
           html`<a href="${href}" ${external ? raw('target="_blank" rel="noopener"') : ''}
@@ -333,19 +295,13 @@ function footerCol(title: string, items: Array<[string, string, boolean?]>): Saf
 
 function footer(v: SitePageView): SafeHtml {
   const l = v.locale;
-  return html`<footer
-    style="margin-top:120px;border-top:1px solid var(--border-neutral);background:var(--surface-raised);position:relative"
-  >
+  return html`<footer class="site-footer">
     <span class="foot-top" aria-hidden="true"></span>
-    <div class="wrap" style="display:flex;gap:48px;padding:64px 24px 44px;flex-wrap:wrap">
-      <div style="flex:1 1 280px">
-        ${wordmark(v, 22)}
-        <p
-          style="font-size:14px;color:var(--text-muted);margin:14px 0 16px;max-width:320px;line-height:1.65"
-        >
-          ${v.t('footer.blurb')}
-        </p>
-        <div style="display:flex;gap:8px">
+    <div class="wrap foot-grid">
+      <div class="foot-brand">
+        ${wordmark(v, true)}
+        <p class="foot-blurb">${v.t('footer.blurb')}</p>
+        <div class="foot-badges">
           ${badge('warning', v.t('badge.alpha'))} ${badge('neutral', v.t('badge.agpl'))}
         </div>
       </div>
@@ -367,10 +323,7 @@ function footer(v: SitePageView): SafeHtml {
       ])}
     </div>
     ${shareBlock(v)}
-    <div
-      class="wrap"
-      style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 24px;border-top:1px solid var(--border-neutral);font-size:13px;color:var(--text-faint)"
-    >
+    <div class="wrap foot-bottom">
       <span>${v.t('footer.copyright')}</span>
       <span>${v.t('footer.built')}</span>
     </div>
@@ -405,11 +358,11 @@ function demoRow(v: SitePageView, m: DemoMessage): SafeHtml {
         : 'image · behind auth';
   return html`<div class="ad-msg">
     <span class="ad-avatar" aria-hidden="true">${m.a[0]?.toUpperCase() ?? ''}</span>
-    <div style="flex:1;min-width:0">
+    <div class="ad-msg-body">
       <div class="ad-meta">
         <b>${m.a}</b><span class="ad-grp">${m.g}</span><span class="ad-time">${m.t}</span>
         <span class="ad-arch"
-          >${siteIcon('check', { size: 12, color: 'var(--success)' })}${v.t('demo.archived')}</span
+          >${siteIcon('check', { size: 12, tone: 'success' })}${v.t('demo.archived')}</span
         >
       </div>
       <div class="ad-text">${m.text}</div>
@@ -417,12 +370,9 @@ function demoRow(v: SitePageView, m: DemoMessage): SafeHtml {
         m.media
           ? html`<div class="ad-chip">
               ${siteIcon(AD_MEDIA_ICON[m.media] ?? 'file-text', {
-                size: 13,
-                color: 'var(--text-accent)',
-              })}<span>${mediaLabel}</span>${siteIcon('lock', {
-                size: 11,
-                color: 'var(--text-faint)',
-              })}
+              size: 13,
+              tone: 'accent',
+            })}<span>${mediaLabel}</span>${siteIcon('lock', { size: 11, tone: 'faint' })}
             </div>`
           : null
       }
@@ -433,11 +383,11 @@ function demoRow(v: SitePageView, m: DemoMessage): SafeHtml {
 function archiveDemo(v: SitePageView): SafeHtml {
   return html`<div class="ad-frame" id="cn-ad">
     <div class="ad-titlebar">
-      <span class="ad-dot" style="background:#E5646E"></span>
-      <span class="ad-dot" style="background:#E0B454"></span>
-      <span class="ad-dot" style="background:#4ADE9E"></span>
+      <span class="ad-dot ad-dot-r"></span>
+      <span class="ad-dot ad-dot-y"></span>
+      <span class="ad-dot ad-dot-g"></span>
       <span class="ad-url"
-        >${siteIcon('lock', { size: 12, color: 'var(--success)' })} archive.cinderella.example /
+        >${siteIcon('lock', { size: 12, tone: 'success' })} archive.cinderella.example /
         <span id="cn-ad-url-group" data-all="${v.t('demo.allgroups.short')}"
           >${v.t('demo.allgroups.short')}</span
         ></span
@@ -461,14 +411,14 @@ function archiveDemo(v: SitePageView): SafeHtml {
             </button>`,
         )}
         <div class="ad-consent">
-          ${siteIcon('shield-check', { size: 14, color: 'var(--success)' })}<span
+          ${siteIcon('shield-check', { size: 14, tone: 'success' })}<span
             >${v.t('demo.consent')}</span
           >
         </div>
       </aside>
       <div class="ad-main">
         <div class="ad-searchbar">
-          ${siteIcon('search', { size: 17, color: 'var(--text-faint)' })}
+          ${siteIcon('search', { size: 17, tone: 'faint' })}
           <input
             id="cn-ad-input"
             class="ad-input"
@@ -491,7 +441,7 @@ function archiveDemo(v: SitePageView): SafeHtml {
           ${AD_MSGS.map((m) => demoRow(v, m))}
         </div>
         <div class="ad-empty" id="cn-ad-empty">
-          ${siteIcon('search-x', { size: 22, color: 'var(--text-faint)' })}
+          ${siteIcon('search-x', { size: 22, tone: 'faint' })}
           <div>${v.t('demo.empty')} <span id="cn-ad-empty-q"></span></div>
         </div>
       </div>
@@ -500,8 +450,8 @@ function archiveDemo(v: SitePageView): SafeHtml {
 }
 
 function demoConfig(v: SitePageView): DemoConfig {
-  const iconStr = (name: string, size: number, color?: string): string =>
-    siteIcon(name, { size, ...(color ? { color } : {}) }).toString();
+  const iconStr = (name: string, size: number, tone?: 'accent' | 'faint' | 'success'): string =>
+    siteIcon(name, { size, ...(tone ? { tone } : {}) }).toString();
   return {
     messages: AD_MSGS,
     groups: AD_GROUPS,
@@ -514,11 +464,11 @@ function demoConfig(v: SitePageView): DemoConfig {
       attachment: v.t('demo.attachment'),
     },
     icons: {
-      check: iconStr('check', 12, 'var(--success)'),
-      lock: iconStr('lock', 11, 'var(--text-faint)'),
-      'file-text': iconStr('file-text', 13, 'var(--text-accent)'),
-      clapperboard: iconStr('clapperboard', 13, 'var(--text-accent)'),
-      image: iconStr('image', 13, 'var(--text-accent)'),
+      check: iconStr('check', 12, 'success'),
+      lock: iconStr('lock', 11, 'faint'),
+      'file-text': iconStr('file-text', 13, 'accent'),
+      clapperboard: iconStr('clapperboard', 13, 'accent'),
+      image: iconStr('image', 13, 'accent'),
     },
   };
 }
@@ -551,33 +501,17 @@ function homeBody(v: SitePageView): SafeHtml {
     <section class="hero-bg fx-hero">
       <div class="wrap hero-cine">
         <div class="htext">
-          <a class="ann sym sym-left" href="/${l}/features" style="animation-delay:40ms">
+          <a class="ann sym sym-left d40" href="/${l}/features">
             <span class="ann-dot"></span>
             <span>${v.t('hero.ann')}</span>
             <span class="ann-chip">${siteIcon('arrow-right', { size: 13 })}</span>
           </a>
-          <h1 class="hero-h1" style="margin:18px 0 22px;letter-spacing:-.03em">
-            <span
-              class="sym sym-blur"
-              style="display:block;white-space:nowrap;animation-delay:120ms"
-              >${v.t('hero.title1')}</span
-            >
-            <span
-              class="grad-text sym sym-rise"
-              style="display:block;white-space:nowrap;animation-delay:240ms"
-              >${v.t('hero.title2')}</span
-            >
+          <h1 class="hero-h1 home-h1">
+            <span class="hline sym sym-blur d120">${v.t('hero.title1')}</span>
+            <span class="hline grad-text sym sym-rise d240">${v.t('hero.title2')}</span>
           </h1>
-          <p
-            class="sym sym-left"
-            style="font-size:18px;line-height:1.6;color:var(--text-muted);max-width:500px;margin:0;animation-delay:380ms"
-          >
-            ${v.t('hero.lede')}
-          </p>
-          <div
-            class="sym sym-scale"
-            style="display:flex;gap:12px;margin-top:26px;flex-wrap:wrap;animation-delay:480ms"
-          >
+          <p class="home-lede sym sym-left d380">${v.t('hero.lede')}</p>
+          <div class="home-cta sym sym-scale d480">
             ${btnLink(`/${l}/security`, 'primary', 'lg', html`${v.t('hero.cta.safeguards')}`)}
             ${btnLink(
               `/${l}/features`,
@@ -586,14 +520,14 @@ function homeBody(v: SitePageView): SafeHtml {
               html`${v.t('hero.cta.explore')} ${siteIcon('arrow-right', { size: 15 })}`,
             )}
           </div>
-          <div class="trust sym sym-blur" style="justify-content:flex-start;animation-delay:580ms">
+          <div class="trust trust-left sym sym-blur d580">
             ${trust.map(
               ([i, label]) =>
-                html`<span>${siteIcon(i, { size: 14, color: 'var(--text-faint)' })}${label}</span>`,
+                html`<span>${siteIcon(i, { size: 14, tone: 'faint' })}${label}</span>`,
             )}
           </div>
         </div>
-        <div class="hero-stage sym sym-right" style="animation-delay:220ms">
+        <div class="hero-stage sym sym-right d220">
           <div class="pring">
             <img src="${AVATAR_SRC}" alt="${v.t('brand.name')}" width="420" height="420" />
             <span class="pchip c1"><span class="d"></span>${v.t('hero.chip.consent')}</span>
@@ -609,7 +543,7 @@ function homeBody(v: SitePageView): SafeHtml {
         title: v.t('home.live.title'),
         lede: v.t('home.live.lede'),
       })}
-      <div class="hero-visual" style="margin-top:36px">${archiveDemo(v)}</div>
+      <div class="hero-visual mt36">${archiveDemo(v)}</div>
     </section>
 
     <section class="band wrap" data-reveal>
@@ -619,7 +553,7 @@ function homeBody(v: SitePageView): SafeHtml {
         lede: v.t('home.how.lede'),
         center: true,
       })}
-      <div class="grid4" style="margin-top:48px">
+      <div class="grid4 mt48">
         ${tiles.map(([icon, k]) =>
           featureTile(icon, v.t(`home.tile.${k}.title`), v.t(`home.tile.${k}.body`)),
         )}
@@ -632,16 +566,15 @@ function homeBody(v: SitePageView): SafeHtml {
         title: v.t('home.suite.title'),
         lede: v.t('home.suite.lede'),
       })}
-      <div class="grid2" style="margin-top:40px;align-items:stretch">
+      <div class="grid2 grid-stretch mt40">
         <div class="cn-card cn-card-default cn-card-pad-lg">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:18px;font-weight:700;color:var(--text-bright)"
-              >${v.t('home.suite.archive.title')}</span
-            >${badge('success', v.t('badge.live'))}
+          <div class="row-title">
+            <span class="card-title">${v.t('home.suite.archive.title')}</span>${badge(
+              'success',
+              v.t('badge.live'),
+            )}
           </div>
-          <p style="font-size:15px;line-height:1.65;color:var(--text-muted);margin:12px 0 18px">
-            ${v.t('home.suite.archive.body')}
-          </p>
+          <p class="card-lede">${v.t('home.suite.archive.body')}</p>
           ${btnLink(
             `/${l}/features`,
             'secondary',
@@ -650,15 +583,11 @@ function homeBody(v: SitePageView): SafeHtml {
           )}
         </div>
         <div class="cn-card cn-card-default cn-card-pad-lg">
-          <div style="font-size:18px;font-weight:700;color:var(--text-bright)">
-            ${v.t('home.suite.roadmap.title')}
-          </div>
-          <div style="display:flex;flex-direction:column;gap:11px;margin-top:16px">
+          <div class="card-title">${v.t('home.suite.roadmap.title')}</div>
+          <div class="list-col">
             ${roadmap.map(
               (r) =>
-                html`<div
-                  style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-neutral);padding-bottom:10px;font-size:14px"
-                >
+                html`<div class="roadmap-row">
                   <span>${v.t(`roadmap.${r}`)}</span>${badge('outline', v.t('badge.planned'))}
                 </div>`,
             )}
@@ -668,17 +597,14 @@ function homeBody(v: SitePageView): SafeHtml {
     </section>
 
     <section class="band wrap" data-reveal>
-      <div
-        class="cn-card cn-card-default cn-card-pad-lg"
-        style="display:flex;gap:48px;align-items:center;flex-wrap:wrap"
-      >
-        <div style="flex:1 1 340px">
+      <div class="cn-card cn-card-default cn-card-pad-lg card-split">
+        <div class="split-main">
           ${sectionHeader({
             eyebrow: v.t('home.sec.eyebrow'),
             title: v.t('home.sec.title'),
             lede: v.t('home.sec.lede'),
           })}
-          <div style="margin-top:22px">
+          <div class="mt22">
             ${btnLink(
               `/${l}/security`,
               'secondary',
@@ -687,13 +613,11 @@ function homeBody(v: SitePageView): SafeHtml {
             )}
           </div>
         </div>
-        <div style="flex:1 1 300px;display:flex;flex-direction:column;gap:12px">
+        <div class="split-side">
           ${secPoints.map(
             ([i, label]) =>
-              html`<div
-                style="display:flex;gap:11px;align-items:center;font-size:15px;color:var(--text-body)"
-              >
-                ${siteIcon(i, { size: 17, color: 'var(--text-accent)' })}${label}
+              html`<div class="icon-line">
+                ${siteIcon(i, { size: 17, tone: 'accent' })}${label}
               </div>`,
           )}
         </div>
@@ -724,36 +648,24 @@ function featuresBody(v: SitePageView): SafeHtml {
         >${v.t('features.title2')}`,
       lede: v.t('features.lede'),
     })}
-    <section class="band wrap" data-reveal style="padding-top:64px">
-      <div style="display:flex;flex-direction:column;gap:16px">
+    <section class="band wrap pt64" data-reveal>
+      <div class="cap-list">
         ${caps.map(
           (c, i) =>
             html`<div
-              class="cn-card ${c.dev ? 'cn-card-accent' : 'cn-card-default'} cn-card-pad-lg"
-              style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap"
+              class="cn-card ${c.dev ? 'cn-card-accent' : 'cn-card-default'} cn-card-pad-lg cap-card"
             >
-              <div
-                style="position:relative;width:44px;height:44px;flex:none;border-radius:var(--radius-sm);background:var(--neon-weak);border:1px solid rgba(232,56,159,.2);display:flex;align-items:center;justify-content:center;color:var(--text-neon)"
-              >
+              <div class="cap-icon">
                 ${siteIcon(c.icon, { size: 22 })}
-                <span
-                  style="position:absolute;top:-9px;left:-9px;width:20px;height:20px;border-radius:99px;background:var(--surface-card);border:1px solid var(--border-neutral);font-family:var(--font-mono);font-size:10px;color:var(--text-faint);display:flex;align-items:center;justify-content:center"
-                  >${i + 1}</span
-                >
+                <span class="cap-num">${i + 1}</span>
               </div>
-              <div style="flex:1 1 420px">
-                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                  <span style="font-size:19px;font-weight:700;color:var(--text-bright)"
-                    >${v.t(`features.${c.k}.title`)}</span
-                  >
+              <div class="cap-main">
+                <div class="row-title">
+                  <span class="cap-title">${v.t(`features.${c.k}.title`)}</span>
                   ${c.dev ? badge('danger', v.t('badge.indev')) : null}
                 </div>
-                <p
-                  style="font-size:14px;line-height:1.7;color:var(--text-muted);margin:8px 0 14px;max-width:660px"
-                >
-                  ${v.t(`features.${c.k}.body`)}
-                </p>
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <p class="cap-body">${v.t(`features.${c.k}.body`)}</p>
+                <div class="chip-row">
                   ${[1, 2, 3].map(
                     (n) => html`<span class="cn-tag">${v.t(`features.${c.k}.chip${n}`)}</span>`,
                   )}
@@ -770,7 +682,7 @@ function featuresBody(v: SitePageView): SafeHtml {
         title: v.t('features.roadmap.title'),
         lede: v.t('features.roadmap.lede'),
       })}
-      <div class="grid3" style="margin-top:36px">
+      <div class="grid3 mt36">
         ${roadmap.map(([icon, k]) =>
           featureTile(
             icon,
@@ -796,7 +708,9 @@ function pricingTier(o: {
   tierBadge?: SafeHtml;
 }): SafeHtml {
   return html`<div
-    class="cn-card ${o.highlight ? 'cn-card-accent cn-tier-highlight' : 'cn-card-default'} cn-card-pad-lg"
+    class="cn-card ${
+      o.highlight ? 'cn-card-accent cn-tier-highlight' : 'cn-card-default'
+    } cn-card-pad-lg"
   >
     <div class="cn-tier-name">${o.name}${o.tierBadge ?? null}</div>
     <div class="cn-tier-price">
@@ -819,7 +733,7 @@ function proBody(v: SitePageView): SafeHtml {
       title: html`${v.t('pro.title')}`,
       lede: v.t('pro.lede'),
     })}
-    <section class="band wrap" data-reveal style="padding-top:64px">
+    <section class="band wrap pt64" data-reveal>
       <div class="grid3">
         ${featureTile('server', v.t('pro.tile1.title'), v.t('pro.tile1.body'))}
         ${featureTile('layers', v.t('pro.tile2.title'), v.t('pro.tile2.body'))}
@@ -832,7 +746,7 @@ function proBody(v: SitePageView): SafeHtml {
         title: v.t('pro.pricing.title'),
         lede: v.t('pro.pricing.lede'),
       })}
-      <div class="grid3" style="margin-top:36px;align-items:stretch">
+      <div class="grid3 grid-stretch mt36">
         ${pricingTier({
           name: v.t('pro.tier1.name'),
           price: v.t('pro.tier1.price'),
@@ -869,20 +783,13 @@ function proBody(v: SitePageView): SafeHtml {
       </div>
     </section>
     <section class="band wrap" data-reveal>
-      <div
-        class="cn-card cn-card-accent cn-card-pad-lg"
-        style="display:flex;gap:32px;align-items:center;flex-wrap:wrap"
-      >
-        <div style="flex:1 1 320px">
-          <div style="font-size:20px;font-weight:700;color:var(--text-bright)">
-            ${v.t('pro.customer.title')}
-          </div>
-          <p style="font-size:14px;color:var(--text-muted);margin:8px 0 0;line-height:1.6">
-            ${v.t('pro.customer.body')}
-          </p>
+      <div class="cn-card cn-card-accent cn-card-pad-lg card-row">
+        <div class="split-320">
+          <div class="card-title-lg">${v.t('pro.customer.title')}</div>
+          <p class="card-note">${v.t('pro.customer.body')}</p>
         </div>
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-          <div class="cn-field" style="width:220px">
+        <div class="pro-form">
+          <div class="cn-field pro-email">
             <label class="cn-field-label" for="cn-pro-email">${v.t('pro.customer.email')}</label>
             <input id="cn-pro-email" class="cn-input cn-input-md" placeholder="you@example.org" />
           </div>
@@ -917,81 +824,40 @@ function securityBody(v: SitePageView): SafeHtml {
         >${v.t('security.title3')}`,
       lede: v.t('security.lede'),
     })}
-    <section class="band wrap" style="padding-top:48px" data-reveal>
-      <div
-        class="cn-card cn-card-accent cn-card-pad-lg"
-        style="display:flex;gap:36px;flex-wrap:wrap;align-items:center"
-      >
-        <div style="flex:1 1 360px">
-          <div
-            style="width:44px;height:44px;border-radius:var(--radius-sm);background:var(--neon-weak);border:1px solid rgba(232,56,159,.28);display:flex;align-items:center;justify-content:center;color:var(--text-neon);box-shadow:var(--edge-lit),var(--glow-neon-sm)"
-          >
-            ${siteIcon('shield-alert', { size: 22 })}
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0 0">
-            <span style="font-size:22px;font-weight:700;color:var(--text-bright)"
-              >${v.t('security.csam.title')}</span
-            >
+    <section class="band wrap pt48" data-reveal>
+      <div class="cn-card cn-card-accent cn-card-pad-lg sec-csam">
+        <div class="sec-main">
+          <div class="sec-icon">${siteIcon('shield-alert', { size: 22 })}</div>
+          <div class="row-title mt16">
+            <span class="sec-title">${v.t('security.csam.title')}</span>
             ${badge('danger', v.t('badge.indev'))}
           </div>
-          <p
-            style="font-size:15px;line-height:1.65;color:var(--text-muted);margin:10px 0 0;max-width:520px"
-          >
-            ${v.t('security.csam.body')}
-          </p>
+          <p class="sec-body">${v.t('security.csam.body')}</p>
         </div>
-        <div
-          style="flex:1 1 280px;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap"
-        >
+        <div class="sec-flow">
           ${flow.map(
             (f, i) => html`
-              <div
-                style="text-align:center;padding:16px 14px;border-radius:var(--radius-md);border:1px solid ${
-                  f.on ? 'rgba(232,56,159,.45)' : 'var(--border-neutral)'
-                };background:${f.on ? 'var(--neon-weak)' : 'var(--surface-field)'};box-shadow:${
-                  f.on ? 'var(--glow-neon-sm)' : 'none'
-                };min-width:92px"
-              >
-                ${siteIcon(f.i, {
-                  size: 20,
-                  color: f.on ? 'var(--text-neon)' : 'var(--text-muted)',
-                })}
-                <div
-                  style="font-family:var(--font-mono);font-size:11px;color:${
-                    f.on ? 'var(--text-neon)' : 'var(--text-muted)'
-                  };margin-top:8px"
-                >
-                  ${f.t}
-                </div>
+              <div class="flow-node${f.on ? ' on' : ''}">
+                ${siteIcon(f.i, { size: 20 })}
+                <div class="flow-label">${f.t}</div>
               </div>
-              ${
-                i < flow.length - 1
-                  ? siteIcon('arrow-right', { size: 16, color: 'var(--text-faint)' })
-                  : null
-              }
+              ${i < flow.length - 1 ? siteIcon('arrow-right', { size: 16, tone: 'faint' }) : null}
             `,
           )}
         </div>
       </div>
-      <div class="grid3" style="margin-top:16px;align-items:start">
+      <div class="grid3 grid-start mt16">
         ${tiles.map(([icon, k]) =>
           featureTile(icon, v.t(`security.${k}.title`), v.t(`security.${k}.body`)),
         )}
       </div>
     </section>
     <section class="band wrap" data-reveal>
-      <div
-        class="cn-card cn-card-default cn-card-pad-lg"
-        style="display:flex;gap:32px;align-items:center;flex-wrap:wrap"
-      >
-        ${siteIcon('bug', { size: 26, color: 'var(--text-accent)' })}
-        <div style="flex:1 1 320px">
-          <div style="font-size:17px;font-weight:700;color:var(--text-bright)">
-            ${v.t('security.vuln.title')}
-          </div>
-          <p style="font-size:14px;color:var(--text-muted);margin:6px 0 0;line-height:1.6">
-            ${v.t('security.vuln.body')}
-          </p>
+      <div class="cn-card cn-card-default cn-card-pad-lg card-row">
+        ${siteIcon('bug', { size: 26, tone: 'accent' })}
+        <div class="split-320">
+          <div class="card-title-sm">${v.t('security.vuln.title')}</div>
+          <p class="card-note">${v.t('security.vuln.body')}</p>
         </div>
         ${btnLink(
           `/${l}/open-source`,
@@ -1017,18 +883,15 @@ function openSourceBody(v: SitePageView): SafeHtml {
       title: html`${v.t('os.title')}`,
       lede: v.t('os.lede'),
     })}
-    <section class="band wrap" data-reveal style="padding-top:64px">
-      <div class="grid2" style="align-items:stretch">
+    <section class="band wrap pt64" data-reveal>
+      <div class="grid2 grid-stretch">
         <div class="cn-card cn-card-default cn-card-pad-lg">
-          <div style="display:flex;align-items:center;gap:10px">
-            ${siteIcon('github', { size: 22, color: 'var(--text-accent)' })}<span
-              style="font-size:17px;font-weight:700;color:var(--text-bright)"
+          <div class="row-title">
+            ${siteIcon('github', { size: 22, tone: 'accent' })}<span class="card-title-sm"
               >${v.t('os.repo.title')}</span
             >
           </div>
-          <p style="font-size:14px;line-height:1.7;color:var(--text-muted);margin:10px 0 16px">
-            ${v.t('os.repo.body')}
-          </p>
+          <p class="card-para">${v.t('os.repo.body')}</p>
           <a
             class="cn-btn cn-btn-primary cn-btn-md"
             href="${GITHUB_URL}"
@@ -1038,12 +901,8 @@ function openSourceBody(v: SitePageView): SafeHtml {
           >
         </div>
         <div class="cn-card cn-card-default cn-card-pad-lg">
-          <div style="font-size:17px;font-weight:700;color:var(--text-bright)">
-            ${v.t('os.why.title')}
-          </div>
-          <p style="font-size:14px;line-height:1.7;color:var(--text-muted);margin:10px 0 0">
-            ${v.t('os.why.body')}
-          </p>
+          <div class="card-title-sm">${v.t('os.why.title')}</div>
+          <p class="card-para-tight">${v.t('os.why.body')}</p>
         </div>
       </div>
     </section>
@@ -1053,25 +912,17 @@ function openSourceBody(v: SitePageView): SafeHtml {
         title: v.t('os.self.title'),
         lede: v.t('os.self.lede'),
       })}
-      <div class="grid3" style="margin-top:36px">
+      <div class="grid3 mt36">
         ${steps.map(
           ([t, code], i) =>
             html`<div class="cn-card cn-card-default cn-card-pad-md">
-              <div
-                style="font-family:var(--font-mono);font-size:11px;color:var(--text-accent);margin-bottom:8px"
-              >
-                0${i + 1}
-              </div>
-              <div
-                style="font-size:15px;font-weight:700;color:var(--text-bright);margin-bottom:10px"
-              >
-                ${t}
-              </div>
-              <div class="mono-block" style="font-size:12px">${code}</div>
+              <div class="step-num">0${i + 1}</div>
+              <div class="step-title">${t}</div>
+              <div class="mono-block mono-sm">${code}</div>
             </div>`,
         )}
       </div>
-      <p style="font-size:13px;color:var(--text-faint);margin-top:16px">${v.t('os.self.note')}</p>
+      <p class="note-faint">${v.t('os.self.note')}</p>
     </section>
   `;
 }
@@ -1182,10 +1033,10 @@ function legalBody(v: SitePageView): SafeHtml {
       title: html`${v.t('legal.title')}`,
       lede: v.t('legal.lede'),
     })}
-    <section class="wrap" style="padding-top:40px">
+    <section class="wrap pt40">
       ${legalTabs(v)}
-      <div class="cn-card cn-card-quiet cn-card-pad-lg" style="margin-top:24px;max-width:860px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="cn-card cn-card-quiet cn-card-pad-lg legal-card">
+        <div class="chip-row">
           ${badge('outline', v.t('legal.badge.template'))}
           ${draft ? badge('warning', v.t('legal.badge.draft')) : null}
         </div>
