@@ -29,7 +29,7 @@ import {
 } from './client.js';
 import type { LocaleSet } from './i18n.js';
 import { NAV_PAGES, pagePath, HOME, type SitePage } from './pages.js';
-import { GITHUB_URL, type SiteSeoHead } from './seo.js';
+import { CONTACT_EMAIL, GITHUB_URL, type SiteSeoHead } from './seo.js';
 import { shouldLoadAnalytics, type ShareNetwork, type SiteSettings } from '../../site/settings.js';
 
 export interface SitePageView {
@@ -417,12 +417,12 @@ function demoRow(v: SitePageView, m: DemoMessage): SafeHtml {
         m.media
           ? html`<div class="ad-chip">
               ${siteIcon(AD_MEDIA_ICON[m.media] ?? 'file-text', {
-              size: 13,
-              color: 'var(--text-accent)',
-            })}<span>${mediaLabel}</span>${siteIcon('lock', {
-              size: 11,
-              color: 'var(--text-faint)',
-            })}
+                size: 13,
+                color: 'var(--text-accent)',
+              })}<span>${mediaLabel}</span>${siteIcon('lock', {
+                size: 11,
+                color: 'var(--text-faint)',
+              })}
             </div>`
           : null
       }
@@ -854,7 +854,7 @@ function proBody(v: SitePageView): SafeHtml {
             v.t('pro.tier2.f4'),
           ],
           cta: v.t('pro.tier2.cta'),
-          ctaHref: `/${l}/pro`,
+          ctaHref: `mailto:${CONTACT_EMAIL}?subject=Cinderella%20Pro%20waitlist`,
           highlight: true,
           tierBadge: badge('accent', v.t('badge.recommended')),
         })}
@@ -864,7 +864,7 @@ function proBody(v: SitePageView): SafeHtml {
           desc: v.t('pro.tier3.desc'),
           features: [v.t('pro.tier3.f1'), v.t('pro.tier3.f2'), v.t('pro.tier3.f3')],
           cta: v.t('pro.tier3.cta'),
-          ctaHref: `/${l}/pro`,
+          ctaHref: `mailto:${CONTACT_EMAIL}?subject=Cinderella%20Enterprise`,
         })}
       </div>
     </section>
@@ -886,9 +886,11 @@ function proBody(v: SitePageView): SafeHtml {
             <label class="cn-field-label" for="cn-pro-email">${v.t('pro.customer.email')}</label>
             <input id="cn-pro-email" class="cn-input cn-input-md" placeholder="you@example.org" />
           </div>
-          <button type="button" class="cn-btn cn-btn-primary cn-btn-md" disabled>
-            ${v.t('pro.customer.request')}
-          </button>
+          <a
+            class="cn-btn cn-btn-primary cn-btn-md"
+            href="mailto:${CONTACT_EMAIL}?subject=Cinderella%20Pro%20access%20request"
+            >${v.t('pro.customer.request')}</a
+          >
           ${btnLink('/login', 'secondary', 'md', html`${v.t('pro.customer.login')}`)}
         </div>
       </div>
@@ -1113,9 +1115,8 @@ function impressumDoc(v: SitePageView): SafeHtml {
     </p>
     <h3>${v.t('impressum.contact.h')}</h3>
     <p>
-      ${v.t('impressum.contact.email')} ${ph('contact@example.org')}<br />${v.t(
-        'impressum.contact.phone',
-      )}
+      ${v.t('impressum.contact.email')}
+      <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a><br />${v.t('impressum.contact.phone')}
       ${ph('+49 …')}
     </p>
     <h3>${v.t('impressum.responsible.h')}</h3>

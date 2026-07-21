@@ -205,6 +205,11 @@ async function main(): Promise<void> {
       legal.body.includes('e.keller@simplego.dev') &&
       legal.body.includes(locales.t('en', 'impressum.ypo.intro')),
   );
+  check(
+    'legal: real contact email (no placeholder)',
+    legal.body.includes('mailto:cinderella@simplego.dev') &&
+      !legal.body.includes('contact@example.org'),
+  );
   const privacy = await app.inject({ method: 'GET', url: '/en/legal/privacy' });
   check(
     'legal: privacy draft is 200 + noindex + marked draft',
