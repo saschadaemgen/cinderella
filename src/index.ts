@@ -17,6 +17,7 @@ import { loadAdminConfig, loadConfig, redactConfig, type Config } from './config
 import { log, setLogLevel } from './log.js';
 import { startBot, type BotHandle } from './bot/client.js';
 import { flushAvatarToGroups } from './bot/avatar.js';
+import { sendToChat } from './bot/send.js';
 import { registerCapture } from './capture/handler.js';
 import { makePersistenceHooks } from './capture/persist.js';
 import { makeConsentHandler } from './consent/commands.js';
@@ -90,16 +91,17 @@ async function startCaptureWorker(
   try {
     const botHandle = await startBot(cfg, { getFileTimeoutMs: () => settings.fileTimeoutMs });
     const hooks = makePersistenceHooks(cfg);
-    hooks.onCommand = makeConsentHandler(botHandle);
+    hooks.onCommand = makeConsentHandler(botHandle, interaction);
 
     // Natural addressing (CCB-S3-002). The engine only ever decides and replies;
     // consent changes go through the same write path as the slash commands.
     const engine = new InteractionEngine({
       db: getPool(),
       settings: () => interaction.get(),
-      send: async (msg, text) => {
-        await botHandle.chat.apiSendTextReply(msg.raw, text);
-      },
+      // Presentation is the engine's decision (CCB-S3-003); this is only the
+      // transport. Both this and the slash-command path go through sendToChat,
+      // so the two can never disagree about quoting again.
+      send: (msg, text, opts) => sendToChat(botHandle.chat, msg, text, opts),
     });
     hooks.onInteraction = (msg) => engine.handle(msg);
     hooks.isAddressed = (msg) => engine.isExplicitAddress(msg);
@@ -130,6 +132,7 @@ async function startCaptureWorker(
     log.info(
       `Interaction layer: wake word "${ia.wakeWord}", natural addressing ` +
         `${ia.naturalAddressing ? 'on' : 'off'}, slash commands ${ia.slashCommands ? 'on' : 'off'}, ` +
+        `reply mode "${ia.replyMode}"${ia.replyMode === 'mention' && !ia.namePrefix.enabled ? ' (name prefix off)' : ''}, ` +
         `resolver "${activeResolverName()}".`,
     );
 

@@ -36,6 +36,7 @@ import {
   normalizeInteraction,
   type InteractionSettings,
 } from '../src/interaction/settings.js';
+import { formatOutbound, sanitizeDisplayName } from '../src/interaction/reply.js';
 import { setLogLevel } from '../src/log.js';
 
 let failures = 0;
@@ -109,13 +110,18 @@ async function main(): Promise<void> {
   for (const m of await loadMigrationFiles()) await pg.exec(m.sql);
 
   let settings: InteractionSettings = normalizeInteraction({});
+  // `replies` carries the text (what every existing assertion reads); `sent`
+  // carries the same messages WITH their transport flag, so the presentation
+  // rules of CCB-S3-003 can be asserted without weakening anything above.
   const replies: string[] = [];
+  const sent: { text: string; quote: boolean }[] = [];
 
   const engine = new InteractionEngine({
     db,
     settings: () => settings,
-    send: async (_msg, text) => {
+    send: async (_msg, text, opts) => {
       replies.push(text);
+      sent.push({ text, quote: opts.quote });
       return Promise.resolve();
     },
     now: clock.now,
@@ -126,10 +132,11 @@ async function main(): Promise<void> {
   async function say(
     text: string,
     opts: { member?: string; group?: number; quotedFromBot?: boolean } = {},
-  ): Promise<{ handled: boolean; replies: string[] }> {
+  ): Promise<{ handled: boolean; replies: string[]; sent: { text: string; quote: boolean }[] }> {
     replies.length = 0;
+    sent.length = 0;
     const handled = await engine.handle(makeMessage(text, opts));
-    return { handled, replies: [...replies] };
+    return { handled, replies: [...replies], sent: [...sent] };
   }
 
   /** Resets conversational state between scenarios by moving past every window. */
@@ -327,7 +334,7 @@ async function main(): Promise<void> {
 
   const ask = await say('Cinderella publish me');
   check('"Cinderella publish me" is handled as a control message', ask.handled);
-  check('she asks for confirmation', ask.replies[0]?.includes('Say **yes**') === true);
+  check('she asks for confirmation', ask.replies[0]?.includes('Say *yes*') === true);
   check('nothing is published yet', (await consentRow(ALICE)).optedIn === false);
 
   const confirm = await say('yes');
@@ -345,7 +352,7 @@ async function main(): Promise<void> {
 
   coolDown();
   const askOut = await say('Cinderella, can you unpublish me?');
-  check('unpublish also asks first', askOut.replies[0]?.includes('Say **yes**') === true);
+  check('unpublish also asks first', askOut.replies[0]?.includes('Say *yes*') === true);
   check('still opted in while unconfirmed', (await consentRow(ALICE)).revoked === false);
   const confirmOut = await say('yes');
   check(
@@ -369,7 +376,7 @@ async function main(): Promise<void> {
   const askTypo = await say('hi cinderella publsh me');
   check(
     'typos in the wake word AND the instruction still reach the confirmation',
-    askTypo.replies[0]?.includes('Say **yes**') === true,
+    askTypo.replies[0]?.includes('Say *yes*') === true,
   );
   await say('yep');
   check('a fuzzy affirmation ("yep") confirms', (await consentRow(ALICE)).optedIn === true);
@@ -411,7 +418,7 @@ async function main(): Promise<void> {
   clock.advanceSeconds(30);
   const inWindow = await say('publish me');
   check('a follow-up without the wake word works inside the window', inWindow.handled);
-  check('it reaches the confirmation', inWindow.replies[0]?.includes('Say **yes**') === true);
+  check('it reaches the confirmation', inWindow.replies[0]?.includes('Say *yes*') === true);
 
   coolDown();
   await say('Cinderella what can you do');
@@ -423,7 +430,7 @@ async function main(): Promise<void> {
   coolDown();
   const replyToBot = await say('publish me', { quotedFromBot: true });
   check('a direct reply to one of her messages needs no wake word', replyToBot.handled);
-  check('and it reaches the confirmation', replyToBot.replies[0]?.includes('Say **yes**') === true);
+  check('and it reaches the confirmation', replyToBot.replies[0]?.includes('Say *yes*') === true);
 
   coolDown();
   await say('Cinderella what can you do');
@@ -446,7 +453,7 @@ async function main(): Promise<void> {
   const realInstruction = await say('publish me');
   check(
     'but a real instruction inside the window still works',
-    realInstruction.replies[0]?.includes('Say **yes**') === true,
+    realInstruction.replies[0]?.includes('Say *yes*') === true,
   );
 
   /* ── 8. Read-only intents ──────────────────────────────────────────────── */
@@ -589,7 +596,7 @@ async function main(): Promise<void> {
   const properName = await say('Cinderella publish me');
   check(
     'using her proper name works normally again',
-    properName.replies[0]?.includes('Say **yes**') === true,
+    properName.replies[0]?.includes('Say *yes*') === true,
   );
 
   settings = normalizeInteraction({
@@ -613,7 +620,7 @@ async function main(): Promise<void> {
   const germanAsk = await say('Cinderella veröffentliche mich');
   check(
     'a German instruction is answered in German',
-    germanAsk.replies[0]?.includes('Sag **ja**') === true,
+    germanAsk.replies[0]?.includes('Sag *ja*') === true,
   );
   const germanConfirm = await say('ja');
   check(
@@ -654,7 +661,7 @@ async function main(): Promise<void> {
   coolDown();
   await clearConsent(ALICE);
   const renamed = await say('Aschenputtel publish me');
-  check('the renamed wake word is heard', renamed.replies[0]?.includes('Say **yes**') === true);
+  check('the renamed wake word is heard', renamed.replies[0]?.includes('Say *yes*') === true);
   coolDown();
   const oldName = await say('Cinderella publish me');
   check('the old name no longer addresses her', !oldName.handled && oldName.replies.length === 0);
@@ -741,9 +748,182 @@ async function main(): Promise<void> {
   const slashJournal = await memberConsentHistory(db, BOB);
   check('and is journalled with its source', slashJournal[0]?.source === 'slash');
 
-  /* ── 14. Capture pipeline integration ──────────────────────────────────── */
+  /* ── 14. Reply presentation (CCB-S3-003) ──────────────────────────────── */
 
-  section('14. Capture pipeline — instructions are not archived');
+  section('14. Reply presentation — no quote clutter, correct markdown');
+
+  // The markup guard. SimpleX renders SINGLE-character delimiters (*bold*,
+  // _italic_, ~strike~, `code`, #secret#); DOUBLING any of them makes the
+  // delimiters render literally. Verified directly against the 6.5.4 core.
+  // This check exists so a CommonMark habit cannot creep back into the copy.
+  // All five delimiters, doubled — not just the CommonMark-shaped ones, so the
+  // guard covers the rule it states rather than the mistake we happened to make.
+  const DOUBLED = /\*\*|__|~~|``|##/;
+  const shipped = normalizeInteraction({});
+  const badMarkup: string[] = [];
+  for (const [lang, strings] of Object.entries(shipped.persona)) {
+    for (const [key, value] of Object.entries(strings)) {
+      if (DOUBLED.test(value)) badMarkup.push(`persona.${lang}.${key}`);
+    }
+  }
+  for (const [lang, list] of Object.entries(shipped.retorts)) {
+    list.forEach((value, i) => {
+      if (DOUBLED.test(value)) badMarkup.push(`retorts.${lang}[${i}]`);
+    });
+  }
+  for (const [lang, tpl] of Object.entries(shipped.namePrefix.templates)) {
+    if (DOUBLED.test(tpl)) badMarkup.push(`namePrefix.${lang}`);
+  }
+  check(
+    'no persona string, retort or prefix uses a DOUBLED markdown delimiter',
+    badMarkup.length === 0,
+    badMarkup.join(', '),
+  );
+  check(
+    'the confirmation prompts use single-asterisk bold, which SimpleX renders',
+    shipped.persona['en']?.publishConfirm.includes('*yes*') === true &&
+      shipped.persona['de']?.publishConfirm.includes('*ja*') === true,
+  );
+  check(
+    'the first retort uses single-asterisk bold in both languages',
+    shipped.retorts['en']?.[0]?.includes('*Cinderella*') === true &&
+      shipped.retorts['de']?.[0]?.includes('*Cinderella*') === true,
+  );
+
+  // Presentation defaults.
+  check('the shipped reply mode is the non-quoting one', shipped.replyMode === 'plain');
+  check(
+    'an unknown reply mode falls back to plain',
+    normalizeInteraction({ replyMode: 'bogus' }).replyMode === 'plain',
+  );
+  check(
+    'the name prefix ships enabled with a {name} template',
+    shipped.namePrefix.enabled && shipped.namePrefix.templates['en']?.includes('{name}') === true,
+  );
+
+  settings = normalizeInteraction({});
+  coolDown();
+  await clearConsent(ALICE);
+
+  const plainAsk = await say('Cinderella publish me');
+  check('plain mode does not quote', plainAsk.sent[0]?.quote === false);
+  check('plain mode adds no name prefix', plainAsk.sent[0]?.text.startsWith('🕯️') === true);
+  const plainOutcome = await say('yes');
+  check('a consent outcome does not quote either', plainOutcome.sent[0]?.quote === false);
+
+  settings = normalizeInteraction({ ...settings, replyMode: 'mention' });
+  coolDown();
+  await clearConsent(ALICE);
+  const mentionAsk = await say('Cinderella publish me');
+  check(
+    'mention mode opens with the member name',
+    mentionAsk.sent[0]?.text.startsWith('Alice, 🕯️') === true,
+    mentionAsk.sent[0]?.text.slice(0, 24),
+  );
+  check('mention mode still does not quote', mentionAsk.sent[0]?.quote === false);
+
+  settings = normalizeInteraction({
+    ...settings,
+    replyMode: 'mention',
+    namePrefix: { enabled: false, templates: {} },
+  });
+  coolDown();
+  const prefixOff = await say('Cinderella what can you do');
+  check(
+    'the name prefix can be switched off, leaving mention identical to plain',
+    prefixOff.sent[0]?.text.startsWith('🕯️') === true && prefixOff.sent[0]?.quote === false,
+  );
+
+  settings = normalizeInteraction({ ...settings, replyMode: 'quote' });
+  coolDown();
+  const quotedStatus = await say('Cinderella what do you have on me');
+  check('quote mode restores the previous behaviour', quotedStatus.sent[0]?.quote === true);
+
+  coolDown();
+  await clearConsent(ALICE);
+  const quotedAsk = await say('Cinderella publish me');
+  check(
+    'a confirmation prompt NEVER quotes, even in quote mode',
+    quotedAsk.sent[0]?.quote === false,
+  );
+
+  coolDown();
+  const quotedRetort = await say('Cindy publish me');
+  check('a nickname retort never quotes', quotedRetort.sent[0]?.quote === false);
+
+  // Asserted in MENTION mode with the prefix ENABLED — otherwise "no prefix"
+  // would pass simply because prefixing was off, and the check would be vacuous.
+  settings = normalizeInteraction({
+    ...settings,
+    replyMode: 'mention',
+    namePrefix: { enabled: true, templates: { en: '{name},', de: '{name},' } },
+  });
+  coolDown();
+  const mentionRetort = await say('Cindy publish me');
+  check(
+    'a nickname retort carries no name prefix even when prefixing is on',
+    mentionRetort.sent[0]?.text.startsWith('Alice') === false &&
+      mentionRetort.sent[0]?.quote === false,
+    mentionRetort.sent[0]?.text.slice(0, 20),
+  );
+  // …and the same settings DO prefix a normal answer, proving the mode was live.
+  coolDown();
+  const mentionControl = await say('Cinderella what can you do');
+  check(
+    'the control: mention mode was genuinely active for that retort check',
+    mentionControl.sent[0]?.text.startsWith('Alice, ') === true,
+  );
+
+  settings = normalizeInteraction({});
+
+  // Display names are member-controlled and SimpleX parses formatting in what we
+  // send. A paired delimiter in a name would open a span (verified: `#Robin#`
+  // renders as a spoiler), which would hide the very name the prefix exists to show.
+  check(
+    'a display name cannot inject formatting into the prefix',
+    sanitizeDisplayName('#Robin#') === 'Robin' &&
+      sanitizeDisplayName('Ro*bin') === 'Robin' &&
+      sanitizeDisplayName('a`b~c') === 'abc',
+  );
+  check(
+    'a display name cannot break the reply across lines',
+    sanitizeDisplayName('Bob\nEvil') === 'Bob Evil',
+  );
+  check(
+    'underscores survive (they do not italicise inside a word)',
+    sanitizeDisplayName('sascha_d') === 'sascha_d',
+  );
+  check('an over-long display name is bounded', sanitizeDisplayName('x'.repeat(200)).length === 64);
+
+  // The pure formatter, directly.
+  check(
+    'formatOutbound: plain leaves the body untouched',
+    formatOutbound('body', { mode: 'plain', prefixTemplate: '{name},', displayName: 'Alice' })
+      .text === 'body',
+  );
+  check(
+    'formatOutbound: mention adds exactly one space after the prefix',
+    formatOutbound('body', { mode: 'mention', prefixTemplate: '{name},', displayName: 'Alice' })
+      .text === 'Alice, body',
+  );
+  check(
+    'formatOutbound: allowQuote=false beats quote mode',
+    formatOutbound('body', {
+      mode: 'quote',
+      prefixTemplate: null,
+      displayName: 'Alice',
+      allowQuote: false,
+    }).quote === false,
+  );
+  check(
+    'formatOutbound: a name that sanitises to nothing yields no stray prefix',
+    formatOutbound('body', { mode: 'mention', prefixTemplate: '{name},', displayName: '###' })
+      .text === 'body',
+  );
+
+  /* ── 15. Capture pipeline integration ──────────────────────────────────── */
+
+  section('15. Capture pipeline — instructions are not archived');
 
   settings = normalizeInteraction({});
   coolDown();

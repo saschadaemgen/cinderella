@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -52,8 +52,9 @@ Consent is the product's legal backbone, and the command surface is deliberately
 
 Slash commands are no longer the only way in, but nothing about the **envelope** changed:
 natural addressing reads the same `newChatItems` group items, through the same
-`parseGroupMessage` filter, and replies with the same `apiSendTextReply(msg.raw, …)`.
-No new SimpleX surface, no new event, no new command mechanism.
+`parseGroupMessage` filter, and answers into the same group chat. No new SimpleX surface,
+no new event, no new command mechanism. (How those answers are SENT changed in CCB-S3-003 —
+see §3c.)
 
 Three wire-level facts are worth recording:
 
@@ -66,12 +67,89 @@ Three wire-level facts are worth recording:
 - **Command-shaped text never enters the conversational path.** A message whose text begins
   with `/` is handled by the slash path or not at all (`src/interaction/engine.ts`). Without
   this, a disabled `/publish` could still be triggered through the follow-up window.
-- **Persona strings are sent verbatim as plain text.** SimpleX renders no markdown of its own,
-  so the `**yes**` emphasis in the shipped copy travels literally, exactly as the briefing
-  specified it. Operators editing persona strings are editing what members literally see.
+- **Persona strings are sent verbatim, and the RECEIVER formats them.** The bot hands the core
+  a plain string; the core stores exactly that (`{"type":"text","text":"…"}`, no parsed
+  formatting) and each receiving client parses the markup for display. An earlier version of
+  this document concluded from the first half of that sentence that "SimpleX renders no
+  markdown" — which is false, and is what shipped literal asterisks to a live group. See §3b
+  for what the parser actually accepts.
 
 Because attachments are content rather than instructions, the engine ignores any message with
 a file or a non-`text` type — a photo captioned "publish me" is not a consent decision.
+
+## 3b. SimpleX message formatting — single-character delimiters (verified)
+
+SimpleX chat renders its own markup, and it is **not CommonMark**. Delimiters are single
+characters, and **doubling any of them disables the format** and prints the delimiters
+literally.
+
+| Format | Delimiter | Example | Renders as |
+| --- | --- | --- | --- |
+| bold | `*` | `*yes*` | **yes** |
+| italic | `_` | `_maybe_` | _maybe_ |
+| strikethrough | `~` | `~gone~` | ~~gone~~ |
+| code / snippet | `` ` `` | `` `code` `` | monospace |
+| secret / spoiler | `#` | `#hidden#` | hidden until tapped |
+| coloured | `!<digit> … !` | `!1 red!` | coloured text |
+| link | none | `https://example.org` | auto-detected |
+| mention | `@` | `@alice` | member mention |
+
+**How this was established.** Two independent methods, in agreement (CCB-S3-003):
+
+1. The embedded 6.5.4 core was booted against a throwaway database and asked to parse each
+   candidate string; the core's own `chatItem.formattedText` was read back. Note the oracle is
+   `chatItem.formattedText`, a SIBLING of `content` — `content.msgContent` echoes the raw text
+   unchanged and tells you nothing about parsing.
+2. The parser source `Simplex.Chat.Markdown` at tag `v6.5.4` (matching the GHC symbols in the
+   shipped `libsimplex.dll`) and its test suite were read.
+
+**The decisive observation.** `x **dbl** and *sgl* y` parses to
+`[{"text":"x **dbl** and "},{"format":{"type":"bold"},"text":"sgl"},{"text":" y"}]` — the
+single-asterisk word became bold while the double-asterisk word survived as literal text,
+asterisks included. `**bold**`, `__ital__` and `~~strike~~` all parse to *no formatting at all*.
+
+Boundary rules that matter when writing copy, all observed directly:
+
+- Multi-word spans work: `*two words*` is bold.
+- Whitespace just inside a delimiter kills the span: `* bold *` is literal.
+- Punctuation immediately after a closing delimiter is fine: `*ja*,` and `*Cinderella*.` both
+  format. (Every shipped string was run through the real parser before release.)
+- Underscores inside a word do not italicise, so `snake_case` is safe.
+- A **paired** delimiter in a member's display name will format: a member called `#Robin#`
+  would render as a spoiler span. `sanitizeDisplayName` in `src/interaction/reply.ts` strips
+  `*`, `~`, `` ` `` and `#` from names used in the mention prefix for exactly this reason.
+
+`scripts/verify-interaction.ts` fails if any shipped persona string, retort or prefix template
+contains a doubled delimiter, so this cannot silently regress.
+
+## 3c. Outbound replies: plain by default, quoting is opt-in (CCB-S3-003)
+
+Two SDK calls produce visibly different messages in the group:
+
+- `apiSendTextMessage(chatInfo, text)` with no `inReplyTo` — a **normal group message**.
+- `apiSendTextReply(chatItem, text)` — a **quoting reply**: SimpleX repeats the quoted
+  message above the answer.
+
+Until CCB-S3-003 every reply used the second form, so each answer carried a copy of the
+member's message. In the live group that meant 30 of the bot's 33 sent items were quoting
+replies (the only exceptions being the join welcome and two avatar-flush markers), which read
+as duplicated, assembled noise to members not part of the exchange.
+
+Both the interaction engine and the slash-command handler now go through one transport,
+`sendToChat` (`src/bot/send.ts`), which picks the call from a single boolean. The choice is
+made by `formatOutbound` (`src/interaction/reply.ts`) from the admin `replyMode` setting:
+
+| Mode | Transport | Text |
+| --- | --- | --- |
+| `plain` (default) | `apiSendTextMessage` | the reply body |
+| `mention` | `apiSendTextMessage` | `<name>, ` + the reply body |
+| `quote` | `apiSendTextReply` | the reply body |
+
+Two rules override the mode: **consent confirmation prompts and slash-command confirmations
+never quote** in any mode, and **nickname retorts never quote and never carry a name prefix**
+(a retort is a snub, not an address). If the chat reference is somehow missing, `sendToChat`
+falls back to the quoting form rather than dropping the message — cluttered is recoverable,
+an unsent consent confirmation is not.
 
 ## 4. There is no private per-member channel — consent is group-only, and confirmations are public
 

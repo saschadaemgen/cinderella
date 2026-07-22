@@ -16,10 +16,12 @@
 import type { FastifyInstance } from 'fastify';
 import {
   DEFAULT_INTERACTION,
+  REPLY_MODES,
   PERSONA_KEYS,
   SHIPPED_LANGS,
   type InteractionSettings,
   type PersonaKey,
+  type ReplyMode,
 } from '../../interaction/settings.js';
 import { activeResolverName } from '../../interaction/resolver.js';
 import { html, page, raw, type SafeHtml } from '../html.js';
@@ -47,6 +49,17 @@ function numberField(name: string, value: number, min: number, max: number, step
     value="${String(value)}"
     class="${INPUT_CLS} sm:w-40"
   />`;
+}
+
+function selectField(name: string, current: string, options: [string, string][]): SafeHtml {
+  return html`<select name="${name}" class="${INPUT_CLS}">
+    ${options.map(
+      ([value, label]) =>
+        html`<option value="${value}" ${value === current ? raw('selected') : ''}>
+          ${label}
+        </option>`,
+    )}
+  </select>`;
 }
 
 function checkbox(name: string, label: string, checked: boolean): SafeHtml {
@@ -91,6 +104,12 @@ const PERSONA_META: Record<PersonaKey, { label: string; vars: string }> = {
   undoNothing: { label: 'Undo — nothing to undo', vars: '' },
   cancelled: { label: 'Confirmation declined', vars: '' },
   help: { label: 'Help', vars: '{wake}' },
+};
+
+const REPLY_MODE_LABELS: Record<ReplyMode, string> = {
+  plain: 'Plain — a normal group message (recommended)',
+  mention: "Mention — a normal message, opened with the member's name",
+  quote: "Quote — repeats the member's message above the answer",
 };
 
 const LANG_LABELS: Record<string, string> = { en: 'English', de: 'Deutsch' };
@@ -193,6 +212,46 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
             ${saveButton()}
           `,
         ),
+      );
+
+      const answering = card(
+        'How she answers',
+        html`<p class="mb-3 text-sm text-slate-500">
+            She used to quote the message she was answering, which repeated the member's words above
+            every reply and read as duplicated noise to everyone else in the group. She now sends
+            plain messages. Confirmation prompts never quote, whatever this is set to.
+          </p>
+          ${form(
+            'reply',
+            html`
+              ${labelled(
+                'Reply mode',
+                selectField(
+                  'replyMode',
+                  s.replyMode,
+                  // Derived from REPLY_MODES so a mode can never be added to the
+                  // model and silently go missing from the console.
+                  REPLY_MODES.map((m) => [m, REPLY_MODE_LABELS[m]] as [string, string]),
+                ),
+                'Plain and Mention both keep the group readable. Quote is the old behaviour.',
+              )}
+              ${checkbox(
+                'namePrefixEnabled',
+                'Use the name prefix (Mention mode only)',
+                s.namePrefix.enabled,
+              )}
+              ${Object.keys(s.namePrefix.templates)
+                .sort()
+                .map((lang) =>
+                  labelled(
+                    `Name prefix — ${langLabel(lang)}`,
+                    textField(`prefix:${lang}`, s.namePrefix.templates[lang] as string),
+                    "{name} is the member's display name. A single space is added after it automatically.",
+                  ),
+                )}
+              ${saveButton()}
+            `,
+          )}`,
       );
 
       const safety = card(
@@ -303,8 +362,9 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
       const reset = card(
         'Reset',
         html`<p class="mb-3 text-sm text-slate-500">
-            Restores every setting on this page — wake word, greetings, limits, persona strings and
-            retorts — to the values Cinderella ships with. Consent data is untouched.
+            Restores every setting on this page — wake word, greetings, reply mode, name prefix,
+            limits, persona strings and retorts — to the values Cinderella ships with. Consent data
+            is untouched.
           </p>
           ${form(
             'reset',
@@ -321,7 +381,7 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         ${pageHeader('Interaction', 'How she is addressed, what she understands, and how she speaks')}
         ${notice} ${intro}
         <div class="flex flex-col gap-6">
-          ${addressing} ${safety} ${nicknames} ${personaCards} ${retortCards} ${reset}
+          ${addressing} ${answering} ${safety} ${nicknames} ${personaCards} ${retortCards} ${reset}
         </div>
       `;
 
@@ -359,6 +419,14 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
           words: bodyString(body, 'words'),
           spamLimit: bodyString(body, 'spamLimit'),
         };
+      } else if (section === 'reply') {
+        next['replyMode'] = bodyString(body, 'replyMode');
+        const templates: Record<string, string> = {};
+        for (const key of Object.keys(body)) {
+          if (key.startsWith('prefix:'))
+            templates[key.slice('prefix:'.length)] = bodyString(body, key);
+        }
+        next['namePrefix'] = { enabled: 'namePrefixEnabled' in body, templates };
       } else if (section.startsWith('persona:')) {
         const lang = section.slice('persona:'.length);
         const persona = (next['persona'] ?? {}) as Record<string, Record<string, string>>;

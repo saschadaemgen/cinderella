@@ -655,6 +655,55 @@ async function main(): Promise<void> {
   const iaReset = await getPage('/interaction');
   check('reset restores the shipped wake word', iaReset.body.includes('value="Cinderella"'));
 
+  // Reply presentation (CCB-S3-003).
+  check(
+    'interaction page offers all three reply modes, defaulting to the non-quoting one',
+    iaReset.body.includes('name="replyMode"') &&
+      iaReset.body.includes('value="plain"') &&
+      iaReset.body.includes('value="mention"') &&
+      iaReset.body.includes('value="quote"') &&
+      /<option value="plain"[^>]*selected/.test(iaReset.body),
+  );
+  const replyRes = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: {
+      _csrf: iaCsrf,
+      section: 'reply',
+      replyMode: 'mention',
+      namePrefixEnabled: 'on',
+      'prefix:en': '{name} —',
+      'prefix:de': '{name},',
+    },
+    headers: authed,
+  });
+  check('reply-mode edit redirects', replyRes.statusCode === 302);
+  const iaReply = await pg.query<{
+    value: {
+      replyMode: string;
+      namePrefix: { enabled: boolean; templates: Record<string, string> };
+    };
+  }>(`SELECT value FROM settings WHERE key = 'interaction'`);
+  check('reply mode persisted', iaReply.rows[0]?.value.replyMode === 'mention');
+  check(
+    'the name prefix template persisted',
+    iaReply.rows[0]?.value.namePrefix.templates['en'] === '{name} —',
+  );
+  const prefixOffRes = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: { _csrf: iaCsrf, section: 'reply', replyMode: 'plain', 'prefix:en': '{name},' },
+    headers: authed,
+  });
+  check('reply-mode edit without the checkbox redirects', prefixOffRes.statusCode === 302);
+  const iaPrefixOff = await pg.query<{ value: { namePrefix: { enabled: boolean } } }>(
+    `SELECT value FROM settings WHERE key = 'interaction'`,
+  );
+  check(
+    'unticking the name prefix saves as OFF',
+    iaPrefixOff.rows[0]?.value.namePrefix.enabled === false,
+  );
+
   const iaNoAuth = await app.inject({ method: 'GET', url: '/interaction' });
   check(
     'interaction console is unreachable unauthenticated',

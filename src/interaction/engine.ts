@@ -43,13 +43,17 @@ import {
   type PersonaKey,
 } from './settings.js';
 import { fuzzyEquals, guessLanguage, normTokens } from './text.js';
+import { formatOutbound, type OutboundReply } from './reply.js';
 
 export interface InteractionDeps {
   db: Queryable;
   /** Live settings — read per message, never cached across edits. */
   settings: () => InteractionSettings;
-  /** Sends a reply in the chat the message came from. */
-  send: (msg: CapturedMessage, text: string) => Promise<void>;
+  /**
+   * Sends a reply in the chat the message came from. `opts.quote` decides
+   * whether it appears as a quoting reply (CCB-S3-003).
+   */
+  send: (msg: CapturedMessage, text: string, opts: { quote: boolean }) => Promise<void>;
   /** Injectable clock (harness). */
   now?: () => number;
   /** Injectable randomness for retort rotation (harness). */
@@ -69,6 +73,12 @@ interface ReplyOptions {
    * (two messages per change), so exempting them cannot be used to flood.
    */
   bypassLimit?: boolean;
+  /**
+   * Never quote, whatever `replyMode` says (CCB-S3-003 §1). Set on the consent
+   * confirmation prompts: they may carry a name prefix so the member knows the
+   * prompt is theirs, but must not repeat their message back at the group.
+   */
+  neverQuote?: boolean;
 }
 
 /**
@@ -221,12 +231,15 @@ export class InteractionEngine {
           // The offer lives exactly as long as the conversation does.
           expiresAt: now + Math.max(followUpMs, 15_000),
         });
+        // §1 — a confirmation prompt may carry a name prefix so the member knows
+        // the prompt is theirs, but must never quote them back to the group.
         await this.reply(
           msg,
           s,
           lang,
           result.intent === 'PUBLISH' ? 'publishConfirm' : 'unpublishConfirm',
           {},
+          { neverQuote: true },
         );
         return true;
       }
@@ -376,7 +389,10 @@ export class InteractionEngine {
     const index = this.state.pickRetort(msg.groupId, list.length, this.random);
     const retort = index >= 0 ? list[index] : undefined;
     if (retort) {
-      await this.sendReply(msg, s, retort, { openWindow: false });
+      // A retort is a snub, not an address: no name prefix (that would read as
+      // her talking TO the member, contradicting "never opens a conversation")
+      // and no quote.
+      await this.sendReply(msg, s, { text: retort, quote: false }, { openWindow: false });
     }
     return true;
   }
@@ -401,6 +417,13 @@ export class InteractionEngine {
     );
   }
 
+  /** The prefix template for a language, or null when prefixing is switched off. */
+  private prefixTemplate(s: InteractionSettings, lang: string): string | null {
+    if (!s.namePrefix.enabled) return null;
+    const t = s.namePrefix.templates;
+    return t[lang] ?? t[s.defaultLanguage] ?? t['en'] ?? null;
+  }
+
   private async reply(
     msg: CapturedMessage,
     s: InteractionSettings,
@@ -409,13 +432,24 @@ export class InteractionEngine {
     vars: Record<string, string | number>,
     opts: ReplyOptions = {},
   ): Promise<void> {
-    await this.sendReply(msg, s, fillPersona(this.persona(s, lang, key), vars), opts);
+    // The body's own placeholders are filled FIRST and separately from the name
+    // prefix — see the {name} footgun note in reply.ts. Formatting deliberately
+    // happens here rather than inside sendReply's try/catch, so a broken prefix
+    // template fails loudly instead of being swallowed as a failed send.
+    const body = fillPersona(this.persona(s, lang, key), vars);
+    const out = formatOutbound(body, {
+      mode: s.replyMode,
+      prefixTemplate: this.prefixTemplate(s, lang),
+      displayName: msg.senderDisplayName,
+      allowQuote: opts.neverQuote !== true,
+    });
+    await this.sendReply(msg, s, out, opts);
   }
 
   private async sendReply(
     msg: CapturedMessage,
     s: InteractionSettings,
-    text: string,
+    out: OutboundReply,
     opts: ReplyOptions,
   ): Promise<void> {
     const now = this.now();
@@ -439,7 +473,7 @@ export class InteractionEngine {
     }
 
     try {
-      await this.deps.send(msg, text);
+      await this.deps.send(msg, out.text, { quote: out.quote });
     } catch (err) {
       log.warn(
         `Interaction: failed to reply to member ${msg.senderMemberId}: ${

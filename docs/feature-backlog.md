@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -201,6 +201,18 @@ The history below records the pre-CCB-S2-003 state.
       windows, threshold, affirmations, rate limits, persona strings per language, retorts,
       nicknames) with a restore-defaults action; audited, live, no restart.
       See [`src/web/views/interaction.ts`](../src/web/views/interaction.ts).
+- [x] **Reply presentation (CCB-S3-003)** — she answers as a plain group message instead of
+      quoting the member back at the group; `replyMode` (`plain` default / `mention` /
+      `quote`) and a localised, disableable name prefix are admin-editable. Confirmation
+      prompts and nickname retorts never quote. Persona markup corrected to the delimiters
+      SimpleX actually renders (`*bold*`, not `**bold**`), with a harness guard against
+      regression. See [`src/interaction/reply.ts`](../src/interaction/reply.ts) and
+      [`src/bot/send.ts`](../src/bot/send.ts).
+- [ ] **Placeholder markup injection** — `{name}`-style substitutions put member-controlled
+      text into a message SimpleX will parse. The mention prefix strips the pairing delimiters
+      (`sanitizeDisplayName`), but other placeholders (`{query}` in the search answer, `{name}`
+      in the third-party refusal) do not. Cosmetic today; worth a shared escape helper if more
+      placeholders appear.
 - [ ] **More languages** — only EN and DE ship with persona copy. The structure takes a new
       language as a key in the persona/retort maps; the resolver's keyword sets would need the
       matching additions.

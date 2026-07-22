@@ -59,7 +59,31 @@ export interface NicknameSettings {
   spamLimit: number;
 }
 
+/**
+ * How her answers appear in the group (CCB-S3-003 §1).
+ *
+ * `quote` was the original behaviour and turned out to be the wrong default: it
+ * repeats the member's message above every answer, so a short exchange reads as
+ * a wall of duplicated text to everyone else in the group.
+ */
+export const REPLY_MODES = ['plain', 'mention', 'quote'] as const;
+export type ReplyMode = (typeof REPLY_MODES)[number];
+
+export interface NamePrefixSettings {
+  /** Whether `mention` mode actually prefixes. Off → `mention` behaves as `plain`. */
+  enabled: boolean;
+  /** Per-language prefix template. `{name}` is the member's display name. */
+  templates: Record<string, string>;
+}
+
 export interface InteractionSettings {
+  /**
+   * Whether her replies quote the triggering message, carry the member's name,
+   * or are simply plain group messages (CCB-S3-003).
+   */
+  replyMode: ReplyMode;
+  /** The name prefix used in `mention` mode. */
+  namePrefix: NamePrefixSettings;
   /** Natural addressing on/off (§7). Off → only slash commands reach her. */
   naturalAddressing: boolean;
   /** Slash commands on/off (§7). Off → `/publish` stops being recognised. */
@@ -95,12 +119,12 @@ export interface InteractionSettings {
 
 const PERSONA_EN: PersonaStrings = {
   publishConfirm:
-    '🕯️ You would like your words carried into the light? Say **yes** and it is done. ' +
+    '🕯️ You would like your words carried into the light? Say *yes* and it is done. ' +
     'Only what you speak from this moment on, and you may take it back whenever you wish.',
   published:
     '✨ Done. Your words now shine in the public archive. Say the word and I will hide them again.',
   unpublishConfirm:
-    '🌙 You would like your words to step back into the dark? Say **yes** and they leave the ' +
+    '🌙 You would like your words to step back into the dark? Say *yes* and they leave the ' +
     'archive at once.',
   unpublished:
     '🌙 Back into the dark they go. Your words are out of the archive, and nothing new will ' +
@@ -127,13 +151,13 @@ const PERSONA_EN: PersonaStrings = {
 
 const PERSONA_DE: PersonaStrings = {
   publishConfirm:
-    '🕯️ Du möchtest, dass ich deine Worte ans Licht trage? Sag **ja**, und es ist getan. ' +
+    '🕯️ Du möchtest, dass ich deine Worte ans Licht trage? Sag *ja*, und es ist getan. ' +
     'Nur das, was du ab jetzt sprichst, und du kannst es jederzeit zurücknehmen.',
   published:
     '✨ Erledigt. Deine Worte leuchten nun im öffentlichen Archiv. Ein Wort von dir, und ich ' +
     'verberge sie wieder.',
   unpublishConfirm:
-    '🌙 Du möchtest, dass deine Worte zurück ins Dunkel treten? Sag **ja**, und sie verlassen ' +
+    '🌙 Du möchtest, dass deine Worte zurück ins Dunkel treten? Sag *ja*, und sie verlassen ' +
     'das Archiv sofort.',
   unpublished:
     '🌙 Zurück ins Dunkel damit. Deine Worte sind aus dem Archiv, und nichts Neues folgt ihnen ' +
@@ -160,7 +184,7 @@ const PERSONA_DE: PersonaStrings = {
 };
 
 const RETORTS_EN = [
-  '🕯️ It is **Cinderella**. Four syllables. You managed three, so you are nearly there.',
+  '🕯️ It is *Cinderella*. Four syllables. You managed three, so you are nearly there.',
   '💅 Cindy? That is the name of someone who works at a nail salon in a strip mall. I run an archive.',
   '🌙 I have a full name. Use it, or I shall start calling you by your first two letters.',
   '⚡ Cindy is what the pumpkin calls me. You are not a pumpkin. Do better.',
@@ -175,7 +199,7 @@ const RETORTS_EN = [
 ];
 
 const RETORTS_DE = [
-  '🕯️ Es heißt **Cinderella**. Vier Silben. Drei hast du geschafft, also fast.',
+  '🕯️ Es heißt *Cinderella*. Vier Silben. Drei hast du geschafft, also fast.',
   '💅 Cindy? So heißt jemand, der im Nagelstudio arbeitet. Ich führe ein Archiv.',
   '🌙 Ich habe einen vollen Namen. Benutze ihn, sonst nenne ich dich bei deinen ersten zwei Buchstaben.',
   '⚡ Cindy nennt mich der Kürbis. Du bist kein Kürbis. Streng dich an.',
@@ -190,6 +214,15 @@ const RETORTS_DE = [
 ];
 
 export const DEFAULT_INTERACTION: InteractionSettings = {
+  // Non-quoting by default (CCB-S3-003). Switch to `mention` to have her address
+  // the member by name, or back to `quote` for the original behaviour.
+  replyMode: 'plain',
+  namePrefix: {
+    enabled: true,
+    // Stored WITHOUT a trailing space; the formatter owns the separator, so an
+    // operator cannot accidentally save a prefix that runs into the sentence.
+    templates: { en: '{name},', de: '{name},' },
+  },
   naturalAddressing: true,
   slashCommands: true,
   wakeWord: 'Cinderella',
@@ -370,13 +403,44 @@ function normalizeRetorts(input: unknown): Record<string, string[]> {
   return out;
 }
 
+/**
+ * Prefix templates per language. Stored trimmed — the formatter contributes the
+ * single separating space — and never empty, because an operator who wants no
+ * prefix turns `enabled` off rather than saving a blank that would silently look
+ * like a bug.
+ */
+function normalizeNamePrefix(input: unknown): Record<string, string> {
+  const src = rec(input);
+  const out: Record<string, string> = {};
+  const fallback = DEFAULT_INTERACTION.namePrefix.templates;
+  for (const lang of SHIPPED_LANGS) {
+    const v = str(src[lang], '', 80).trim();
+    out[lang] = v || (fallback[lang] as string);
+  }
+  for (const [lang, value] of Object.entries(src)) {
+    if (out[lang] || !isLangCode(lang)) continue;
+    const v = str(value, '', 80).trim();
+    if (v) out[lang] = v;
+  }
+  return out;
+}
+
 export function normalizeInteraction(input: unknown): InteractionSettings {
   const d = DEFAULT_INTERACTION;
   const o = rec(input);
   const nick = rec(o['nicknames']);
+  const prefix = rec(o['namePrefix']);
 
   const persona = normalizePersona(o['persona']);
   const retorts = normalizeRetorts(o['retorts']);
+
+  // An unknown or absent mode falls back to the non-quoting default rather than
+  // throwing — this value arrives from a form and from stored JSON written by
+  // older builds, neither of which is trusted.
+  const rawMode = str(o['replyMode'], d.replyMode, 16).trim().toLowerCase();
+  const replyMode: ReplyMode = (REPLY_MODES as readonly string[]).includes(rawMode)
+    ? (rawMode as ReplyMode)
+    : d.replyMode;
 
   // The wake word is the whole addressing model — an empty one would either
   // match nothing or match everything, so it never becomes empty.
@@ -385,6 +449,11 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
   const defaultLanguage = str(o['defaultLanguage'], d.defaultLanguage, 5).trim().toLowerCase();
 
   return {
+    replyMode,
+    namePrefix: {
+      enabled: bool(prefix['enabled'], d.namePrefix.enabled),
+      templates: normalizeNamePrefix(prefix['templates']),
+    },
     naturalAddressing: bool(o['naturalAddressing'], d.naturalAddressing),
     slashCommands: bool(o['slashCommands'], d.slashCommands),
     wakeWord,

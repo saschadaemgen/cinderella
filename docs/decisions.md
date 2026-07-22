@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,35 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-033 — She answers as a plain group message, and her markup follows SimpleX, not CommonMark
+
+**Status: IMPLEMENTED (CCB-S3-003).**
+**Decision.** Bot replies default to a **plain group message**. An admin `replyMode` setting
+offers `plain` (default), `mention` (opens with the member's display name, from a localised
+and disableable prefix template) and `quote` (the previous quoting behaviour). Consent
+confirmation prompts, the slash-command confirmations, and nickname retorts **never quote** in
+any mode. Both the interaction engine and the slash-command handler send through one transport,
+`sendToChat`, so they cannot diverge again. Separately, all persona copy moved from CommonMark
+`**bold**` to SimpleX's `*bold*`, and a harness check fails on any doubled delimiter.
+**Rationale.** Quoting made every answer repeat the member's message, so a two-message exchange
+rendered as four blocks of text to everyone else in the group; at the wire level 30 of the
+bot's 33 sent items were quoting replies. The markup half is a plain defect: SimpleX uses
+single-character delimiters and prints doubled ones literally, so the live group saw `**yes**`
+with visible asterisks. Both were presentation-only bugs, and the fix deliberately touches no
+consent logic — the confirmation handshake, the third-party refusal, the rate limits and the
+follow-up window are unchanged, and the only edit inside those paths is a transport flag.
+**Evidence.** `src/interaction/reply.ts` (pure `formatOutbound` + `sanitizeDisplayName`);
+`src/bot/send.ts`; `src/interaction/settings.ts` (`REPLY_MODES`, `namePrefix`, corrected copy);
+`src/consent/commands.ts`; `src/web/views/interaction.ts` ("How she answers" card);
+`scripts/verify-interaction.ts` §14; `docs/wire-format.md` §3b–§3c.
+**Verification note.** The delimiter set was not assumed. It was established twice
+independently — by booting the embedded 6.5.4 core and reading back its own parse output, and
+by reading `Simplex.Chat.Markdown` at the matching tag — and every shipped string was then run
+through the real parser before release, including the punctuation-adjacent cases (`*ja*,` and
+`*Cinderella*.`) that the source reading alone could not settle.
 
 ---
 

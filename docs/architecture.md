@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -352,6 +352,7 @@ Responsibilities are split so that the later AI swap changes one registration an
 | `resolver.ts` | The **seam**: `resolveIntent` validates every result against the catalog and falls back to the rules if the active resolver fails |
 | `state.ts` | In-process, forgetful conversation state: follow-up windows, pending confirmations, retort rotation, reply rate limits |
 | `engine.ts` | Decides what to do: confirmations, refusals, read-only answers, undo, nickname retorts |
+| `reply.ts` | Pure presentation (CCB-S3-003): whether a reply quotes, and whether it opens with the member's name |
 | `settings.ts` | The admin-editable model + the shipped defaults (persona copy, retorts) |
 
 **Addressing.** A message is addressed to her when it starts with the wake word (a greeting
@@ -369,6 +370,12 @@ nothing more. The engine performs actions, and every consent change goes through
 **Acting is stricter than understanding.** Inside the follow-up window she is hearing messages
 that were never marked for her, so the confidence bar there is raised to 0.8 — above the score
 of a lone keyword. `I'll publish the photos later` is left alone; `publish me` is not.
+
+**One transport.** Both the engine and the slash-command handler send through
+`sendToChat` (`src/bot/send.ts`), which chooses between a plain group message and a quoting
+reply from a single boolean. They used to call the SDK independently, which is how every reply
+came to quote; one seam means they cannot disagree again. Presentation is decided by
+`formatOutbound` (`reply.ts`) from the admin `replyMode` setting — see `wire-format.md` §3c.
 
 **Message flow.** Slash command → `onCommand` (immediate, unchanged). Otherwise → the engine.
 A message that is command-shaped (`/…`) never enters the conversational path, so switching

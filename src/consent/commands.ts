@@ -10,6 +10,9 @@ import { log } from '../log.js';
 import { getPool } from '../db/pool.js';
 import { applyConsentChange } from './apply.js';
 import { status } from '../web/status.js';
+import { sendToChat } from '../bot/send.js';
+import { formatOutbound } from '../interaction/reply.js';
+import { DEFAULT_INTERACTION, type InteractionSettings } from '../interaction/settings.js';
 import type { BotHandle } from '../bot/client.js';
 import type { CapturedMessage } from '../capture/message.js';
 
@@ -42,8 +45,13 @@ const FAILURE_REPLY =
 /**
  * Consent-first welcome message posted to the group on join (briefing §9,
  * Addendum 2 A2.7, Connect & Go-Live C.2). Cinderella's own voice; it is the
- * consent notice that does the legal work — plain text, posted verbatim (SimpleX
- * renders no markdown). Do not paraphrase.
+ * consent notice that does the legal work — posted verbatim. Do not paraphrase.
+ *
+ * NOTE (CCB-S3-003): an earlier version of this comment claimed SimpleX renders
+ * no markdown. That is wrong, and believing it is what shipped literal asterisks
+ * to the live group. SimpleX DOES render single-character delimiters — `*bold*`,
+ * `_italic_`, `~strike~`, backtick code, `#secret#`. This message contains none,
+ * so it is unaffected, but any copy added here must respect that.
  */
 export const WELCOME_MESSAGE = `I'm Cinderella, and yes, I run this place.
 
@@ -58,9 +66,31 @@ No /publish, and you simply talk freely. Nothing leaves this room. Your choice, 
 
 Cinderella`;
 
-async function reply(botHandle: BotHandle, msg: CapturedMessage, text: string): Promise<void> {
+/**
+ * Sends a consent confirmation. These NEVER quote (CCB-S3-003): a `/publish` is
+ * one word, so repeating it above the answer adds nothing but clutter — the same
+ * clutter this briefing removes from the natural-language path. In `mention` mode
+ * the member's name is prefixed instead, which is what ties the notice to them.
+ *
+ * The chat rendering was never the consent record: `consent` and `consent_actions`
+ * are. Do not reintroduce the quote to "prove" who opted in.
+ */
+async function reply(
+  botHandle: BotHandle,
+  msg: CapturedMessage,
+  text: string,
+  s: InteractionSettings,
+): Promise<void> {
   try {
-    await botHandle.chat.apiSendTextReply(msg.raw, text);
+    const out = formatOutbound(text, {
+      mode: s.replyMode,
+      prefixTemplate: s.namePrefix.enabled
+        ? (s.namePrefix.templates[s.defaultLanguage] ?? s.namePrefix.templates['en'] ?? null)
+        : null,
+      displayName: msg.senderDisplayName,
+      allowQuote: false,
+    });
+    await sendToChat(botHandle.chat, msg, out.text, { quote: out.quote });
   } catch (err) {
     log.warn(
       `Failed to send consent confirmation to member ${msg.senderMemberId}: ` +
@@ -75,9 +105,23 @@ async function reply(botHandle: BotHandle, msg: CapturedMessage, text: string): 
  */
 export function makeConsentHandler(
   botHandle: BotHandle,
+  interaction?: { get(): InteractionSettings },
 ): (msg: CapturedMessage, command: ConsentCommand) => Promise<void> {
   return async (msg, command) => {
     const db = getPool();
+    // Read the presentation settings ONCE, up front, and never between recording
+    // a consent change and confirming it: a throw in that gap would send the
+    // failure notice for a decision that was actually written.
+    let presentation = DEFAULT_INTERACTION;
+    try {
+      presentation = interaction?.get() ?? DEFAULT_INTERACTION;
+    } catch (err) {
+      log.warn(
+        `Could not read interaction settings for a consent confirmation; using defaults (${
+          err instanceof Error ? err.message : String(err)
+        }).`,
+      );
+    }
     try {
       // Slash commands stay IMMEDIATE (CCB-S3-002 §4.1) — the confirmation
       // handshake applies to natural language only. They share the write path
@@ -90,7 +134,7 @@ export function makeConsentHandler(
           source: 'slash',
         });
         log.info(`Consent: opt-in recorded for member ${msg.senderMemberId}.`);
-        await reply(botHandle, msg, PUBLISH_REPLY);
+        await reply(botHandle, msg, PUBLISH_REPLY, presentation);
       } else {
         const { hadActive } = await applyConsentChange(db, {
           memberId: msg.senderMemberId,
@@ -101,7 +145,7 @@ export function makeConsentHandler(
         log.info(
           `Consent: opt-out recorded for member ${msg.senderMemberId} (had active consent: ${hadActive}).`,
         );
-        await reply(botHandle, msg, UNPUBLISH_REPLY);
+        await reply(botHandle, msg, UNPUBLISH_REPLY, presentation);
       }
     } catch (err) {
       // Fail loudly toward the member and the operator — never silently drop a
@@ -111,7 +155,7 @@ export function makeConsentHandler(
       status.error(
         `Consent command /${command} failed for member ${msg.senderMemberId}: ${message}`,
       );
-      await reply(botHandle, msg, FAILURE_REPLY);
+      await reply(botHandle, msg, FAILURE_REPLY, presentation);
     }
   };
 }
