@@ -516,16 +516,28 @@ section.pt64{padding-top:64px}
 .pring:hover .pchip.c1{transform:translate(-4px,-7px);border-color:rgba(232,56,159,.7);box-shadow:0 8px 30px rgba(0,0,0,.5),0 0 18px rgba(232,56,159,.5)}
 .pring:hover .pchip.c2{transform:translate(4px,7px);border-color:rgba(69,189,209,.7);box-shadow:0 8px 30px rgba(0,0,0,.5),0 0 18px rgba(69,189,209,.5)}
 @media (prefers-reduced-motion:reduce){.pring:hover img,.pring:hover .pchip.c1,.pring:hover .pchip.c2{transform:none}}
-/* --- Footer menu restyle --- */
-.foot-grid{gap:56px 64px}
-.fcol-title{position:relative;padding-bottom:9px;margin-bottom:16px}
-.fcol-title::after{content:"";position:absolute;left:0;bottom:0;width:26px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--magenta-500),rgba(232,56,159,0))}
+/* --- Footer menu restyle: accent titles, hover shift, light separators --- */
+.foot-grid{gap:56px 0}
+.foot-brand{padding-right:56px}
+.fcol{position:relative;padding-left:32px;padding-right:32px}
+.fcol::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:1px;background:linear-gradient(180deg,transparent,var(--border-strong) 30%,var(--border-strong) 70%,transparent)}
+.fcol-title{position:relative;padding-bottom:10px;margin-bottom:16px;border-bottom:1px solid var(--border-neutral)}
+.fcol-title::after{content:"";position:absolute;left:0;bottom:-1px;width:26px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--magenta-500),rgba(232,56,159,0))}
 .fcol-links{gap:11px}
 .fcol-links a{display:inline-flex;align-items:center;gap:6px;width:max-content;padding:1px 0;border-radius:4px;transition:color var(--duration-fast) var(--ease),transform var(--duration-base) var(--ease-out)}
 .fcol-links a:hover{transform:translateX(3px)}
 .fcol-links a:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .fcol-links a .ext{opacity:.5}
 .fcol-links a:hover .ext{opacity:.9}
+@media (max-width:860px){
+  .foot-grid{gap:0}
+  .foot-brand{padding-right:0;padding-bottom:28px}
+  .fcol{padding:22px 0 0;margin-top:22px;border-top:1px solid var(--border-neutral)}
+  .fcol::before{display:none}
+}
+/* Bigger brand portrait in the footer */
+.wordmark-lg .wm-av{width:72px;height:72px;margin-right:16px;box-shadow:0 0 0 2px var(--magenta-500),0 0 22px rgba(232,56,159,.6)}
+.wordmark-lg .wm-name{font-size:26px}
 `;
 
 /** The complete site stylesheet (emitted once per page under the CSP nonce). */

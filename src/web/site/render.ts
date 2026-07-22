@@ -324,6 +324,8 @@ function footer(v: SitePageView): SafeHtml {
       ${footerCol(v.t('footer.ecosystem'), [
         ['SimpleX Chat', 'https://simplex.chat', true],
         ['Matrix', 'https://matrix.org', true],
+        ['SimpleGo.dev', 'https://simplego.dev', true],
+        ['Cyb3rD3sk.com', 'https://cyb3rd3sk.com', true],
       ])}
       ${footerCol(v.t('footer.legal'), [
         [v.t('footer.legalnotice'), `/${l}/legal`],
