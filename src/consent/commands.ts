@@ -8,7 +8,7 @@
 
 import { log } from '../log.js';
 import { getPool } from '../db/pool.js';
-import { recordOptIn, recordOptOut } from '../db/consent.js';
+import { applyConsentChange } from './apply.js';
 import { status } from '../web/status.js';
 import type { BotHandle } from '../bot/client.js';
 import type { CapturedMessage } from '../capture/message.js';
@@ -79,12 +79,25 @@ export function makeConsentHandler(
   return async (msg, command) => {
     const db = getPool();
     try {
+      // Slash commands stay IMMEDIATE (CCB-S3-002 §4.1) — the confirmation
+      // handshake applies to natural language only. They share the write path
+      // with it so both are journalled and undoable in the same way.
       if (command === 'publish') {
-        await recordOptIn(db, msg.senderMemberId, msg.sentAt);
+        await applyConsentChange(db, {
+          memberId: msg.senderMemberId,
+          at: msg.sentAt,
+          action: 'opt_in',
+          source: 'slash',
+        });
         log.info(`Consent: opt-in recorded for member ${msg.senderMemberId}.`);
         await reply(botHandle, msg, PUBLISH_REPLY);
       } else {
-        const hadActive = await recordOptOut(db, msg.senderMemberId, msg.sentAt);
+        const { hadActive } = await applyConsentChange(db, {
+          memberId: msg.senderMemberId,
+          at: msg.sentAt,
+          action: 'opt_out',
+          source: 'slash',
+        });
         log.info(
           `Consent: opt-out recorded for member ${msg.senderMemberId} (had active consent: ${hadActive}).`,
         );

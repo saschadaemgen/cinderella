@@ -12,8 +12,10 @@ web archive. Standalone — NOT part of CARVILON, CyberDesk, or SimpleGoX.
 
 ## The one rule: consent-first
 
-**Nothing a member posts appears on the public archive unless that member sent
-`/publish`.** This is the product's legal backbone. Publication is _derived_
+**Nothing a member posts appears on the public archive unless that member opted
+in** — by sending `/publish`, or by asking her in plain language and confirming
+when she asks back (CCB-S3-002; both routes share one write path, and consent is
+always first-person). This is the product's legal backbone. Publication is _derived_
 (never a stale flag) from the `consent` table, `sent_at` (forward-only from
 opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 `message_publish_state` / `published_messages` views.
@@ -50,20 +52,23 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 ## Layout
 
 - `src/` — `config.ts`, `log.ts`, `bot/` (core wiring, files, connect, avatar),
-  `capture/` (parse, media, links, persist), `consent/`, `settings/`, `db/`,
+  `capture/` (parse, media, links, persist), `consent/`, `interaction/`
+  (wake word, intent resolver, dialogue engine, persona), `settings/`, `db/`,
   `web/` (server, auth, session, views), `index.ts`.
 - `migrations/` — 001 messages/links · 002 consent+views · 003 admin · 004
   moderation gate · 005 deletion provenance · 006 webauthn + TOTP · 007 admin
-  sessions (persisted across restarts). Runner: `node dist/db/migrate.js`.
+  sessions (persisted across restarts) · 008 content reports · 009 consent action
+  journal (provenance + undo). Runner: `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.
 - Git-ignored: `.env`, `state/`, `media/`, `public/` (built assets), `dist/`.
 
 ## Verify before committing nontrivial changes
 
-`npm run build` (tsc + Tailwind/htmx assets) · `npm run lint` · and the four
-PGlite harnesses (real Postgres-in-WASM, no server needed):
-`verify:db`, `verify:consent`, `verify:admin`, `verify:admin-views`.
+`npm run build` (tsc + Tailwind/htmx assets) · `npm run lint` · and the PGlite
+harnesses (real Postgres-in-WASM, no server needed): `verify:db`,
+`verify:consent`, `verify:admin`, `verify:admin-views`, `verify:interaction`
+(natural addressing), plus `verify:security`, `verify:public`, `verify:site`.
 `scripts/admin-preview.ts` boots a seeded local admin console for browser checks.
 
 ## Documentation maintenance (binding on every briefing)

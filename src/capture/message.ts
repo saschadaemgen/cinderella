@@ -57,6 +57,12 @@ export interface CapturedMessage {
   linkPreview: LinkPreview | undefined;
   /** Attached media/file, if any. */
   file: CapturedFile | undefined;
+  /**
+   * True when this message is a direct reply to one of the BOT's own messages.
+   * That is an address in itself (CCB-S3-002 §1.2) — replying to her needs no
+   * wake word. `groupSnd` on the quoted item means "sent by us in this group".
+   */
+  quotedFromBot: boolean;
   /** The raw AChatItem, for the `raw_json` column and debugging. */
   raw: T.AChatItem;
 }
@@ -141,6 +147,7 @@ export function parseGroupMessage(aChatItem: T.AChatItem): CapturedMessage | nul
     text: msgContent.text ?? '',
     linkPreview: buildLinkPreview(msgContent),
     file,
+    quotedFromBot: chatItem.quotedItem?.chatDir?.type === 'groupSnd',
     raw: aChatItem,
   };
 }

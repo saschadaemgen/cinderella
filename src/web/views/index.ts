@@ -6,6 +6,7 @@ import { registerDashboard } from './dashboard.js';
 import { registerMessages } from './messages.js';
 import { registerConsent } from './consent.js';
 import { registerSettings } from './settings.js';
+import { registerInteraction } from './interaction.js';
 import { registerEmbeds } from './embeds.js';
 import { registerSecurity } from './security.js';
 import { registerReports } from './reports.js';
@@ -16,6 +17,7 @@ export function registerAdminViews(app: FastifyInstance, ctx: ViewContext): void
   registerMessages(app, ctx);
   registerConsent(app, ctx);
   registerSettings(app, ctx);
+  registerInteraction(app, ctx);
   registerSecurity(app, ctx);
   registerEmbeds(app, ctx);
   registerSiteAdmin(app, ctx);

@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-001**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,58 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-032 — Consent decisions are journalled with their prior state, so a member can undo their own
+
+**Status: IMPLEMENTED (CCB-S3-002).**
+**Decision.** Every opt-in and opt-out now writes a `consent_actions` row recording the
+decision, **how it arrived** (`slash` / `natural` / `admin`), and the consent row exactly as
+it stood beforehand. `/publish` and the natural-language path share one write function,
+`applyConsentChange`. Undo restores the recorded prior state and stamps the journal row
+`undone_at`, so an action is never reverted twice. The journal is provenance ONLY —
+`message_publish_state` still derives publication from `consent` alone.
+**Rationale.** Undo is not expressible from current state: an opt-in that created the first
+consent row and an opt-in that replaced a revoked one leave identical rows behind, yet undoing
+them must do different things. Recording the prior state at the moment of the change is the
+only way to put it back exactly. Sharing one write path also stops the natural-language route
+from drifting away from the slash command it is supposed to mirror.
+**Evidence.** `migrations/009_consent_actions.sql`; `src/db/consent-actions.ts`;
+`src/consent/apply.ts`; `src/consent/commands.ts:79-104`;
+`src/interaction/engine.ts` (`performUndo`); `scripts/verify-interaction.ts` §9, §13.
+
+---
+
+### D-031 — Natural addressing: her name is the wake word, the resolver is a seam, and consent still needs a "yes"
+
+**Status: IMPLEMENTED (CCB-S3-002).**
+**Decision.** Members may address Cinderella in plain language. A message counts as addressed
+when it **starts with the wake word** (optionally after a greeting), replies directly to one of
+her messages, or arrives inside a per-member **follow-up window** (default 60s); slash commands
+remain, unchanged and immediate. Anchoring is strict and first-word-only: `Cinderellas Archiv`
+and `I think Cinderella is great` are never addresses, and a token that is the wake word plus a
+suffix is rejected before fuzzy matching can forgive it. Understanding is a **deterministic
+rule engine** over EN+DE keyword and phrase sets with typo tolerance, negation/hypothetical/
+quotation guards, and a closed intent catalog. It sits behind `resolveIntent`, which validates
+every result against that catalog and falls back to the rules if a future resolver fails.
+**PUBLISH/UNPUBLISH always require an explicit confirmation**, and any instruction naming a
+third party is refused outright, admin or not. Her chat voice ships as admin-editable persona
+strings per language; she refuses to answer to nicknames with a rotating retort and no action.
+**Rationale.** Typing `/publish` is a barrier for exactly the members whose consent matters
+most, but natural language is ambiguous in a way a consent decision cannot afford to be. The
+resolution is to make understanding generous and **acting** strict: she guesses freely at what
+was meant, then asks before anything is published. Building the rules behind a one-function
+seam means the later local-AI brain is a registration, not a rewrite, with the rules surviving
+as the offline fallback. No AI ships in this briefing.
+**Rejected.** A wake *phrase* ("hey cinderella") — the bare name works in every language for
+free, with greetings as strippable decoration. Substring matching on the name — it cannot tell
+`Cinderella,` from `Cinderellas`. Acting on a single high-confidence message — a false positive
+publishes someone who never asked, which is the one failure this product cannot have.
+**Evidence.** `src/interaction/` (`addressing.ts`, `rules.ts`, `resolver.ts`, `engine.ts`,
+`state.ts`, `settings.ts`, `text.ts`); `src/web/views/interaction.ts`;
+`src/capture/handler.ts` (`onInteraction` / `isAddressed` hooks);
+`scripts/verify-interaction.ts` (105 checks); `scripts/verify-admin-views.ts` §11.
 
 ---
 

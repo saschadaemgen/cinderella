@@ -28,6 +28,19 @@ export interface CaptureHooks {
    * persisted.
    */
   onCommand?: (msg: CapturedMessage, command: ConsentCommand) => Promise<void> | void;
+  /**
+   * Natural-language interaction (CCB-S3-002). Called for every non-command
+   * message BEFORE persistence. Returning true means the message was spoken to
+   * Cinderella rather than to the group — a control message, so it is not
+   * archived. Returning false means ordinary content: persist as usual.
+   */
+  onInteraction?: (msg: CapturedMessage) => Promise<boolean>;
+  /**
+   * Side-effect-free "was this addressed to the bot?" test, used on EDITS. An
+   * edit must not re-run the dialogue, but an instruction aimed at the bot must
+   * not be archived either.
+   */
+  isAddressed?: (msg: CapturedMessage) => boolean;
   /** Called when messages are deleted in-group (by SimpleX group_msg_id). */
   onDeleted?: (groupId: number, groupMsgIds: number[]) => Promise<void> | void;
 }
@@ -39,6 +52,12 @@ export interface CaptureOptions {
    * otherwise silently stop capture). Resolved once at startup.
    */
   targetGroupId?: number | undefined;
+  /**
+   * Whether `/publish` and `/unpublish` are currently recognised (CCB-S3-002 §7,
+   * admin-toggleable). Read per message so the toggle takes effect live. Absent
+   * means enabled, which keeps every existing caller behaving as before.
+   */
+  slashCommandsEnabled?: () => boolean;
 }
 
 async function receiveAndReport(
@@ -99,8 +118,29 @@ export function registerCapture(
   };
 
   /** A consent command is ONLY a plain-text message with no attachment. */
-  const commandFor = (msg: CapturedMessage): ConsentCommand | null =>
-    msg.type === 'text' && !msg.file ? parseConsentCommand(msg.text) : null;
+  const commandFor = (msg: CapturedMessage): ConsentCommand | null => {
+    if (opts.slashCommandsEnabled && !opts.slashCommandsEnabled()) return null;
+    return msg.type === 'text' && !msg.file ? parseConsentCommand(msg.text) : null;
+  };
+
+  /**
+   * Runs the interaction layer. A thrown hook must never take a message down
+   * with it — on failure we fall back to treating the message as ordinary
+   * content, which archives it rather than losing it.
+   */
+  const interacted = async (msg: CapturedMessage): Promise<boolean> => {
+    if (!hooks.onInteraction) return false;
+    try {
+      return await hooks.onInteraction(msg);
+    } catch (err) {
+      log.error(
+        `onInteraction hook failed for item ${msg.itemId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return false;
+    }
+  };
 
   const persist = async (msg: CapturedMessage): Promise<boolean> => {
     try {
@@ -138,6 +178,10 @@ export function registerCapture(
         continue;
       }
 
+      // Natural addressing (CCB-S3-002): if she was spoken to, the message is a
+      // control message and is not archived.
+      if (await interacted(msg)) continue;
+
       const persisted = await persist(msg);
 
       // Only receive the file if the row exists — otherwise the media would be
@@ -153,6 +197,9 @@ export function registerCapture(
     const msg = parseGroupMessage(chatItem);
     if (!msg || !inScope(msg)) return;
     if (commandFor(msg)) return; // an edit does not (re)trigger a consent command
+    // Nor does it re-open a dialogue — but a message addressed to her is still
+    // not archive content, so it is dropped rather than persisted.
+    if (hooks.isAddressed?.(msg)) return;
     await persist(msg);
   });
 

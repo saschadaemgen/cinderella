@@ -18,6 +18,7 @@ import type { Queryable } from '../db/pool.js';
 import type { SettingsService } from '../settings/service.js';
 import type { SecurityService } from '../security/settings.js';
 import { SiteService } from '../site/settings.js';
+import { InteractionService } from '../interaction/settings.js';
 import { log } from '../log.js';
 import { GlobalRateLimiter, LoginRateLimiter } from './auth.js';
 import {
@@ -54,6 +55,7 @@ export interface AdminContext {
   settings: SettingsService;
   security: SecurityService;
   site: SiteService;
+  interaction: InteractionService;
   sessions: SessionStore;
   loginLimiter: LoginRateLimiter;
   challenges: ChallengeStore;
@@ -66,6 +68,7 @@ export interface ViewContext {
   settings: SettingsService;
   security: SecurityService;
   site: SiteService;
+  interaction: InteractionService;
   sessions: SessionStore;
 }
 
@@ -78,6 +81,9 @@ export interface ServerDeps {
   /** Website settings (CCB-S2-012). Optional — buildServer falls back to all-OFF
    * defaults so harnesses need not seed a `site` row. */
   site?: SiteService;
+  /** Interaction settings (CCB-S3-002). Optional — buildServer falls back to the
+   * briefing defaults so harnesses need not seed an `interaction` row. */
+  interaction?: InteractionService;
   mediaRoot: string;
   registerViews?: (app: FastifyInstance, ctx: ViewContext) => void;
 }
@@ -97,6 +103,7 @@ function isSensitive(method: string, path: string): boolean {
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const { db, adminCfg, cfg, settings, security } = deps;
   const site = deps.site ?? SiteService.withDefaults(db);
+  const interaction = deps.interaction ?? InteractionService.withDefaults(db);
   const app = Fastify({ trustProxy: 'loopback', logger: false });
 
   // The public marketing site (CCB-S2-012). Locales are loaded once so the routes
@@ -128,6 +135,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     settings,
     security,
     site,
+    interaction,
     sessions,
     loginLimiter,
     challenges,
@@ -262,7 +270,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerAuthRoutes(app, ctx);
 
   // Public archive front (CCB-S2-003) — no auth; consent-gated data + media.
-  const viewCtx: ViewContext = { db, adminCfg, cfg, settings, security, site, sessions };
+  const viewCtx: ViewContext = {
+    db,
+    adminCfg,
+    cfg,
+    settings,
+    security,
+    site,
+    interaction,
+    sessions,
+  };
   registerPublicEmbed(app, viewCtx);
 
   // Public marketing site (CCB-S2-012) — no auth; owns the domain root '/'.
@@ -293,6 +310,7 @@ export function registerNav(): void {
     { key: 'messages', href: '/messages', label: 'Messages', icon: icon('messages') },
     { key: 'consent', href: '/consent', label: 'Consent', icon: icon('consent') },
     { key: 'settings', href: '/settings', label: 'Settings', icon: icon('settings') },
+    { key: 'interaction', href: '/interaction', label: 'Interaction', icon: icon('interaction') },
     { key: 'security', href: '/security', label: 'Security', icon: icon('shield') },
     { key: 'embeds', href: '/embeds', label: 'Embeds', icon: icon('embed') },
     { key: 'site', href: '/website', label: 'Website', icon: icon('site') },

@@ -492,6 +492,27 @@ export async function publishedLastmod(
   return ts ? new Date(ts).toISOString() : null;
 }
 
+/**
+ * How many PUBLISHED messages match a free-text query — the number behind
+ * Cinderella's SEARCH answer in chat (CCB-S3-002 §5).
+ *
+ * It reads `published_messages`, so a member searching in the group is told only
+ * about the archive as the public sees it: a count here can never reveal that an
+ * unpublished, recalled or deleted message exists. The query goes through
+ * `websearch_to_tsquery`, the same parser the public front uses, so it is a bind
+ * parameter and never string-built SQL.
+ */
+export async function countPublishedMatching(db: Queryable, q: string): Promise<number> {
+  const term = q.trim();
+  if (!term) return 0;
+  const { rows } = await db.query<{ n: string }>(
+    `SELECT count(*) AS n FROM published_messages
+     WHERE search @@ websearch_to_tsquery('simple', $1)`,
+    [term],
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 /** The most recent published image, for OG/Twitter/`ItemList` preview imagery. */
 export async function latestPublishedImageId(
   db: Queryable,

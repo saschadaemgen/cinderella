@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Season 1–2. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S2-012**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -48,6 +48,31 @@ Consent is the product's legal backbone, and the command surface is deliberately
 
 > Divergence worth recording: Cinderella does **not** use the SDK's built-in command mechanism. The SDK offers `onCommands` + `util.ciBotCommand` (`node_modules/simplex-chat/src/bot.ts:41`, `123-140`) for keyword dispatch, but Cinderella ignores it and does its own parsing inside the capture handler. (Confirmed: a grep of `src/` for `onCommands`/`ciBotCommand` returns no usages.) This is consistent — Cinderella subscribes to the raw `newChatItems` event itself — but means the SDK's command-parsing rules do not apply here; the exact-match rule above is Cinderella's own.
 
+## 3a. Natural addressing rides the same group-message envelope (CCB-S3-002)
+
+Slash commands are no longer the only way in, but nothing about the **envelope** changed:
+natural addressing reads the same `newChatItems` group items, through the same
+`parseGroupMessage` filter, and replies with the same `apiSendTextReply(msg.raw, …)`.
+No new SimpleX surface, no new event, no new command mechanism.
+
+Three wire-level facts are worth recording:
+
+- **The reply-to signal is the quoted item's direction.** A member replying to one of
+  Cinderella's messages is an address in itself. It is detected from
+  `chatItem.quotedItem?.chatDir?.type === 'groupSnd'` — `groupSnd` meaning the quoted item was
+  sent by *us* in that group — surfaced as `CapturedMessage.quotedFromBot`
+  (`src/capture/message.ts`). There is no other reliable "this is a reply to the bot" marker
+  in the envelope.
+- **Command-shaped text never enters the conversational path.** A message whose text begins
+  with `/` is handled by the slash path or not at all (`src/interaction/engine.ts`). Without
+  this, a disabled `/publish` could still be triggered through the follow-up window.
+- **Persona strings are sent verbatim as plain text.** SimpleX renders no markdown of its own,
+  so the `**yes**` emphasis in the shipped copy travels literally, exactly as the briefing
+  specified it. Operators editing persona strings are editing what members literally see.
+
+Because attachments are content rather than instructions, the engine ignores any message with
+a file or a non-`text` type — a photo captioned "publish me" is not a consent decision.
+
 ## 4. There is no private per-member channel — consent is group-only, and confirmations are public
 
 The outline references "the member-support scope as the only private per-member channel." **That channel is not implemented in the current code.** This is a Season 2 concept, not present in the codebase.
@@ -59,6 +84,14 @@ Evidence:
 - The confirmation reply is sent with `apiSendTextReply(msg.raw, text)` (`src/consent/commands.ts:63`), where `msg.raw` is the original **group** chat item. So the `/publish` / `/unpublish` acknowledgements (`PUBLISH_REPLY`, `UNPUBLISH_REPLY`, `FAILURE_REPLY`; `src/consent/commands.ts:26`, `32`, `38`) are posted **into the group, visibly to everyone** — they are not private DMs.
 
 > Divergence, explicit: outline says a private per-member support channel is the mechanism; the code has **no private per-member channel at all**. Consent is entirely group-scoped, and even the consent confirmations are public group replies. Treat "member-support / private DM" as _planned / not yet implemented_.
+
+**CCB-S3-002 inherits this constraint.** The briefing asks for personal answers (`STATUS`,
+undo detail) to be kept out of the public group "where a private channel exists". None does,
+so the rule's fallback applies: those answers are kept **short**. `STATUS` is a single line
+with two counts and no message content, and the undo reply states only that something was
+undone. Every natural-language reply, like every slash-command confirmation, is a public group
+reply. Reply rate limits (per member and per chat, `src/interaction/state.ts`) exist because
+that publicness makes flooding a group through her a real risk.
 
 ## 5. SimpleX has no persistent user identity — consent is bound to a stable-but-not-durable member id
 

@@ -556,6 +556,118 @@ async function main(): Promise<void> {
       settingsBar.body.includes('disabled'),
   );
 
+  // --- 11) Interaction console (CCB-S3-002 §7) ---
+  const iaPage = await getPage('/interaction');
+  check('interaction page renders', iaPage.code === 200);
+  check(
+    'interaction page ships the briefing defaults',
+    iaPage.body.includes('value="Cinderella"') &&
+      iaPage.body.includes('value="60"') &&
+      iaPage.body.includes('cindy, cindi, cin, ella'),
+  );
+  check(
+    'interaction page exposes the persona strings for both languages',
+    iaPage.body.includes('Her voice — English') && iaPage.body.includes('Her voice — Deutsch'),
+  );
+  check(
+    'interaction page exposes the retort lists for both languages',
+    iaPage.body.includes('Nickname retorts — English') &&
+      iaPage.body.includes('Nickname retorts — Deutsch'),
+  );
+  const iaCsrf = csrfFrom(iaPage.body);
+
+  const renameRes = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: {
+      _csrf: iaCsrf,
+      section: 'addressing',
+      naturalAddressing: 'on',
+      // slashCommands deliberately OMITTED — an unticked checkbox is absent.
+      wakeWord: 'Aschenputtel',
+      greetings: 'hi, moin',
+      followUpSeconds: '90',
+      confidenceThreshold: '0.7',
+      defaultLanguage: 'de',
+    },
+    headers: authed,
+  });
+  check('interaction edit redirects', renameRes.statusCode === 302);
+
+  const iaAfter = await getPage('/interaction');
+  check('renamed wake word persisted', iaAfter.body.includes('value="Aschenputtel"'));
+  check('follow-up window persisted', iaAfter.body.includes('value="90"'));
+  check(
+    'an unticked checkbox is saved as OFF, not ignored',
+    /name="slashCommands"(?![^>]*checked)/.test(iaAfter.body),
+  );
+  check(
+    'the untouched section is not clobbered by a section save',
+    iaAfter.body.includes('cindy, cindi, cin, ella'),
+  );
+
+  const iaStored = await pg.query<{ value: { wakeWord: string; slashCommands: boolean } }>(
+    `SELECT value FROM settings WHERE key = 'interaction'`,
+  );
+  check(
+    'interaction settings persisted to the settings table',
+    iaStored.rows[0]?.value.wakeWord === 'Aschenputtel' &&
+      iaStored.rows[0]?.value.slashCommands === false,
+  );
+  const iaAudit = await pg.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM audit_log WHERE action = 'interaction.update'`,
+  );
+  check('interaction edit is audited', (iaAudit.rows[0]?.n ?? 0) >= 1);
+
+  const personaRes = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: {
+      _csrf: iaCsrf,
+      section: 'persona:en',
+      published: 'Custom published line.',
+      publishConfirm: '', // blanked → falls back to the shipped default
+    },
+    headers: authed,
+  });
+  check('persona edit redirects', personaRes.statusCode === 302);
+  const iaPersona = await pg.query<{ value: { persona: Record<string, Record<string, string>> } }>(
+    `SELECT value FROM settings WHERE key = 'interaction'`,
+  );
+  check(
+    'an edited persona string persisted',
+    iaPersona.rows[0]?.value.persona['en']?.published === 'Custom published line.',
+  );
+  check(
+    'a blanked persona string fell back to its shipped default, never to empty',
+    (iaPersona.rows[0]?.value.persona['en']?.publishConfirm ?? '').includes(
+      'carried into the light',
+    ),
+  );
+
+  const resetRes = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: { _csrf: iaCsrf, section: 'reset' },
+    headers: authed,
+  });
+  check('reset redirects', resetRes.statusCode === 302);
+  const iaReset = await getPage('/interaction');
+  check('reset restores the shipped wake word', iaReset.body.includes('value="Cinderella"'));
+
+  const iaNoAuth = await app.inject({ method: 'GET', url: '/interaction' });
+  check(
+    'interaction console is unreachable unauthenticated',
+    iaNoAuth.statusCode === 302 || iaNoAuth.statusCode === 401,
+  );
+  const iaNoCsrf = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: { section: 'addressing', wakeWord: 'Nope' },
+    headers: authed,
+  });
+  check('interaction edit without CSRF is rejected', iaNoCsrf.statusCode === 403);
+
   await app.close();
   await pg.close();
 

@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-001**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -157,7 +157,8 @@ The history below records the pre-CCB-S2-003 state.
 
 ### 3. Local AI brain over a tunnel
 
-- [ ] Integrate the operator's local model over a secure tunnel, decoupled behind a single "AI endpoint" address; the bot forwards free-form private messages and returns replies, while commands stay deterministic. Not present in code today (source: [`seasons/SEASON-1-PROTOCOL.md`](../seasons/SEASON-1-PROTOCOL.md) Part D §3).
+- [ ] Integrate the operator's local model over a secure tunnel, decoupled behind a single "AI endpoint" address; the bot forwards free-form private messages and returns replies, while commands stay deterministic. No AI exists in code today (source: [`seasons/SEASON-1-PROTOCOL.md`](../seasons/SEASON-1-PROTOCOL.md) Part D §3).
+  > **The seam is now built (CCB-S3-002).** `resolveIntent` in [`src/interaction/resolver.ts`](../src/interaction/resolver.ts) is the single entry point every caller uses; swapping in the AI is a `setIntentResolver()` registration, with the deterministic rule engine kept as the automatic fallback when the endpoint is unreachable and as the validator of the closed intent catalog. No caller imports the rule engine directly, so the swap touches no call site.
 
 ### 4. Multi-tenancy & Pro (customer self-service)
 
@@ -171,6 +172,43 @@ The history below records the pre-CCB-S2-003 state.
 ### 5. Optional durable-ban identity layer
 
 - [ ] An application-level verified-identity layer binding bans to an external key — **only if** admission-gate friction proves insufficient. SimpleX has no persistent identity, so removed members otherwise rejoin instantly. Explicitly conditional/optional in [`seasons/SEASON-1-PROTOCOL.md`](../seasons/SEASON-1-PROTOCOL.md) Part D §5.
+
+### 5a. Natural addressing — talking to her instead of commanding her
+
+**Status: SHIPPED (CCB-S3-002).** Deterministic, no AI. Slash commands are unchanged and remain.
+
+- [x] **Wake-word addressing** — her name, not a phrase, so greetings work in every language for
+      free. Strict first-standalone-word anchoring rejects `Cinderellas Archiv` and
+      `I think Cinderella is great`; typos in the name are forgiven. Direct replies to her
+      messages and a per-member **follow-up window** (default 60s) also count as addressing.
+      See [`src/interaction/addressing.ts`](../src/interaction/addressing.ts).
+- [x] **Rule-based intent resolver** — closed catalog (`PUBLISH`, `UNPUBLISH`, `STATUS`,
+      `SEARCH`, `HELP`, `UNDO`, `UNKNOWN`), EN+DE keyword/phrase sets, Levenshtein typo
+      tolerance, phrases outranking keywords, and negation/hypothetical/quotation guards. It
+      **never executes anything**. See [`src/interaction/rules.ts`](../src/interaction/rules.ts).
+- [x] **Consent confirmation handshake** — publishing and unpublishing by natural language always
+      ask first and act only on an affirmative; slash commands stay immediate.
+- [x] **Third-party refusal** — any instruction naming or pointing at another member is refused,
+      admin or not; the acted-on member id is always the sender's own.
+- [x] **Undo** — a member can revert their own last consent decision inside a configurable window,
+      backed by the new `consent_actions` journal (D-032).
+- [x] **Cinderella's voice** — the §5 persona strings shipped as admin-editable defaults in EN and
+      DE, structured so a new language is a new key.
+- [x] **Nicknames** — she does not answer to "Cindy": a rotating sarcastic retort, never a repeat
+      of the previous one in a chat, no action taken, no follow-up window opened, and silence past
+      the anti-spam limit.
+- [x] **Admin console** — `/interaction` exposes every §7 setting (wake word, greetings, toggles,
+      windows, threshold, affirmations, rate limits, persona strings per language, retorts,
+      nicknames) with a restore-defaults action; audited, live, no restart.
+      See [`src/web/views/interaction.ts`](../src/web/views/interaction.ts).
+- [ ] **More languages** — only EN and DE ship with persona copy. The structure takes a new
+      language as a key in the persona/retort maps; the resolver's keyword sets would need the
+      matching additions.
+- [ ] **Private answers** — `STATUS` and undo detail are kept short because SimpleX gives the bot
+      no private per-member channel (see `wire-format.md` §4). If a direct-contact path is ever
+      built, those answers should move into it.
+
+---
 
 ### 6. Public marketing website — the domain root
 

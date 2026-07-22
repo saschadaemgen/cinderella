@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-001**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -388,6 +388,41 @@ verification control** (§3.11). Two further precision fixes applied to this dra
 the console is script-free only in the "no SPA" sense — `htmx.min.js` is loaded
 site-wide (§1) — and resident-key/attestation policy is applied at registration
 only, not on the authentication ceremony (§3.10).
+
+---
+
+## 9a. Natural addressing — the consent-safety controls (CCB-S3-002)
+
+Letting members instruct Cinderella in plain language widens the attack surface on the one
+thing that must never be wrong: **who consented to what**. The controls below exist for that
+reason and are verified in [`scripts/verify-interaction.ts`](../scripts/verify-interaction.ts).
+
+| Risk | Control | Anchor |
+| --- | --- | --- |
+| A misread sentence publishes someone | **PUBLISH/UNPUBLISH always require an explicit affirmative** inside the follow-up window. Understanding is generous; acting is not. | `src/interaction/engine.ts` (`dispatch`, `performConsentChange`) |
+| Publishing on someone else's behalf | Any instruction carrying a third-person pronoun, an `@mention`, a capitalised possessive, or an unknown capitalised name is **refused**, with no action taken — admin or not | `src/interaction/rules.ts` (`findTargetName`), `engine.ts` |
+| Privilege escalation through the bot | **There is no admin concept in this path.** The member id acted on is always `msg.senderMemberId`; no call shape reaches another member's consent | `src/consent/apply.ts`, `src/db/consent-actions.ts` (`undoLastConsentAction`) |
+| A future AI resolver inventing authority | The catalog is **closed and re-validated at the seam**: an out-of-catalog intent, an out-of-range confidence, or a throw becomes UNKNOWN / falls back to the rules | `src/interaction/resolver.ts` (`sanitize`) |
+| Discussion of the bot triggering the bot | Strict first-standalone-word anchoring; suffixed forms rejected before fuzzy matching; hypothetical and quotation guards | `src/interaction/addressing.ts`, `rules.ts` |
+| Negated instructions acted on literally | A negation beside the matched keyword collapses confidence — she asks rather than acts | `rules.ts` (`negatedNear`) |
+| Ordinary conversation being acted on | Inside the follow-up window the confidence bar rises to 0.8, above a lone keyword's score | `engine.ts` (`IMPLICIT_MIN_CONFIDENCE`) |
+| Flooding a group through the bot | Reply rate limits per member and per chat; nickname anti-spam silence | `src/interaction/state.ts` |
+| A disabled toggle half-applying | Command-shaped text (`/…`) never enters the conversational path | `engine.ts` |
+| Silent consent changes | Consent OUTCOME replies bypass the rate limiter, so a change is never made without saying so; failures are logged and raised to the runtime status | `engine.ts` (`ReplyOptions.bypassLimit`) |
+
+**Untrusted input handling.** The search slot reaches Postgres only through
+`websearch_to_tsquery` as a bind parameter and only against `published_messages`
+(`src/db/public-archive.ts`), so a member's search can neither be injected nor reveal that an
+unpublished message exists. Slots are length-capped at the seam (query 200, name 80 chars).
+
+**Conversation state is deliberately not persisted.** Follow-up windows, pending confirmations
+and retort history live in process memory and are lost on restart (`src/interaction/state.ts`).
+That costs a member one repeated wake word and avoids keeping a durable side-channel record of
+who spoke to the bot and when. Consent itself is in PostgreSQL, journalled with its provenance
+(D-032).
+
+**Admin surface.** `/interaction` sits behind the same session, CSRF, step-up and IP controls
+as every other admin page, and every save writes an `interaction.update` audit entry.
 
 ---
 

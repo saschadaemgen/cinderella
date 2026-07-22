@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-001**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-002**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -54,6 +54,7 @@ flowchart TB
 sequenceDiagram
   participant Core as SimpleX core
   participant H as handler.ts (registerCapture)
+  participant IA as interaction/engine.ts
   participant P as persist.ts (hooks)
   participant PG as PostgreSQL
   participant FR as FileReceiver
@@ -62,7 +63,9 @@ sequenceDiagram
   Core->>H: newChatItems
   H->>H: parseGroupMessage (group + groupRcv + rcvMsgContent)
   Note over H: consent command? → onCommand, NOT persisted
-  H->>P: onMessage(msg)
+  H->>IA: onInteraction(msg)   (CCB-S3-002)
+  Note over IA: addressed to her? → reply, NOT persisted
+  H->>P: onMessage(msg)  (only when IA returned false)
   P->>PG: withTransaction(upsertMessage + replaceLinks)
   alt media-type but no file transfer
     P->>PG: recordMediaError("no downloadable file …")
@@ -119,6 +122,8 @@ Configuration is env-driven (`config.ts`), from a git-ignored `.env` in developm
 - **005** `deletion_provenance` — splits `group_deleted` (in-group, non-clearable) from the admin-initiated `deleted`.
 - **006** `webauthn` — `webauthn_credentials` + break-glass TOTP.
 - **007** `sessions` — `admin_sessions` (persisted across restarts).
+- **008** `reports` — public content reports + the admin review queue.
+- **009** `consent_actions` — the consent decision journal (source + prior state) that makes UNDO possible (CCB-S3-002). Provenance only; the publish views still derive from `consent` alone.
 
 Each migration is applied once, inside a transaction, by `db/migrate.ts`.
 
@@ -328,6 +333,50 @@ nonce'd CSS/JS, `html`/`raw` escaping), NOT the Tailwind admin shell. Code lives
   distributed, so the site is a forward-looking shop window; the binding point is first
   distribution (screening must be built before any hand-over, or the site comes down).
   CSAM screening itself carries "In development" badges on Features/Security.
+
+## 13. Interaction layer — natural addressing (CCB-S3-002)
+
+Members can talk to Cinderella instead of typing commands. The layer lives in
+[`src/interaction/`](../src/interaction/) and is wired into capture through two hooks on
+`registerCapture`: `onInteraction` (returns true when the message was spoken to her, so it
+is NOT archived) and `isAddressed` (a side-effect-free test used on message edits).
+
+Responsibilities are split so that the later AI swap changes one registration and nothing else:
+
+| Module | Responsibility |
+|---|---|
+| `text.ts` | Normalisation (case, umlaut folding `ö→oe`, diacritics, punctuation), tokenisation with source offsets, Levenshtein with a length-tiered threshold, quote ranges, reply-language hint |
+| `addressing.ts` | Is this addressed to her? Wake word, greeting prefixes, strict first-standalone-word anchoring, nickname detection |
+| `intent.ts` | The **closed** intent catalog and the resolver contract |
+| `rules.ts` | The deterministic EN+DE rule engine (phrases outrank keywords; negation, hypothetical and quotation guards; third-party and search slots) |
+| `resolver.ts` | The **seam**: `resolveIntent` validates every result against the catalog and falls back to the rules if the active resolver fails |
+| `state.ts` | In-process, forgetful conversation state: follow-up windows, pending confirmations, retort rotation, reply rate limits |
+| `engine.ts` | Decides what to do: confirmations, refusals, read-only answers, undo, nickname retorts |
+| `settings.ts` | The admin-editable model + the shipped defaults (persona copy, retorts) |
+
+**Addressing.** A message is addressed to her when it starts with the wake word (a greeting
+may precede it), when it replies directly to one of her messages (`quotedFromBot`, derived
+from the quoted item's `groupSnd` direction), or when it arrives inside that member's
+follow-up window. Anchoring is strict: a token that is the wake word **plus a suffix**
+(`Cinderellas`, `Cinderella's`) is rejected before fuzzy matching runs, because edit distance
+would otherwise forgive exactly the case that must be ignored. Nicknames are matched
+**exactly** — `cin` and `ella` are too short to fuzz without firing on ordinary words.
+
+**Resolution never executes.** The resolver returns `{intent, confidence, slots, lang}` and
+nothing more. The engine performs actions, and every consent change goes through the same
+`applyConsentChange` the `/publish` command uses (D-032), so the two paths cannot drift.
+
+**Acting is stricter than understanding.** Inside the follow-up window she is hearing messages
+that were never marked for her, so the confidence bar there is raised to 0.8 — above the score
+of a lone keyword. `I'll publish the photos later` is left alone; `publish me` is not.
+
+**Message flow.** Slash command → `onCommand` (immediate, unchanged). Otherwise → the engine.
+A message that is command-shaped (`/…`) never enters the conversational path, so switching
+slash commands off cannot be defeated by talking to her mid-conversation.
+
+Verified by [`scripts/verify-interaction.ts`](../scripts/verify-interaction.ts) (105 checks,
+real PGlite + the real capture pipeline) and §11 of
+[`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
 
 ## Appendix: divergences (code wins)
 

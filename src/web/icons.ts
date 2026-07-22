@@ -26,6 +26,7 @@ import {
   Smartphone,
   Trash,
   Globe,
+  Sparkles,
 } from 'lucide-static';
 import { raw, type SafeHtml } from './html.js';
 
@@ -65,6 +66,7 @@ const ICONS = {
   device: Smartphone,
   trash: Trash,
   site: Globe,
+  interaction: Sparkles,
 } as const;
 
 /** Icon for a message type. */

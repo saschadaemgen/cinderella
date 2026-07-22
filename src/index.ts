@@ -25,6 +25,9 @@ import { markInterruptedMediaReceipts } from './db/messages.js';
 import { SettingsService } from './settings/service.js';
 import { SecurityService } from './security/settings.js';
 import { SiteService } from './site/settings.js';
+import { InteractionService } from './interaction/settings.js';
+import { InteractionEngine } from './interaction/engine.js';
+import { activeResolverName } from './interaction/resolver.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
 import { registerAdminViews } from './web/views/index.js';
@@ -82,11 +85,24 @@ async function reportGroups(botHandle: BotHandle, cfg: Config): Promise<void> {
 async function startCaptureWorker(
   cfg: Config,
   settings: SettingsService,
+  interaction: InteractionService,
 ): Promise<BotHandle | null> {
   try {
     const botHandle = await startBot(cfg, { getFileTimeoutMs: () => settings.fileTimeoutMs });
     const hooks = makePersistenceHooks(cfg);
     hooks.onCommand = makeConsentHandler(botHandle);
+
+    // Natural addressing (CCB-S3-002). The engine only ever decides and replies;
+    // consent changes go through the same write path as the slash commands.
+    const engine = new InteractionEngine({
+      db: getPool(),
+      settings: () => interaction.get(),
+      send: async (msg, text) => {
+        await botHandle.chat.apiSendTextReply(msg.raw, text);
+      },
+    });
+    hooks.onInteraction = (msg) => engine.handle(msg);
+    hooks.isAddressed = (msg) => engine.isExplicitAddress(msg);
 
     // Resolve the configured group to its STABLE numeric id, so capture keeps
     // working if a group admin renames the group (display names are mutable).
@@ -103,9 +119,19 @@ async function startCaptureWorker(
       // Non-fatal; fall back to name-based scoping.
     }
 
-    registerCapture(botHandle, cfg, hooks, { targetGroupId });
+    registerCapture(botHandle, cfg, hooks, {
+      targetGroupId,
+      slashCommandsEnabled: () => interaction.get().slashCommands,
+    });
     await reportGroups(botHandle, cfg);
     status.botRunning(groupNames);
+
+    const ia = interaction.get();
+    log.info(
+      `Interaction layer: wake word "${ia.wakeWord}", natural addressing ` +
+        `${ia.naturalAddressing ? 'on' : 'off'}, slash commands ${ia.slashCommands ? 'on' : 'off'}, ` +
+        `resolver "${activeResolverName()}".`,
+    );
 
     // Push the avatar to group members: the core only sends the member-profile
     // update (XInfo, incl. avatar) when the bot next sends a GROUP message. This
@@ -138,6 +164,7 @@ async function runApp(cfg: Config): Promise<void> {
 
   const security = await SecurityService.load(getPool());
   const site = await SiteService.load(getPool());
+  const interaction = await InteractionService.load(getPool());
 
   // One process (A2): the admin web server and the capture worker together.
   const adminCfg = loadAdminConfig();
@@ -148,11 +175,12 @@ async function runApp(cfg: Config): Promise<void> {
     settings,
     security,
     site,
+    interaction,
     cfg,
     registerViews: registerAdminViews,
   });
 
-  const botHandle = await startCaptureWorker(cfg, settings);
+  const botHandle = await startCaptureWorker(cfg, settings, interaction);
   log.info('Cinderella is capturing to PostgreSQL (consent-gated). Press Ctrl+C to stop.');
 
   await new Promise<void>((resolve) => {
