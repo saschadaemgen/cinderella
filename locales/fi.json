@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "Tekoälybottipaketti SimpleX- ja Matrix-yhteisöille",
-
   "a11y.skip": "Siirry sisältöön",
   "a11y.menu": "Valikko",
   "lang.label": "Kieli",
-
   "nav.home": "Etusivu",
   "nav.features": "Ominaisuudet",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentaatio",
   "nav.legal": "Oikeudelliset tiedot",
   "nav.login": "Kirjaudu",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Käytössä",
   "badge.planned": "Suunnitteilla",
   "badge.indev": "Kehitteillä",
   "badge.recommended": "Suositeltu",
-
   "hero.ann": "Nyt alfavaiheessa · suostumus- ja CSAM-seulonta",
   "hero.title1": "Mitään ei julkaista,",
   "hero.title2": "ennen kuin se on seulottu.",
@@ -43,7 +38,6 @@
   "trust.consent": "Suostumus ensin",
   "trust.passkeys": "Pääsyavaimet",
   "trust.localai": "Paikallinen tekoäly",
-
   "home.live.eyebrow": "Arkisto livenä",
   "home.live.title": "Hae pysyvästä, julkisesta arkistosta",
   "home.live.lede": "Kokotekstihaku, suodattimet ja media kirjautumisen takana. Tämä interaktiivinen esikatselu toimii kokonaan selaimessasi esimerkkidatalla: kirjoita hakusana, vaihda ryhmää ja katso, miten arkisto vastaa täsmälleen kuten oikea.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Tiekartalla",
   "roadmap.matrix": "Matrix-tuki",
   "roadmap.categorization": "Luokittelu",
-  "roadmap.videogallery": "Videogalleria",
+  "roadmap.videogallery": "Video- ja kuvagalleria",
   "roadmap.moderation": "Moderointityökalut",
   "roadmap.localai": "Paikallinen tekoäly",
   "roadmap.multitenancy": "Monivuokraajuus",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Salattu siirto, kovennetut palvelimet",
   "home.sec.point3": "Paikallinen tekoäly, ei kolmansien osapuolten pilviä",
   "home.sec.point4": "Sisällön ilmoittaminen ja moderointi",
-
   "demo.preview": "ESIKATSELU · ESIMERKKIDATA",
   "demo.groups": "RYHMÄT",
   "demo.allgroups": "Kaikki ryhmät",
@@ -94,7 +87,6 @@
   "demo.empty": "Yksikään arkistoitu viesti ei vastaa hakua",
   "demo.archived": "arkistoitu",
   "demo.attachment": "liite",
-
   "features.eyebrow": "Ominaisuudet",
   "features.title1": "Kaikki kulkee ",
   "features.title2": "n läpi.",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Kehitteillä tai suunnittelussa. Järjestys ja laajuus voivat muuttua, sillä tämä on alfavaiheen ohjelmisto, ja haluamme julkaista suojamekanismit ensin.",
   "features.rm.matrix.body": "Sama suostumuspohjainen arkisto ja bottipaketti Matrix-huoneisiin.",
   "features.rm.categorization.body": "Arkistoidun sisällön automaattinen aiheittainen ryhmittely.",
-  "features.rm.videogallery.body": "Oma selailunäkymä arkistoiduille videoille.",
+  "features.rm.videogallery.body": "Oma selauspinta arkistoiduille videoille ja kuville.",
   "features.rm.moderation.body": "Massatoiminnot, käytännöt ja tarkastusjonot.",
   "features.rm.localai.body": "Seulonta ja tiivistelmät, jotka toimivat omalla laitteistollasi.",
   "features.rm.multitenancy.body": "Yksi asennus, monta eristettyä arkistoa.",
-
   "pro.eyebrow": "Kaupallinen versio",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Hallinnoitu hosting ja avoimen ytimen ylittävät kyvykkyydet ylläpitäjille, jotka haluavat arkiston ilman oman infrastruktuurin pyörittämistä. Samat suojamekanismit, sama avoin perusta, ei lainkaan palvelintyötä.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "Sähköposti",
   "pro.customer.request": "Pyydä pääsyä",
   "pro.customer.login": "Asiakaskirjautuminen",
-
   "security.eyebrow": "Turvallisuus ja suoja",
   "security.title1": "Turvallisuus on ",
   "security.title2": "koko idea",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Löysitkö haavoittuvuuden?",
   "security.vuln.body": "Ilmoita siitä luottamuksellisesti repositorion turvallisuusyhteystiedon kautta. Annamme tunnustusta vastuulliselle ilmoittamiselle ja otamme jokaisen ilmoituksen vakavasti.",
   "security.vuln.cta": "Turvallisuuskäytäntö",
-
   "os.eyebrow": "Avoin lähdekoodi",
   "os.title": "Avoin ydin, avoimet kirjat",
   "os.lede": "Cinderellan ydin on vapaata ohjelmistoa AGPL-3.0-lisenssillä. Aja sitä itse, lue jokainen rivi ja pidä meidät vastuussa siitä, mitä tämä sivusto väittää. Luottamuksen pitää olla todennettavissa, ei pelkkä lupaus.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Katso GitHubissa",
   "os.why.title": "Miksi AGPL-3.0",
   "os.why.body": "Arkisto pyytää luottamusta. AGPL takaa, että jokaisen muokattua Cinderellaa ajavan on julkaistava muutoksensa, joten yleisö voi aina tarkastaa koodin, joka käsittelee julkisia keskusteluja. Juuri tätä varten lisenssi on olemassa.",
-
   "legal.eyebrow": "Oikeudelliset tiedot",
   "legal.title": "Oikeudelliset tiedot",
   "legal.lede": "Paikanpitäjätekstit, jotka lakiasiantuntijan on tarkastettava ennen julkaisua. Korostetut kentät on täytettävä.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Käyttöehdot",
   "legal.badge.template": "Malliteksti, ei oikeudellista neuvontaa",
   "legal.badge.draft": "Luonnos, kesken",
-
   "impressum.title": "Oikeudellinen ilmoitus (Impressum)",
   "impressum.intro": "Tiedot säännösten § 5 TMG / § 18 MStV mukaisesti.",
   "impressum.operator.h": "Palveluntarjoaja",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Emme ole halukkaita emmekä velvollisia osallistumaan riidanratkaisumenettelyyn kuluttajariitalautakunnassa.",
   "impressum.ypo.h": "Nuorisonsuojeluvastaava (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella on vapaaehtoisesti nimennyt nuorisonsuojeluvastaavan:",
-
   "privacy.title": "Tietosuojaseloste",
   "privacy.effective": "Voimassa alkaen:",
   "privacy.effective.ph": "päivämäärä",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Palveluntarjoaja / sijainti; huomautus, että tekoälykäsittely tapahtuu paikallisesti",
   "privacy.s5.h": "5. Oikeutesi",
   "privacy.s5.body": "Pääsy tietoihin, oikaisu, poisto, rajoittaminen, siirrettävyys, vastustaminen: ota yhteyttä ylläpitäjään. Voit myös tehdä valituksen valvontaviranomaiselle.",
-
   "terms.title": "Käyttöehdot",
   "terms.effective": "Voimassa alkaen:",
   "terms.effective.ph": "päivämäärä",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Arkistoitu sisältö on peräisin suostumuksensa antaneista julkisista ryhmistä. Ylläpitäjä voi poistaa sisältöä ilmoitusten tai lakisääteisen velvoitteen perusteella.",
   "terms.s5.h": "5. Vastuu",
   "terms.s5.ph": "Vastuulauseke, jonka lakiasiantuntija toimittaa",
-
   "footer.blurb": "Tekoälybottipaketti SimpleX- ja Matrix-yhteisöille. Suostumus ensin, pysyvä, haettava ja avointa lähdekoodia AGPL-3.0-lisenssillä.",
   "footer.product": "Tuote",
   "footer.opensource": "Avoin lähdekoodi",
@@ -269,20 +253,16 @@
   "footer.terms": "Käyttöehdot",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Rakennettu SimpleX- ja Matrix-alustoille. Ei sidoksissa SimpleX Chatiin eikä Matrix Foundationiin.",
-
   "share.label": "Jaa tämä sivu",
-
   "cookie.title": "Evästeet",
   "cookie.text": "Tämä sivusto käyttää istuntoevästettä kirjautumiseen sekä anonyymiin käytön laskentaan. Lisätiedot:",
   "cookie.policy": "Tietosuojaseloste",
   "cookie.accept": "Hyväksy",
   "cookie.reject": "Vain välttämättömät",
-
   "stub.badge": "Tulossa pian",
   "stub.lead": "Tämä sivu on tulossa.",
   "stub.body": "Kirjoitamme tätä vielä. Sillä välin arkistokyvykkyys on jo käytössä ja koodi on avointa, joten käy katsomassa GitHubissa odotellessasi.",
   "stub.back": "Takaisin etusivulle",
-
   "meta.home.title": "Cinderella · Tekoälybottipaketti SimpleX- ja Matrix-yhteisöille",
   "meta.home.description": "Cinderella on palomuuri julkisen arkiston edessä: jokainen viesti ja tiedosto käy läpi suostumustarkistukset ja CSAM-seulonnan ennen kuin mikään julkaistaan. Avointa lähdekoodia AGPL-3.0-lisenssillä.",
   "meta.features.title": "Ominaisuudet · Cinderella",

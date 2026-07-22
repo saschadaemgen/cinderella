@@ -654,7 +654,7 @@ function featuresBody(v: SitePageView): SafeHtml {
   const roadmap = [
     ['network', 'matrix'],
     ['tags', 'categorization'],
-    ['clapperboard', 'videogallery'],
+    ['images', 'videogallery'],
     ['gavel', 'moderation'],
     ['cpu', 'localai'],
     ['building-2', 'multitenancy'],

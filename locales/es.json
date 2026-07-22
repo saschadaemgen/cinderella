@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "La suite de bots de IA para comunidades de SimpleX y Matrix",
-
   "a11y.skip": "Saltar al contenido",
   "a11y.menu": "Menú",
   "lang.label": "Idioma",
-
   "nav.home": "Inicio",
   "nav.features": "Funciones",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Documentación",
   "nav.legal": "Legal",
   "nav.login": "Iniciar sesión",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Disponible",
   "badge.planned": "Planificado",
   "badge.indev": "En desarrollo",
   "badge.recommended": "Recomendado",
-
   "hero.ann": "Ya en alfa · consentimiento + detección de CSAM",
   "hero.title1": "Nada se publica",
   "hero.title2": "sin antes pasar el filtro.",
@@ -43,7 +38,6 @@
   "trust.consent": "Consentimiento primero",
   "trust.passkeys": "Passkeys",
   "trust.localai": "IA local",
-
   "home.live.eyebrow": "El archivo, en vivo",
   "home.live.title": "Busque en un registro público y permanente",
   "home.live.lede": "Búsqueda de texto completo, filtros y medios protegidos por autenticación. Esta vista previa interactiva se ejecuta por completo en su navegador con datos de ejemplo: escriba una consulta, cambie de grupo y observe cómo el archivo responde exactamente igual que el real.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "En la hoja de ruta",
   "roadmap.matrix": "Compatibilidad con Matrix",
   "roadmap.categorization": "Categorización",
-  "roadmap.videogallery": "Galería de vídeo",
+  "roadmap.videogallery": "Galería de vídeo e imágenes",
   "roadmap.moderation": "Herramientas de moderación",
   "roadmap.localai": "IA local",
   "roadmap.multitenancy": "Multitenencia",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Cifrado en tránsito, servidores reforzados",
   "home.sec.point3": "IA local, sin nubes de terceros",
   "home.sec.point4": "Denuncias de contenido y moderación",
-
   "demo.preview": "VISTA PREVIA · DATOS DE EJEMPLO",
   "demo.groups": "GRUPOS",
   "demo.allgroups": "Todos los grupos",
@@ -94,7 +87,6 @@
   "demo.empty": "Ningún mensaje archivado coincide",
   "demo.archived": "archivado",
   "demo.attachment": "adjunto",
-
   "features.eyebrow": "Funciones",
   "features.title1": "Todo pasa por ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "En desarrollo o en diseño. El orden y el alcance pueden cambiar, porque este es software en fase alfa y preferimos entregar primero las salvaguardas.",
   "features.rm.matrix.body": "El mismo archivo basado en el consentimiento y la misma suite de bots para salas de Matrix.",
   "features.rm.categorization.body": "Agrupación automática por temas en todo el contenido archivado.",
-  "features.rm.videogallery.body": "Una superficie de navegación dedicada para el vídeo archivado.",
+  "features.rm.videogallery.body": "Una superficie de navegación dedicada para vídeos e imágenes archivados.",
   "features.rm.moderation.body": "Acciones masivas, políticas y colas de revisión.",
   "features.rm.localai.body": "Filtrado y resúmenes que se ejecutan en su propio hardware.",
   "features.rm.multitenancy.body": "Un solo despliegue, muchos archivos aislados.",
-
   "pro.eyebrow": "La edición comercial",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Alojamiento gestionado y capacidades más allá del núcleo abierto, para operadores que quieren el archivo sin gestionar la infraestructura. Las mismas salvaguardas, la misma base abierta, nada del trabajo de servidor.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "Correo electrónico",
   "pro.customer.request": "Solicitar acceso",
   "pro.customer.login": "Acceso para clientes",
-
   "security.eyebrow": "Seguridad y protección",
   "security.title1": "La seguridad es ",
   "security.title2": "el propósito",
@@ -190,7 +180,6 @@
   "security.vuln.title": "¿Ha encontrado una vulnerabilidad?",
   "security.vuln.body": "Comuníquela de forma privada a través del contacto de seguridad del repositorio. Reconocemos la divulgación responsable y tomamos en serio cada aviso.",
   "security.vuln.cta": "Política de seguridad",
-
   "os.eyebrow": "Código abierto",
   "os.title": "Núcleo abierto, cuentas claras",
   "os.lede": "El núcleo de Cinderella es software libre bajo AGPL-3.0. Ejecútelo usted mismo, lea cada línea y exíjanos lo que este sitio afirma. La confianza debe poder verificarse, no solo prometerse.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Ver en GitHub",
   "os.why.title": "Por qué AGPL-3.0",
   "os.why.body": "Un archivo pide confianza. La AGPL garantiza que cualquiera que opere una Cinderella modificada debe publicar esas modificaciones, de modo que el público siempre pueda inspeccionar el código que maneja conversaciones públicas. Esa garantía es la licencia haciendo su trabajo.",
-
   "legal.eyebrow": "Legal",
   "legal.title": "Información legal",
   "legal.lede": "Textos provisionales, pendientes de revisión por asesoría jurídica antes del lanzamiento. Los campos resaltados deben completarse.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Condiciones",
   "legal.badge.template": "Plantilla, no asesoramiento jurídico",
   "legal.badge.draft": "Borrador, pendiente",
-
   "impressum.title": "Aviso legal (Impressum)",
   "impressum.intro": "Información conforme a § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Operador",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "No estamos dispuestos ni obligados a participar en procedimientos de resolución de litigios ante una junta de arbitraje de consumo.",
   "impressum.ypo.h": "Delegado de protección de menores (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella ha designado voluntariamente a un delegado de protección de menores:",
-
   "privacy.title": "Política de privacidad",
   "privacy.effective": "Fecha de entrada en vigor:",
   "privacy.effective.ph": "fecha",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Proveedor de alojamiento / ubicación; indicar que el procesamiento de IA se ejecuta localmente",
   "privacy.s5.h": "5. Sus derechos",
   "privacy.s5.body": "Acceso, rectificación, supresión, limitación, portabilidad, oposición: contacte con el operador. Puede presentar una reclamación ante una autoridad de control.",
-
   "terms.title": "Condiciones de uso",
   "terms.effective": "Fecha de entrada en vigor:",
   "terms.effective.ph": "fecha",
@@ -254,7 +239,6 @@
   "terms.s4.body": "El contenido archivado procede de grupos públicos que han dado su consentimiento. El operador puede retirar contenido a raíz de denuncias o por obligación legal.",
   "terms.s5.h": "5. Responsabilidad",
   "terms.s5.ph": "Cláusula de responsabilidad pendiente de la asesoría jurídica",
-
   "footer.blurb": "La suite de bots de IA para comunidades de SimpleX y Matrix. Consentimiento primero, permanente, con capacidad de búsqueda y de código abierto bajo AGPL-3.0.",
   "footer.product": "Producto",
   "footer.opensource": "Código abierto",
@@ -269,20 +253,16 @@
   "footer.terms": "Condiciones",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Construido sobre SimpleX y Matrix. Sin afiliación con SimpleX Chat ni con la Matrix Foundation.",
-
   "share.label": "Compartir esta página",
-
   "cookie.title": "Cookies",
   "cookie.text": "Este sitio utiliza una cookie de sesión para el inicio de sesión y recuentos de uso anónimos. Más detalles en la",
   "cookie.policy": "Política de privacidad",
   "cookie.accept": "Aceptar",
   "cookie.reject": "Rechazar, solo las necesarias",
-
   "stub.badge": "Próximamente",
   "stub.lead": "Esta página está en camino.",
   "stub.body": "Todavía estamos escribiendo esta página. Mientras tanto, la capacidad de archivo ya está disponible y el código es abierto, así que eche un vistazo en GitHub mientras espera.",
   "stub.back": "Volver al inicio",
-
   "meta.home.title": "Cinderella · Suite de bots de IA para SimpleX y Matrix",
   "meta.home.description": "Cinderella es un cortafuegos delante del archivo público: cada mensaje y cada fichero pasa por controles de consentimiento y detección de CSAM antes de publicarse. Código abierto bajo AGPL-3.0.",
   "meta.features.title": "Funciones · Cinderella",

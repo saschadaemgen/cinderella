@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "Suite bot AI untuk komuniti SimpleX dan Matrix",
-
   "a11y.skip": "Langkau ke kandungan",
   "a11y.menu": "Menu",
   "lang.label": "Bahasa",
-
   "nav.home": "Laman Utama",
   "nav.features": "Ciri-ciri",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentasi",
   "nav.legal": "Perundangan",
   "nav.login": "Log Masuk",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Aktif",
   "badge.planned": "Dirancang",
   "badge.indev": "Dalam pembangunan",
   "badge.recommended": "Disyorkan",
-
   "hero.ann": "Kini dalam alfa · persetujuan + saringan CSAM",
   "hero.title1": "Tiada apa yang diterbitkan",
   "hero.title2": "selagi belum disaring.",
@@ -43,7 +38,6 @@
   "trust.consent": "Persetujuan diutamakan",
   "trust.passkeys": "Passkeys",
   "trust.localai": "AI Tempatan",
-
   "home.live.eyebrow": "Arkib ini, secara langsung",
   "home.live.title": "Cari rekod awam yang kekal",
   "home.live.lede": "Carian teks penuh, penapis, dan media di sebalik pengesahan. Pratonton interaktif ini berjalan sepenuhnya dalam pelayar anda dengan data sampel: taip pertanyaan, tukar kumpulan, dan lihat arkib bertindak balas persis seperti yang sebenar.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Dalam pelan hala tuju",
   "roadmap.matrix": "Sokongan Matrix",
   "roadmap.categorization": "Pengkategorian",
-  "roadmap.videogallery": "Galeri video",
+  "roadmap.videogallery": "Galeri video dan imej",
   "roadmap.moderation": "Alatan moderasi",
   "roadmap.localai": "AI Tempatan",
   "roadmap.multitenancy": "Berbilang penyewa",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Disulitkan semasa penghantaran, hos diperkukuh",
   "home.sec.point3": "AI tempatan, tiada awan pihak ketiga",
   "home.sec.point4": "Pelaporan & moderasi kandungan",
-
   "demo.preview": "PRATONTON · DATA SAMPEL",
   "demo.groups": "KUMPULAN",
   "demo.allgroups": "Semua kumpulan",
@@ -94,7 +87,6 @@
   "demo.empty": "Tiada mesej arkib yang sepadan",
   "demo.archived": "diarkibkan",
   "demo.attachment": "lampiran",
-
   "features.eyebrow": "Ciri-ciri",
   "features.title1": "Semuanya melalui ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Dalam pembangunan atau reka bentuk. Urutan dan skop mungkin berubah, kerana ini perisian alfa dan kami lebih rela menyiapkan langkah perlindungan terlebih dahulu.",
   "features.rm.matrix.body": "Arkib mengutamakan persetujuan dan suite bot yang sama, untuk bilik Matrix.",
   "features.rm.categorization.body": "Pengelompokan topik automatik merentas kandungan arkib.",
-  "features.rm.videogallery.body": "Permukaan pelayaran khusus untuk video yang diarkibkan.",
+  "features.rm.videogallery.body": "Permukaan semakan khusus untuk video dan imej yang diarkibkan.",
   "features.rm.moderation.body": "Tindakan pukal, polisi, dan barisan penyemak.",
   "features.rm.localai.body": "Saringan dan ringkasan yang berjalan pada perkakasan anda sendiri.",
   "features.rm.multitenancy.body": "Satu penempatan, banyak arkib terasing.",
-
   "pro.eyebrow": "Edisi komersial",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Pengehosan terurus dan keupayaan melangkaui teras terbuka, untuk pengendali yang mahukan arkib tanpa mengurus infrastruktur. Langkah perlindungan yang sama, asas terbuka yang sama, tanpa sebarang kerja pelayan.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-mel",
   "pro.customer.request": "Mohon akses",
   "pro.customer.login": "Log masuk pelanggan",
-
   "security.eyebrow": "Keselamatan & perlindungan",
   "security.title1": "Keselamatan ialah ",
   "security.title2": "tujuan utama",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Menjumpai kerentanan?",
   "security.vuln.body": "Laporkannya secara sulit melalui kenalan keselamatan dalam repositori. Kami memberi penghargaan kepada pendedahan bertanggungjawab dan memandang serius setiap laporan.",
   "security.vuln.cta": "Polisi keselamatan",
-
   "os.eyebrow": "Sumber Terbuka",
   "os.title": "Teras terbuka, buku terbuka",
   "os.lede": "Teras Cinderella ialah perisian bebas di bawah AGPL-3.0. Jalankannya sendiri, baca setiap baris, dan pertanggungjawabkan kami terhadap apa yang didakwa oleh laman ini. Kepercayaan harus boleh disahkan, bukan sekadar dijanjikan.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Lihat di GitHub",
   "os.why.title": "Mengapa AGPL-3.0",
   "os.why.body": "Sebuah arkib menuntut kepercayaan. AGPL menjamin bahawa sesiapa yang mengendalikan Cinderella yang diubah suai mesti menerbitkan pengubahsuaian tersebut, jadi orang awam sentiasa boleh memeriksa kod yang mengendalikan perbualan awam. Jaminan itulah bukti lesen ini menjalankan tugasnya.",
-
   "legal.eyebrow": "Perundangan",
   "legal.title": "Maklumat perundangan",
   "legal.lede": "Teks penanda tempat, akan disemak oleh peguam sebelum pelancaran. Medan yang diserlahkan mesti dilengkapkan.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Terma",
   "legal.badge.template": "Templat, bukan nasihat perundangan",
   "legal.badge.draft": "Draf, belum muktamad",
-
   "impressum.title": "Notis Perundangan (Impressum)",
   "impressum.intro": "Maklumat menurut § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Pengendali",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Kami tidak bersedia dan tidak berkewajipan untuk mengambil bahagian dalam prosiding penyelesaian pertikaian di hadapan lembaga timbang tara pengguna.",
   "impressum.ypo.h": "Pegawai Perlindungan Belia (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella telah melantik Pegawai Perlindungan Belia secara sukarela:",
-
   "privacy.title": "Dasar Privasi",
   "privacy.effective": "Tarikh kuat kuasa:",
   "privacy.effective.ph": "tarikh",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Penyedia pengehosan / lokasi; ambil perhatian bahawa pemprosesan AI berjalan secara tempatan",
   "privacy.s5.h": "5. Hak anda",
   "privacy.s5.body": "Akses, pembetulan, pemadaman, sekatan, mudah alih data, bantahan: hubungi pengendali. Anda boleh membuat aduan kepada pihak berkuasa penyeliaan.",
-
   "terms.title": "Terma Penggunaan",
   "terms.effective": "Tarikh kuat kuasa:",
   "terms.effective.ph": "tarikh",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Kandungan arkib berasal daripada kumpulan awam yang memberi persetujuan. Pengendali boleh membuang kandungan berikutan laporan atau kewajipan perundangan.",
   "terms.s5.h": "5. Liabiliti",
   "terms.s5.ph": "Klausa liabiliti akan disediakan oleh peguam",
-
   "footer.blurb": "Suite bot AI untuk komuniti SimpleX dan Matrix. Mengutamakan persetujuan, kekal, boleh dicari, dan sumber terbuka di bawah AGPL-3.0.",
   "footer.product": "Produk",
   "footer.opensource": "Sumber Terbuka",
@@ -269,20 +253,16 @@
   "footer.terms": "Terma",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Dibina di atas SimpleX dan Matrix. Tidak berafiliasi dengan SimpleX Chat mahupun Matrix Foundation.",
-
   "share.label": "Kongsi halaman ini",
-
   "cookie.title": "Kuki",
   "cookie.text": "Laman ini menggunakan kuki sesi untuk log masuk dan kiraan penggunaan tanpa nama. Butiran dalam",
   "cookie.policy": "Dasar Privasi",
   "cookie.accept": "Terima",
   "cookie.reject": "Tolak, hanya yang perlu",
-
   "stub.badge": "Akan datang",
   "stub.lead": "Halaman ini sedang disiapkan.",
   "stub.body": "Kami masih menulis halaman ini. Sementara itu, keupayaan arkib sudah beroperasi dan kodnya terbuka, jadi lihatlah di GitHub sementara menunggu.",
   "stub.back": "Kembali ke laman utama",
-
   "meta.home.title": "Cinderella · Suite bot AI untuk SimpleX & Matrix",
   "meta.home.description": "Cinderella ialah tembok api di hadapan arkib awam: setiap mesej dan fail melalui semakan persetujuan dan saringan CSAM sebelum apa-apa disiarkan. Sumber terbuka di bawah AGPL-3.0.",
   "meta.features.title": "Ciri-ciri · Cinderella",

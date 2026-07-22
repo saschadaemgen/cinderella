@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "La suite de bots d'IA per a comunitats SimpleX i Matrix",
-
   "a11y.skip": "Salta al contingut",
   "a11y.menu": "Menú",
   "lang.label": "Idioma",
-
   "nav.home": "Inici",
   "nav.features": "Funcionalitats",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Docs",
   "nav.legal": "Legal",
   "nav.login": "Inicia la sessió",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Actiu",
   "badge.planned": "Planificat",
   "badge.indev": "En desenvolupament",
   "badge.recommended": "Recomanat",
-
   "hero.ann": "Ara en alfa · consentiment + detecció de CSAM",
   "hero.title1": "No es publica res",
   "hero.title2": "fins que no s'ha revisat.",
@@ -43,7 +38,6 @@
   "trust.consent": "Consentiment primer",
   "trust.passkeys": "Passkeys",
   "trust.localai": "IA local",
-
   "home.live.eyebrow": "L'arxiu, en directe",
   "home.live.title": "Cerqueu en un registre públic i permanent",
   "home.live.lede": "Cerca de text complet, filtres i contingut multimèdia darrere d'autenticació. Aquesta previsualització interactiva s'executa completament al vostre navegador amb dades d'exemple: escriviu una consulta, canvieu de grup i observeu com l'arxiu respon exactament igual que el de debò.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Al full de ruta",
   "roadmap.matrix": "Compatibilitat amb Matrix",
   "roadmap.categorization": "Categorització",
-  "roadmap.videogallery": "Galeria de vídeos",
+  "roadmap.videogallery": "Galeria de vídeo i imatges",
   "roadmap.moderation": "Eines de moderació",
   "roadmap.localai": "IA local",
   "roadmap.multitenancy": "Multitenència",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Xifrat en trànsit, servidors reforçats",
   "home.sec.point3": "IA local, sense núvols de tercers",
   "home.sec.point4": "Denúncia i moderació de continguts",
-
   "demo.preview": "PREVISUALITZACIÓ · DADES D'EXEMPLE",
   "demo.groups": "GRUPS",
   "demo.allgroups": "Tots els grups",
@@ -94,7 +87,6 @@
   "demo.empty": "Cap missatge arxivat no coincideix",
   "demo.archived": "arxivat",
   "demo.attachment": "adjunt",
-
   "features.eyebrow": "Funcionalitats",
   "features.title1": "Tot passa per ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "En desenvolupament o en disseny. L'ordre i l'abast poden canviar, perquè això és programari en alfa i preferim publicar primer les salvaguardes.",
   "features.rm.matrix.body": "El mateix arxiu basat en el consentiment i la mateixa suite de bots per a sales de Matrix.",
   "features.rm.categorization.body": "Agrupació temàtica automàtica del contingut arxivat.",
-  "features.rm.videogallery.body": "Una superfície de navegació dedicada per als vídeos arxivats.",
+  "features.rm.videogallery.body": "Una superfície de navegació dedicada per a vídeos i imatges arxivats.",
   "features.rm.moderation.body": "Accions massives, polítiques i cues de revisió.",
   "features.rm.localai.body": "Revisió i resums que s'executen al vostre propi maquinari.",
   "features.rm.multitenancy.body": "Un sol desplegament, molts arxius aïllats.",
-
   "pro.eyebrow": "L'edició comercial",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Allotjament gestionat i capacitats més enllà del nucli obert, per a operadors que volen l'arxiu sense gestionar la infraestructura. Les mateixes salvaguardes, el mateix fonament obert, gens de feina de servidor.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "Correu electrònic",
   "pro.customer.request": "Sol·liciteu accés",
   "pro.customer.login": "Accés per a clients",
-
   "security.eyebrow": "Seguretat i protecció",
   "security.title1": "La seguretat és ",
   "security.title2": "la raó de ser",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Heu trobat una vulnerabilitat?",
   "security.vuln.body": "Informeu-ne de manera privada a través del contacte de seguretat del repositori. Reconeixem la divulgació responsable i ens prenem seriosament cada informe.",
   "security.vuln.cta": "Política de seguretat",
-
   "os.eyebrow": "Codi obert",
   "os.title": "Nucli obert, llibres oberts",
   "os.lede": "El nucli de Cinderella és programari lliure sota AGPL-3.0. Executeu-lo vós mateix, llegiu-ne cada línia i exigiu-nos el que aquest lloc afirma. La confiança s'ha de poder verificar, no prometre.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Vegeu-ho a GitHub",
   "os.why.title": "Per què AGPL-3.0",
   "os.why.body": "Un arxiu demana confiança. L'AGPL garanteix que qualsevol que operi una Cinderella modificada ha de publicar aquestes modificacions, de manera que el públic sempre pot inspeccionar el codi que gestiona converses públiques. Aquesta garantia és la llicència fent la seva feina.",
-
   "legal.eyebrow": "Legal",
   "legal.title": "Informació legal",
   "legal.lede": "Textos provisionals, pendents de revisió jurídica abans del llançament. Els camps ressaltats s'han de completar.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Condicions",
   "legal.badge.template": "Plantilla, no assessorament jurídic",
   "legal.badge.draft": "Esborrany, pendent",
-
   "impressum.title": "Avís legal (Impressum)",
   "impressum.intro": "Informació d'acord amb § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Operador",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "No estem disposats ni obligats a participar en procediments de resolució de conflictes davant d'una junta arbitral de consum.",
   "impressum.ypo.h": "Responsable de protecció de menors (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella ha nomenat voluntàriament un responsable de protecció de menors:",
-
   "privacy.title": "Política de privadesa",
   "privacy.effective": "Data d'entrada en vigor:",
   "privacy.effective.ph": "data",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Proveïdor d'allotjament / ubicació; cal indicar que el processament d'IA es fa localment",
   "privacy.s5.h": "5. Els vostres drets",
   "privacy.s5.body": "Accés, rectificació, supressió, limitació, portabilitat, oposició: contacteu amb l'operador. Podeu presentar una reclamació davant d'una autoritat de control.",
-
   "terms.title": "Condicions d'ús",
   "terms.effective": "Data d'entrada en vigor:",
   "terms.effective.ph": "data",
@@ -254,7 +239,6 @@
   "terms.s4.body": "El contingut arxivat prové de grups públics que hi han consentit. L'operador pot retirar contingut arran de denúncies o d'obligacions legals.",
   "terms.s5.h": "5. Responsabilitat",
   "terms.s5.ph": "Clàusula de responsabilitat pendent d'assessorament jurídic",
-
   "footer.blurb": "La suite de bots d'IA per a comunitats SimpleX i Matrix. Consentiment primer, permanent, cercable i de codi obert sota AGPL-3.0.",
   "footer.product": "Producte",
   "footer.opensource": "Codi obert",
@@ -269,20 +253,16 @@
   "footer.terms": "Condicions",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Construït sobre SimpleX i Matrix. Sense vinculació amb SimpleX Chat ni amb la Matrix Foundation.",
-
   "share.label": "Compartiu aquesta pàgina",
-
   "cookie.title": "Galetes",
   "cookie.text": "Aquest lloc utilitza una galeta de sessió per a l'inici de sessió i recomptes d'ús anònims. Més detalls a la",
   "cookie.policy": "Política de privadesa",
   "cookie.accept": "Accepta",
   "cookie.reject": "Només les necessàries",
-
   "stub.badge": "Properament",
   "stub.lead": "Aquesta pàgina és de camí.",
   "stub.body": "Encara l'estem escrivint. Mentrestant, la capacitat d'arxiu ja és activa i el codi és obert, així que feu un cop d'ull a GitHub mentre espereu.",
   "stub.back": "Torna a l'inici",
-
   "meta.home.title": "Cinderella · Suite de bots d'IA per a SimpleX i Matrix",
   "meta.home.description": "Cinderella és un tallafoc davant de l'arxiu públic: cada missatge i cada fitxer passa per comprovacions de consentiment i detecció de CSAM abans que res es publiqui. Codi obert sota AGPL-3.0.",
   "meta.features.title": "Funcionalitats · Cinderella",

@@ -7,14 +7,11 @@
     "status": "CCB-S3-001 — Texte aus der freigegebenen Website-Vorlage des Betreibers, überarbeitet: keine Gedankenstriche (em dash) im sichtbaren Text, erweiterte Texte. Rechtliche Platzhalterfelder sind noch auszufüllen; Datenschutz/Nutzungsbedingungen sind Entwürfe.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "Die KI-Bot-Suite für SimpleX- und Matrix-Communitys",
-
   "a11y.skip": "Zum Inhalt springen",
   "a11y.menu": "Menü",
   "lang.label": "Sprache",
-
   "nav.home": "Start",
   "nav.features": "Funktionen",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Doku",
   "nav.legal": "Rechtliches",
   "nav.login": "Anmelden",
-
   "badge.alpha": "Alpha",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Aktiv",
   "badge.planned": "Geplant",
   "badge.indev": "In Entwicklung",
   "badge.recommended": "Empfohlen",
-
   "hero.ann": "Jetzt in Alpha · Zustimmungs- & CSAM-Prüfung",
   "hero.title1": "Nichts wird veröffentlicht,",
   "hero.title2": "bis es geprüft ist.",
@@ -43,7 +38,6 @@
   "trust.consent": "Zustimmung zuerst",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Lokale KI",
-
   "home.live.eyebrow": "Das Archiv, live",
   "home.live.title": "Ein dauerhaftes, öffentliches Archiv durchsuchen",
   "home.live.lede": "Volltextsuche, Filter und Medien hinter Authentifizierung. Diese interaktive Vorschau läuft komplett im Browser mit Beispieldaten: Suchbegriff eintippen, Gruppe wechseln und zusehen, wie das Archiv reagiert wie das echte.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Auf der Roadmap",
   "roadmap.matrix": "Matrix-Unterstützung",
   "roadmap.categorization": "Kategorisierung",
-  "roadmap.videogallery": "Videogalerie",
+  "roadmap.videogallery": "Video- & Bildergalerie",
   "roadmap.moderation": "Moderationswerkzeuge",
   "roadmap.localai": "Lokale KI",
   "roadmap.multitenancy": "Mandantenfähigkeit",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Verschlüsselt übertragen, gehärtete Hosts",
   "home.sec.point3": "Lokale KI, keine Dritt-Clouds",
   "home.sec.point4": "Meldung & Moderation von Inhalten",
-
   "demo.preview": "VORSCHAU · BEISPIELDATEN",
   "demo.groups": "GRUPPEN",
   "demo.allgroups": "Alle Gruppen",
@@ -94,7 +87,6 @@
   "demo.empty": "Keine archivierten Nachrichten passen",
   "demo.archived": "archiviert",
   "demo.attachment": "Anhang",
-
   "features.eyebrow": "Funktionen",
   "features.title1": "Alles läuft durch ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "In Entwicklung oder Konzeption. Reihenfolge und Umfang können sich ändern, denn dies ist Alpha-Software, und die Schutzmechanismen kommen zuerst.",
   "features.rm.matrix.body": "Dasselbe Consent-first-Archiv und dieselbe Bot-Suite für Matrix-Räume.",
   "features.rm.categorization.body": "Automatische thematische Gruppierung archivierter Inhalte.",
-  "features.rm.videogallery.body": "Eine eigene Oberfläche zum Durchstöbern archivierter Videos.",
+  "features.rm.videogallery.body": "Eine eigene Oberfläche zum Durchstöbern archivierter Videos und Bilder.",
   "features.rm.moderation.body": "Massenaktionen, Richtlinien und Prüf-Warteschlangen.",
   "features.rm.localai.body": "Prüfung und Zusammenfassungen auf Ihrer eigenen Hardware.",
   "features.rm.multitenancy.body": "Ein Deployment, viele isolierte Archive.",
-
   "pro.eyebrow": "Die kommerzielle Edition",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Verwaltetes Hosting und Fähigkeiten über den offenen Kern hinaus, für Betreiber, die das Archiv ohne eigene Infrastruktur wollen. Dieselben Schutzmechanismen, dasselbe offene Fundament, nur ohne Serverarbeit.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-Mail",
   "pro.customer.request": "Zugang anfragen",
   "pro.customer.login": "Kunden-Login",
-
   "security.eyebrow": "Sicherheit & Schutz",
   "security.title1": "Sicherheit ist ",
   "security.title2": "der Kern",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Eine Schwachstelle gefunden?",
   "security.vuln.body": "Melden Sie sie vertraulich über den Security-Kontakt im Repository. Verantwortungsvolle Meldungen werden genannt, und jede Meldung wird ernst genommen.",
   "security.vuln.cta": "Security-Richtlinie",
-
   "os.eyebrow": "Open Source",
   "os.title": "Offener Kern, offene Bücher",
   "os.lede": "Der Kern von Cinderella ist freie Software unter AGPL-3.0. Betreiben Sie sie selbst, lesen Sie jede Zeile, und messen Sie uns an dem, was diese Seite behauptet. Vertrauen sollte überprüfbar sein, nicht versprochen.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Auf GitHub ansehen",
   "os.why.title": "Warum AGPL-3.0",
   "os.why.body": "Ein Archiv verlangt Vertrauen. Die AGPL garantiert: Wer eine veränderte Cinderella betreibt, muss diese Änderungen veröffentlichen. Der Code, der öffentliche Unterhaltungen verarbeitet, bleibt damit immer überprüfbar. Genau dafür ist die Lizenz da.",
-
   "legal.eyebrow": "Rechtliches",
   "legal.title": "Rechtliche Informationen",
   "legal.lede": "Platzhaltertexte, vor dem Livegang juristisch prüfen zu lassen. Markierte Felder sind auszufüllen.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Nutzungsbedingungen",
   "legal.badge.template": "Vorlage, keine Rechtsberatung",
   "legal.badge.draft": "Entwurf, ausstehend",
-
   "impressum.title": "Impressum",
   "impressum.intro": "Angaben gemäß § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Diensteanbieter",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.",
   "impressum.ypo.h": "Jugendschutzbeauftragter",
   "impressum.ypo.intro": "Cinderella hat freiwillig einen Jugendschutzbeauftragten benannt:",
-
   "privacy.title": "Datenschutzerklärung",
   "privacy.effective": "Stand:",
   "privacy.effective.ph": "Datum",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Hosting-Anbieter / Ort; Hinweis, dass KI-Verarbeitung lokal erfolgt",
   "privacy.s5.h": "5. Ihre Rechte",
   "privacy.s5.body": "Auskunft, Berichtigung, Löschung, Einschränkung, Übertragbarkeit, Widerspruch: Wenden Sie sich an den Betreiber. Beschwerden sind bei einer Aufsichtsbehörde möglich.",
-
   "terms.title": "Nutzungsbedingungen",
   "terms.effective": "Stand:",
   "terms.effective.ph": "Datum",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Archivierte Inhalte stammen aus zustimmenden öffentlichen Gruppen. Der Betreiber kann Inhalte nach Meldungen oder rechtlicher Verpflichtung entfernen.",
   "terms.s5.h": "5. Haftung",
   "terms.s5.ph": "Haftungsklausel, durch Rechtsberatung zu ergänzen",
-
   "footer.blurb": "Die KI-Bot-Suite für SimpleX- und Matrix-Communities. Zustimmung zuerst, dauerhaft, durchsuchbar und Open Source unter AGPL-3.0.",
   "footer.product": "Produkt",
   "footer.opensource": "Open Source",
@@ -269,20 +253,16 @@
   "footer.terms": "Nutzungsbedingungen",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Basiert auf SimpleX und Matrix. Nicht mit SimpleX Chat oder der Matrix Foundation verbunden.",
-
   "share.label": "Diese Seite teilen",
-
   "cookie.title": "Cookies",
   "cookie.text": "Diese Website verwendet ein Sitzungs-Cookie für den Login sowie anonyme Nutzungszahlen. Details in der",
   "cookie.policy": "Datenschutzerklärung",
   "cookie.accept": "Akzeptieren",
   "cookie.reject": "Nur notwendige",
-
   "stub.badge": "Bald verfügbar",
   "stub.lead": "Diese Seite ist unterwegs.",
   "stub.body": "Wir schreiben noch daran. In der Zwischenzeit ist das Archiv live und der Code offen, werfen Sie also gern schon einen Blick auf GitHub.",
   "stub.back": "Zurück zur Startseite",
-
   "meta.home.title": "Cinderella · KI-Bot-Suite für SimpleX & Matrix",
   "meta.home.description": "Cinderella ist eine Firewall vor dem öffentlichen Archiv: Jede Nachricht und jede Datei durchläuft Zustimmungs- und CSAM-Prüfung, bevor irgendetwas online geht. Open Source unter AGPL-3.0.",
   "meta.features.title": "Funktionen · Cinderella",

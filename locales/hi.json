@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "SimpleX और Matrix समुदायों के लिए AI बॉट सुइट",
-
   "a11y.skip": "सीधे सामग्री पर जाएँ",
   "a11y.menu": "मेनू",
   "lang.label": "भाषा",
-
   "nav.home": "होम",
   "nav.features": "विशेषताएँ",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "दस्तावेज़",
   "nav.legal": "कानूनी",
   "nav.login": "लॉगिन",
-
   "badge.alpha": "अल्फ़ा",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "लाइव",
   "badge.planned": "नियोजित",
   "badge.indev": "विकासाधीन",
   "badge.recommended": "अनुशंसित",
-
   "hero.ann": "अब अल्फ़ा में · सहमति + CSAM स्क्रीनिंग",
   "hero.title1": "जाँच पूरी होने से पहले",
   "hero.title2": "कुछ भी प्रकाशित नहीं होता।",
@@ -43,7 +38,6 @@
   "trust.consent": "सहमति सर्वप्रथम",
   "trust.passkeys": "पासकी",
   "trust.localai": "स्थानीय AI",
-
   "home.live.eyebrow": "संग्रह, लाइव",
   "home.live.title": "एक स्थायी, सार्वजनिक रिकॉर्ड खोजें",
   "home.live.lede": "फ़ुल-टेक्स्ट खोज, फ़िल्टर, और प्रमाणीकरण के पीछे सुरक्षित मीडिया। यह इंटरैक्टिव पूर्वावलोकन नमूना डेटा के साथ पूरी तरह आपके ब्राउज़र में चलता है: कोई खोज शब्द टाइप करें, समूह बदलें, और देखें कि संग्रह बिल्कुल असली की तरह प्रतिक्रिया देता है।",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "रोडमैप पर",
   "roadmap.matrix": "Matrix समर्थन",
   "roadmap.categorization": "श्रेणीकरण",
-  "roadmap.videogallery": "वीडियो गैलरी",
+  "roadmap.videogallery": "वीडियो और छवि गैलरी",
   "roadmap.moderation": "मॉडरेशन उपकरण",
   "roadmap.localai": "स्थानीय AI",
   "roadmap.multitenancy": "मल्टी-टेनेंसी",
@@ -79,7 +73,6 @@
   "home.sec.point2": "ट्रांज़िट में एन्क्रिप्टेड, सुदृढ़ होस्ट",
   "home.sec.point3": "स्थानीय AI, कोई तृतीय-पक्ष क्लाउड नहीं",
   "home.sec.point4": "सामग्री रिपोर्टिंग और मॉडरेशन",
-
   "demo.preview": "पूर्वावलोकन · नमूना डेटा",
   "demo.groups": "समूह",
   "demo.allgroups": "सभी समूह",
@@ -94,7 +87,6 @@
   "demo.empty": "कोई संग्रहित संदेश मेल नहीं खाता",
   "demo.archived": "संग्रहित",
   "demo.attachment": "अनुलग्नक",
-
   "features.eyebrow": "विशेषताएँ",
   "features.title1": "सब कुछ ",
   "features.title2": " से होकर गुजरता है।",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "विकास या डिज़ाइन में। क्रम और दायरा बदल सकते हैं, क्योंकि यह अल्फ़ा सॉफ़्टवेयर है और हम सुरक्षा उपायों को पहले जारी करना बेहतर समझते हैं।",
   "features.rm.matrix.body": "Matrix रूम्स के लिए वही सहमति-प्रथम संग्रह और बॉट सुइट।",
   "features.rm.categorization.body": "संग्रहित सामग्री का स्वचालित विषय-आधारित समूहन।",
-  "features.rm.videogallery.body": "संग्रहित वीडियो ब्राउज़ करने के लिए एक समर्पित इंटरफ़ेस।",
+  "features.rm.videogallery.body": "संग्रहीत वीडियो और छवियों के लिए एक समर्पित ब्राउज़िंग सतह।",
   "features.rm.moderation.body": "बल्क कार्रवाइयाँ, नीतियाँ, और समीक्षक कतारें।",
   "features.rm.localai.body": "जाँच और सारांश, जो आपके अपने हार्डवेयर पर चलते हैं।",
   "features.rm.multitenancy.body": "एक डिप्लॉयमेंट, अनेक पृथक संग्रह।",
-
   "pro.eyebrow": "व्यावसायिक संस्करण",
   "pro.title": "Cinderella Pro",
   "pro.lede": "प्रबंधित होस्टिंग और ओपन कोर से आगे की क्षमताएँ, उन ऑपरेटरों के लिए जो इन्फ़्रास्ट्रक्चर चलाए बिना संग्रह चाहते हैं। वही सुरक्षा उपाय, वही खुली नींव, सर्वर का कोई काम नहीं।",
@@ -170,7 +161,6 @@
   "pro.customer.email": "ईमेल",
   "pro.customer.request": "एक्सेस का अनुरोध करें",
   "pro.customer.login": "ग्राहक लॉगिन",
-
   "security.eyebrow": "सुरक्षा और संरक्षण",
   "security.title1": "सुरक्षा ही ",
   "security.title2": "मूल उद्देश्य",
@@ -190,7 +180,6 @@
   "security.vuln.title": "कोई सुरक्षा कमज़ोरी मिली?",
   "security.vuln.body": "रिपॉज़िटरी में दिए गए सुरक्षा संपर्क के माध्यम से उसे निजी रूप से रिपोर्ट करें। हम ज़िम्मेदार प्रकटीकरण को श्रेय देते हैं और हर रिपोर्ट को गंभीरता से लेते हैं।",
   "security.vuln.cta": "सुरक्षा नीति",
-
   "os.eyebrow": "ओपन सोर्स",
   "os.title": "खुला कोर, खुला बहीखाता",
   "os.lede": "Cinderella का कोर AGPL-3.0 के अंतर्गत मुक्त सॉफ़्टवेयर है। इसे स्वयं चलाएँ, हर पंक्ति पढ़ें, और इस साइट के दावों पर हमें परखें। भरोसा सत्यापन योग्य होना चाहिए, केवल वादा नहीं।",
@@ -199,7 +188,6 @@
   "os.repo.cta": "GitHub पर देखें",
   "os.why.title": "AGPL-3.0 ही क्यों",
   "os.why.body": "एक संग्रह भरोसा माँगता है। AGPL यह गारंटी देता है कि संशोधित Cinderella चलाने वाले किसी भी व्यक्ति को वे संशोधन प्रकाशित करने होंगे, ताकि जनता सार्वजनिक बातचीत संभालने वाले कोड की हमेशा जाँच कर सके। यही गारंटी इस लाइसेंस का काम है।",
-
   "legal.eyebrow": "कानूनी",
   "legal.title": "कानूनी जानकारी",
   "legal.lede": "प्लेसहोल्डर पाठ, लॉन्च से पहले कानूनी सलाहकार द्वारा समीक्षा अपेक्षित। हाइलाइट किए गए फ़ील्ड भरे जाने हैं।",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "शर्तें",
   "legal.badge.template": "टेम्पलेट, कानूनी सलाह नहीं",
   "legal.badge.draft": "मसौदा, लंबित",
-
   "impressum.title": "कानूनी सूचना (Impressum)",
   "impressum.intro": "§ 5 TMG / § 18 MStV के अनुसार जानकारी।",
   "impressum.operator.h": "ऑपरेटर",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "हम किसी उपभोक्ता मध्यस्थता बोर्ड के समक्ष विवाद समाधान कार्यवाही में भाग लेने के लिए न इच्छुक हैं, न बाध्य।",
   "impressum.ypo.h": "युवा संरक्षण अधिकारी (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella ने स्वेच्छा से एक युवा संरक्षण अधिकारी नियुक्त किया है:",
-
   "privacy.title": "गोपनीयता नीति",
   "privacy.effective": "प्रभावी तिथि:",
   "privacy.effective.ph": "तिथि",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "होस्टिंग प्रदाता / स्थान; ध्यान दें कि AI प्रसंस्करण स्थानीय रूप से चलता है",
   "privacy.s5.h": "5. आपके अधिकार",
   "privacy.s5.body": "पहुँच, सुधार, विलोपन, प्रतिबंध, पोर्टेबिलिटी, आपत्ति: ऑपरेटर से संपर्क करें। आप किसी पर्यवेक्षी प्राधिकरण के पास शिकायत भी दर्ज कर सकते हैं।",
-
   "terms.title": "उपयोग की शर्तें",
   "terms.effective": "प्रभावी तिथि:",
   "terms.effective.ph": "तिथि",
@@ -254,7 +239,6 @@
   "terms.s4.body": "संग्रहित सामग्री सहमति देने वाले सार्वजनिक समूहों से आती है। ऑपरेटर रिपोर्ट या कानूनी बाध्यता के आधार पर सामग्री हटा सकता है।",
   "terms.s5.h": "5. दायित्व",
   "terms.s5.ph": "दायित्व खंड कानूनी सलाहकार द्वारा उपलब्ध कराया जाना है",
-
   "footer.blurb": "SimpleX और Matrix समुदायों के लिए AI बॉट सुइट। सहमति-प्रथम, स्थायी, खोजने योग्य, और AGPL-3.0 के अंतर्गत ओपन सोर्स।",
   "footer.product": "उत्पाद",
   "footer.opensource": "ओपन सोर्स",
@@ -269,20 +253,16 @@
   "footer.terms": "शर्तें",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "SimpleX और Matrix पर आधारित। SimpleX Chat या Matrix Foundation से संबद्ध नहीं।",
-
   "share.label": "यह पृष्ठ साझा करें",
-
   "cookie.title": "कुकीज़",
   "cookie.text": "यह साइट लॉगिन के लिए एक सत्र कुकी सेट करती है और अनाम उपयोग की गिनती करती है। विवरण यहाँ देखें:",
   "cookie.policy": "गोपनीयता नीति",
   "cookie.accept": "स्वीकार करें",
   "cookie.reject": "केवल आवश्यक ही",
-
   "stub.badge": "जल्द आ रहा है",
   "stub.lead": "यह पृष्ठ तैयार हो रहा है।",
   "stub.body": "हम इसे अभी लिख रहे हैं। इस बीच, संग्रह क्षमता लाइव है और कोड खुला है, तो प्रतीक्षा करते हुए GitHub पर एक नज़र डालें।",
   "stub.back": "होम पर वापस जाएँ",
-
   "meta.home.title": "Cinderella · SimpleX और Matrix के लिए AI बॉट सुइट",
   "meta.home.description": "Cinderella सार्वजनिक संग्रह के सामने खड़ी एक फ़ायरवॉल है: हर संदेश और हर फ़ाइल, लाइव होने से पहले, सहमति जाँच और CSAM स्क्रीनिंग से होकर गुजरती है। AGPL-3.0 के अंतर्गत ओपन सोर्स।",
   "meta.features.title": "विशेषताएँ · Cinderella",

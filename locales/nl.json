@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "De AI-botsuite voor SimpleX- en Matrix-community's",
-
   "a11y.skip": "Naar de inhoud",
   "a11y.menu": "Menu",
   "lang.label": "Taal",
-
   "nav.home": "Home",
   "nav.features": "Functies",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Docs",
   "nav.legal": "Juridisch",
   "nav.login": "Inloggen",
-
   "badge.alpha": "Alpha",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Live",
   "badge.planned": "Gepland",
   "badge.indev": "In ontwikkeling",
   "badge.recommended": "Aanbevolen",
-
   "hero.ann": "Nu in alpha · toestemming + CSAM-screening",
   "hero.title1": "Niets wordt gepubliceerd",
   "hero.title2": "voordat het is gescreend.",
@@ -43,7 +38,6 @@
   "trust.consent": "Toestemming eerst",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Lokale AI",
-
   "home.live.eyebrow": "Het archief, live",
   "home.live.title": "Doorzoek een permanent, openbaar archief",
   "home.live.lede": "Zoeken in volledige tekst, filters en media achter authenticatie. Deze interactieve preview draait volledig in uw browser met voorbeelddata: typ een zoekopdracht, wissel van groep en zie hoe het archief precies zo reageert als het echte.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Op de roadmap",
   "roadmap.matrix": "Matrix-ondersteuning",
   "roadmap.categorization": "Categorisering",
-  "roadmap.videogallery": "Videogalerij",
+  "roadmap.videogallery": "Video- en afbeeldingengalerij",
   "roadmap.moderation": "Moderatietools",
   "roadmap.localai": "Lokale AI",
   "roadmap.multitenancy": "Multi-tenancy",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Versleuteld onderweg, geharde hosts",
   "home.sec.point3": "Lokale AI, geen externe clouds",
   "home.sec.point4": "Melden & modereren van content",
-
   "demo.preview": "PREVIEW · VOORBEELDDATA",
   "demo.groups": "GROEPEN",
   "demo.allgroups": "Alle groepen",
@@ -94,7 +87,6 @@
   "demo.empty": "Geen gearchiveerde berichten komen overeen",
   "demo.archived": "gearchiveerd",
   "demo.attachment": "bijlage",
-
   "features.eyebrow": "Functies",
   "features.title1": "Alles loopt via ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "In ontwikkeling of in ontwerp. Volgorde en omvang kunnen veranderen, want dit is alpha-software en we leveren liever eerst de waarborgen.",
   "features.rm.matrix.body": "Hetzelfde consent-first archief en dezelfde botsuite voor Matrix-kamers.",
   "features.rm.categorization.body": "Automatische thematische groepering van gearchiveerde content.",
-  "features.rm.videogallery.body": "Een eigen bladeromgeving voor gearchiveerde video's.",
+  "features.rm.videogallery.body": "Een speciaal bladeroppervlak voor gearchiveerde video's en afbeeldingen.",
   "features.rm.moderation.body": "Bulkacties, beleidsregels en beoordelingswachtrijen.",
   "features.rm.localai.body": "Screening en samenvattingen die op uw eigen hardware draaien.",
   "features.rm.multitenancy.body": "Eén deployment, vele geïsoleerde archieven.",
-
   "pro.eyebrow": "De commerciële editie",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Managed hosting en functionaliteiten die verder gaan dan de open kern, voor beheerders die het archief willen zonder zelf infrastructuur te draaien. Dezelfde waarborgen, hetzelfde open fundament, zonder het serverwerk.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-mail",
   "pro.customer.request": "Toegang aanvragen",
   "pro.customer.login": "Klantlogin",
-
   "security.eyebrow": "Beveiliging & veiligheid",
   "security.title1": "Beveiliging is ",
   "security.title2": "de kern",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Een kwetsbaarheid gevonden?",
   "security.vuln.body": "Meld die vertrouwelijk via het securitycontact in de repository. We vermelden verantwoorde meldingen met naam en nemen elke melding serieus.",
   "security.vuln.cta": "Securitybeleid",
-
   "os.eyebrow": "Open Source",
   "os.title": "Open kern, open boeken",
   "os.lede": "De kern van Cinderella is vrije software onder AGPL-3.0. Draai hem zelf, lees elke regel en houd ons aan wat deze site beweert. Vertrouwen hoort verifieerbaar te zijn, niet beloofd.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Bekijk op GitHub",
   "os.why.title": "Waarom AGPL-3.0",
   "os.why.body": "Een archief vraagt om vertrouwen. De AGPL garandeert dat iedereen die een gewijzigde Cinderella draait, die wijzigingen moet publiceren, zodat het publiek de code die openbare gesprekken verwerkt altijd kan inspecteren. Precies daarvoor is de licentie er.",
-
   "legal.eyebrow": "Juridisch",
   "legal.title": "Juridische informatie",
   "legal.lede": "Plaatshouderteksten, vóór de lancering te laten beoordelen door een jurist. Gemarkeerde velden moeten worden ingevuld.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Voorwaarden",
   "legal.badge.template": "Sjabloon, geen juridisch advies",
   "legal.badge.draft": "Concept, in afwachting",
-
   "impressum.title": "Colofon (Impressum)",
   "impressum.intro": "Informatie overeenkomstig § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Exploitant",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Wij zijn niet bereid of verplicht om deel te nemen aan een geschillenbeslechtingsprocedure voor een consumentengeschillencommissie.",
   "impressum.ypo.h": "Jeugdbeschermingsfunctionaris (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella heeft vrijwillig een jeugdbeschermingsfunctionaris aangesteld:",
-
   "privacy.title": "Privacybeleid",
   "privacy.effective": "Ingangsdatum:",
   "privacy.effective.ph": "datum",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Hostingprovider / locatie; vermeld dat AI-verwerking lokaal draait",
   "privacy.s5.h": "5. Uw rechten",
   "privacy.s5.body": "Inzage, rectificatie, wissing, beperking, overdraagbaarheid, bezwaar: neem contact op met de exploitant. U kunt een klacht indienen bij een toezichthoudende autoriteit.",
-
   "terms.title": "Gebruiksvoorwaarden",
   "terms.effective": "Ingangsdatum:",
   "terms.effective.ph": "datum",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Gearchiveerde content is afkomstig uit openbare groepen die hebben ingestemd. De exploitant kan content verwijderen naar aanleiding van meldingen of een wettelijke verplichting.",
   "terms.s5.h": "5. Aansprakelijkheid",
   "terms.s5.ph": "Aansprakelijkheidsclausule, aan te leveren door een jurist",
-
   "footer.blurb": "De AI-botsuite voor SimpleX- en Matrix-community's. Toestemming eerst, permanent, doorzoekbaar en open source onder AGPL-3.0.",
   "footer.product": "Product",
   "footer.opensource": "Open Source",
@@ -269,20 +253,16 @@
   "footer.terms": "Voorwaarden",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Gebouwd op SimpleX en Matrix. Niet gelieerd aan SimpleX Chat of de Matrix Foundation.",
-
   "share.label": "Deel deze pagina",
-
   "cookie.title": "Cookies",
   "cookie.text": "Deze site gebruikt een sessiecookie voor het inloggen en anonieme gebruikstellingen. Details in het",
   "cookie.policy": "Privacybeleid",
   "cookie.accept": "Accepteren",
   "cookie.reject": "Alleen noodzakelijke",
-
   "stub.badge": "Binnenkort beschikbaar",
   "stub.lead": "Deze pagina is onderweg.",
   "stub.body": "We schrijven hier nog aan. Ondertussen is de archieffunctionaliteit live en is de code open, dus neem gerust alvast een kijkje op GitHub.",
   "stub.back": "Terug naar home",
-
   "meta.home.title": "Cinderella · AI-botsuite voor SimpleX & Matrix",
   "meta.home.description": "Cinderella is een firewall vóór het openbare archief: elk bericht en elk bestand doorloopt toestemmingscontroles en CSAM-screening voordat er iets live gaat. Open source onder AGPL-3.0.",
   "meta.features.title": "Functies · Cinderella",

@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "DI botų rinkinys SimpleX ir Matrix bendruomenėms",
-
   "a11y.skip": "Pereiti prie turinio",
   "a11y.menu": "Meniu",
   "lang.label": "Kalba",
-
   "nav.home": "Pradžia",
   "nav.features": "Funkcijos",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentacija",
   "nav.legal": "Teisinė informacija",
   "nav.login": "Prisijungti",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Veikia",
   "badge.planned": "Planuojama",
   "badge.indev": "Kuriama",
   "badge.recommended": "Rekomenduojama",
-
   "hero.ann": "Jau alfa versijoje · sutikimo ir CSAM patikra",
   "hero.title1": "Niekas neskelbiama,",
   "hero.title2": "kol nepatikrinta.",
@@ -43,7 +38,6 @@
   "trust.consent": "Pirmiausia sutikimas",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Vietinis DI",
-
   "home.live.eyebrow": "Archyvas gyvai",
   "home.live.title": "Ieškokite nuolatiniame viešame archyve",
   "home.live.lede": "Viso teksto paieška, filtrai ir medija už autentifikacijos. Ši interaktyvi peržiūra veikia vien jūsų naršyklėje su pavyzdiniais duomenimis: įveskite užklausą, perjunkite grupes ir stebėkite, kaip archyvas reaguoja lygiai taip pat kaip tikrasis.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Planuose",
   "roadmap.matrix": "Matrix palaikymas",
   "roadmap.categorization": "Kategorizavimas",
-  "roadmap.videogallery": "Vaizdo įrašų galerija",
+  "roadmap.videogallery": "Vaizdo įrašų ir vaizdų galerija",
   "roadmap.moderation": "Moderavimo įrankiai",
   "roadmap.localai": "Vietinis DI",
   "roadmap.multitenancy": "Kelių nuomininkų režimas",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Šifruota perduodant, sustiprinti serveriai",
   "home.sec.point3": "Vietinis DI, jokių trečiųjų šalių debesijų",
   "home.sec.point4": "Turinio pranešimai ir moderavimas",
-
   "demo.preview": "PERŽIŪRA · PAVYZDINIAI DUOMENYS",
   "demo.groups": "GRUPĖS",
   "demo.allgroups": "Visos grupės",
@@ -94,7 +87,6 @@
   "demo.empty": "Nerasta atitinkančių archyvuotų žinučių",
   "demo.archived": "archyvuota",
   "demo.attachment": "priedas",
-
   "features.eyebrow": "Funkcijos",
   "features.title1": "Viskas eina per ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Kuriama arba projektuojama. Tvarka ir apimtis gali keistis, nes tai alfa programinė įranga, o apsaugos priemones norime paleisti pirmiausia.",
   "features.rm.matrix.body": "Tas pats sutikimu grįstas archyvas ir botų rinkinys Matrix kambariams.",
   "features.rm.categorization.body": "Automatinis archyvuoto turinio grupavimas pagal temas.",
-  "features.rm.videogallery.body": "Atskira naršymo erdvė archyvuotiems vaizdo įrašams.",
+  "features.rm.videogallery.body": "Speciali naršymo erdvė archyvuotiems vaizdo įrašams ir vaizdams.",
   "features.rm.moderation.body": "Masiniai veiksmai, taisyklės ir peržiūrėtojų eilės.",
   "features.rm.localai.body": "Patikra ir santraukos, veikiančios jūsų pačių aparatinėje įrangoje.",
   "features.rm.multitenancy.body": "Vienas diegimas, daug izoliuotų archyvų.",
-
   "pro.eyebrow": "Komercinė versija",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Valdomas talpinimas ir galimybės, pranokstančios atvirąjį branduolį, operatoriams, kurie nori archyvo be infrastruktūros priežiūros. Tos pačios apsaugos priemonės, tas pats atviras pagrindas, jokio darbo su serveriais.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "El. paštas",
   "pro.customer.request": "Prašyti prieigos",
   "pro.customer.login": "Klientų prisijungimas",
-
   "security.eyebrow": "Saugumas ir apsauga",
   "security.title1": "Saugumas yra ",
   "security.title2": "esmė",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Radote pažeidžiamumą?",
   "security.vuln.body": "Praneškite apie jį privačiai per saugumo kontaktą repozitorijoje. Atsakingus pranešėjus paminime, o kiekvieną pranešimą vertiname rimtai.",
   "security.vuln.cta": "Saugumo politika",
-
   "os.eyebrow": "Atvirasis kodas",
   "os.title": "Atviras branduolys, atviros knygos",
   "os.lede": "Cinderella branduolys yra laisva programinė įranga pagal AGPL-3.0. Paleiskite ją patys, perskaitykite kiekvieną eilutę ir reikalaukite iš mūsų to, ką teigia ši svetainė. Pasitikėjimas turi būti patikrinamas, o ne žadamas.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Žiūrėti GitHub",
   "os.why.title": "Kodėl AGPL-3.0",
   "os.why.body": "Archyvas prašo pasitikėjimo. AGPL garantuoja, kad kiekvienas, naudojantis modifikuotą Cinderella, privalo paskelbti tuos pakeitimus, todėl visuomenė visada gali patikrinti kodą, tvarkantį viešus pokalbius. Būtent tam licencija ir skirta.",
-
   "legal.eyebrow": "Teisinė informacija",
   "legal.title": "Teisinė informacija",
   "legal.lede": "Šabloniniai tekstai, prieš paleidimą juos turi peržiūrėti teisininkai. Paryškinti laukai turi būti užpildyti.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Sąlygos",
   "legal.badge.template": "Šablonas, ne teisinė konsultacija",
   "legal.badge.draft": "Juodraštis, laukiama",
-
   "impressum.title": "Teisinis pranešimas (Impressum)",
   "impressum.intro": "Informacija pagal § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Operatorius",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Mes nesame nei pasirengę, nei įpareigoti dalyvauti ginčų sprendimo procedūrose vartotojų arbitražo institucijoje.",
   "impressum.ypo.h": "Nepilnamečių apsaugos pareigūnas (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella savanoriškai paskyrė nepilnamečių apsaugos pareigūną:",
-
   "privacy.title": "Privatumo politika",
   "privacy.effective": "Įsigaliojimo data:",
   "privacy.effective.ph": "data",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Talpinimo paslaugų teikėjas / vieta; pastaba, kad DI apdorojimas vyksta lokaliai",
   "privacy.s5.h": "5. Jūsų teisės",
   "privacy.s5.body": "Prieiga, ištaisymas, ištrynimas, apribojimas, perkeliamumas, prieštaravimas: kreipkitės į operatorių. Taip pat galite pateikti skundą priežiūros institucijai.",
-
   "terms.title": "Naudojimo sąlygos",
   "terms.effective": "Įsigaliojimo data:",
   "terms.effective.ph": "data",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Archyvuotas turinys kyla iš sutikusių viešų grupių. Operatorius gali pašalinti turinį gavęs pranešimus arba vykdydamas teisinę pareigą.",
   "terms.s5.h": "5. Atsakomybė",
   "terms.s5.ph": "Atsakomybės sąlygą pateiks teisininkai",
-
   "footer.blurb": "DI botų rinkinys SimpleX ir Matrix bendruomenėms. Pirmiausia sutikimas, nuolatinis, ieškomas ir atvirojo kodo pagal AGPL-3.0.",
   "footer.product": "Produktas",
   "footer.opensource": "Atvirasis kodas",
@@ -269,20 +253,16 @@
   "footer.terms": "Sąlygos",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Sukurta ant SimpleX ir Matrix pagrindo. Nesusijusi su SimpleX Chat ar Matrix Foundation.",
-
   "share.label": "Dalytis šiuo puslapiu",
-
   "cookie.title": "Slapukai",
   "cookie.text": "Ši svetainė naudoja sesijos slapuką prisijungimui ir anoniminę naudojimo statistiką. Daugiau informacijos:",
   "cookie.policy": "Privatumo politika",
   "cookie.accept": "Sutikti",
   "cookie.reject": "Tik būtini",
-
   "stub.badge": "Netrukus",
   "stub.lead": "Šis puslapis jau pakeliui.",
   "stub.body": "Mes jį dar rašome. Kol laukiate, archyvo galimybė jau veikia, o kodas atviras, tad užsukite į GitHub.",
   "stub.back": "Grįžti į pradžią",
-
   "meta.home.title": "Cinderella · DI botų rinkinys SimpleX ir Matrix bendruomenėms",
   "meta.home.description": "Cinderella yra užkarda prieš viešąjį archyvą: kiekviena žinutė ir failas pereina sutikimo ir CSAM patikras, prieš ką nors paskelbiant. Atvirasis kodas pagal AGPL-3.0.",
   "meta.features.title": "Funkcijos · Cinderella",

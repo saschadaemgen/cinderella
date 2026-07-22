@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "Paket AI botova za SimpleX i Matrix zajednice",
-
   "a11y.skip": "Pređi na sadržaj",
   "a11y.menu": "Meni",
   "lang.label": "Jezik",
-
   "nav.home": "Početna",
   "nav.features": "Funkcije",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentacija",
   "nav.legal": "Pravno",
   "nav.login": "Prijava",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Aktivno",
   "badge.planned": "Planirano",
   "badge.indev": "U razvoju",
   "badge.recommended": "Preporučeno",
-
   "hero.ann": "Sada u alfa fazi · saglasnost + CSAM provera",
   "hero.title1": "Ništa se ne objavljuje",
   "hero.title2": "dok ne prođe proveru.",
@@ -43,7 +38,6 @@
   "trust.consent": "Saglasnost na prvom mestu",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Lokalni AI",
-
   "home.live.eyebrow": "Arhiva, uživo",
   "home.live.title": "Pretražite trajan, javni zapis",
   "home.live.lede": "Pretraga celog teksta, filteri i mediji iza autentifikacije. Ovaj interaktivni pregled radi u potpunosti u vašem pregledaču sa probnim podacima: unesite upit, promenite grupu i posmatrajte kako arhiva reaguje potpuno isto kao prava.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Na planu razvoja",
   "roadmap.matrix": "Podrška za Matrix",
   "roadmap.categorization": "Kategorizacija",
-  "roadmap.videogallery": "Video galerija",
+  "roadmap.videogallery": "Galerija videa i slika",
   "roadmap.moderation": "Alati za moderaciju",
   "roadmap.localai": "Lokalni AI",
   "roadmap.multitenancy": "Multi-tenancy",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Šifrovano u prenosu, ojačani serveri",
   "home.sec.point3": "Lokalni AI, bez klauda trećih strana",
   "home.sec.point4": "Prijavljivanje sadržaja i moderacija",
-
   "demo.preview": "PREGLED · PROBNI PODACI",
   "demo.groups": "GRUPE",
   "demo.allgroups": "Sve grupe",
@@ -94,7 +87,6 @@
   "demo.empty": "Nijedna arhivirana poruka ne odgovara upitu",
   "demo.archived": "arhivirano",
   "demo.attachment": "prilog",
-
   "features.eyebrow": "Funkcije",
   "features.title1": "Sve proverava ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "U razvoju ili u fazi dizajna. Redosled i obim se mogu promeniti, jer je ovo alfa softver i radije prvo isporučujemo zaštitne mehanizme.",
   "features.rm.matrix.body": "Ista arhiva zasnovana na saglasnosti i isti paket botova za Matrix sobe.",
   "features.rm.categorization.body": "Automatsko grupisanje tema u arhiviranom sadržaju.",
-  "features.rm.videogallery.body": "Poseban prostor za pregledanje arhiviranog videa.",
+  "features.rm.videogallery.body": "Namenska površina za pregledanje arhiviranih videa i slika.",
   "features.rm.moderation.body": "Grupne akcije, pravila i redovi za pregledače.",
   "features.rm.localai.body": "Provera i sažeci koji rade na vašem hardveru.",
   "features.rm.multitenancy.body": "Jedna instalacija, mnogo izolovanih arhiva.",
-
   "pro.eyebrow": "Komercijalno izdanje",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Upravljano hostovanje i funkcionalnosti izvan otvorenog jezgra, za operatere koji žele arhivu bez vođenja infrastrukture. Isti zaštitni mehanizmi, ista otvorena osnova, bez posla oko servera.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "Imejl",
   "pro.customer.request": "Zatražite pristup",
   "pro.customer.login": "Prijava za korisnike",
-
   "security.eyebrow": "Bezbednost i zaštita",
   "security.title1": "Bezbednost je ",
   "security.title2": "suština",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Pronašli ste ranjivost?",
   "security.vuln.body": "Prijavite je privatno preko bezbednosnog kontakta u repozitorijumu. Odgovorno prijavljivanje javno priznajemo i svaku prijavu shvatamo ozbiljno.",
   "security.vuln.cta": "Bezbednosna politika",
-
   "os.eyebrow": "Otvoreni kod",
   "os.title": "Otvoreno jezgro, otvorene knjige",
   "os.lede": "Jezgro projekta Cinderella je slobodan softver pod licencom AGPL-3.0. Pokrenite ga sami, pročitajte svaku liniju i držite nas za reč u vezi sa svim što ovaj sajt tvrdi. Poverenje treba da bude proverljivo, a ne obećano.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Pogledajte na GitHub-u",
   "os.why.title": "Zašto AGPL-3.0",
   "os.why.body": "Arhiva traži poverenje. AGPL garantuje da svako ko koristi izmenjenu verziju sistema Cinderella mora da objavi te izmene, pa javnost uvek može da pregleda kod koji obrađuje javne razgovore. Ta garancija je licenca koja radi svoj posao.",
-
   "legal.eyebrow": "Pravno",
   "legal.title": "Pravne informacije",
   "legal.lede": "Privremeni tekstovi, pre objavljivanja ih pregleda pravni savetnik. Označena polja moraju biti popunjena.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Uslovi",
   "legal.badge.template": "Šablon, nije pravni savet",
   "legal.badge.draft": "Nacrt, u pripremi",
-
   "impressum.title": "Pravno obaveštenje (Impressum)",
   "impressum.intro": "Informacije u skladu sa § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Operater",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Nismo ni voljni ni obavezni da učestvujemo u postupcima rešavanja sporova pred potrošačkim arbitražnim telom.",
   "impressum.ypo.h": "Poverenik za zaštitu mladih (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella je dobrovoljno imenovala poverenika za zaštitu mladih:",
-
   "privacy.title": "Politika privatnosti",
   "privacy.effective": "Datum stupanja na snagu:",
   "privacy.effective.ph": "datum",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Hosting provajder / lokacija; napomena da se AI obrada izvršava lokalno",
   "privacy.s5.h": "5. Vaša prava",
   "privacy.s5.body": "Pristup, ispravka, brisanje, ograničenje, prenosivost, prigovor: obratite se operateru. Možete podneti pritužbu nadzornom organu.",
-
   "terms.title": "Uslovi korišćenja",
   "terms.effective": "Datum stupanja na snagu:",
   "terms.effective.ph": "datum",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Arhivirani sadržaj potiče iz javnih grupa koje su dale saglasnost. Operater može ukloniti sadržaj na osnovu prijava ili zakonske obaveze.",
   "terms.s5.h": "5. Odgovornost",
   "terms.s5.ph": "Klauzulu o odgovornosti dostavlja pravni savetnik",
-
   "footer.blurb": "Paket AI botova za SimpleX i Matrix zajednice. Saglasnost na prvom mestu, trajno, pretraživo i otvorenog koda pod licencom AGPL-3.0.",
   "footer.product": "Proizvod",
   "footer.opensource": "Otvoreni kod",
@@ -269,9 +253,7 @@
   "footer.terms": "Uslovi",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Izgrađeno na mrežama SimpleX i Matrix. Nismo povezani sa SimpleX Chat niti sa Matrix Foundation.",
-
   "share.label": "Podelite ovu stranicu",
-
   "cookie.title": "Kolačići",
   "cookie.text": "Ovaj sajt koristi sesijski kolačić za prijavu i anonimno brojanje poseta. Detalji se nalaze u dokumentu",
   "cookie.policy": "Politika privatnosti",
@@ -281,7 +263,6 @@
   "stub.lead": "Ova stranica je u pripremi.",
   "stub.body": "Još uvek je pišemo. U međuvremenu, funkcionalnost arhive je aktivna i kod je otvoren, pa dok čekate pogledajte na GitHub-u.",
   "stub.back": "Nazad na početnu",
-
   "meta.home.title": "Cinderella · Paket AI botova za SimpleX i Matrix",
   "meta.home.description": "Cinderella je zaštitni zid ispred javne arhive: svaka poruka i svaki fajl prolaze kroz proveru saglasnosti i CSAM proveru pre nego što bilo šta postane javno. Otvoreni kod pod licencom AGPL-3.0.",
   "meta.features.title": "Funkcije · Cinderella",

@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "MI botu komplekts SimpleX un Matrix kopienām",
-
   "a11y.skip": "Pāriet uz saturu",
   "a11y.menu": "Izvēlne",
   "lang.label": "Valoda",
-
   "nav.home": "Sākums",
   "nav.features": "Funkcijas",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentācija",
   "nav.legal": "Juridiskā informācija",
   "nav.login": "Pieteikties",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Darbojas",
   "badge.planned": "Plānots",
   "badge.indev": "Izstrādē",
   "badge.recommended": "Ieteicams",
-
   "hero.ann": "Tagad alfa versijā · piekrišanas un CSAM pārbaude",
   "hero.title1": "Nekas netiek publicēts,",
   "hero.title2": "kamēr nav pārbaudīts.",
@@ -43,7 +38,6 @@
   "trust.consent": "Piekrišana vispirms",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Lokāls MI",
-
   "home.live.eyebrow": "Arhīvs darbībā",
   "home.live.title": "Meklējiet pastāvīgā, publiskā arhīvā",
   "home.live.lede": "Pilnteksta meklēšana, filtri un multivide aiz autentifikācijas. Šis interaktīvais priekšskatījums darbojas pilnībā jūsu pārlūkā ar paraugdatiem: ierakstiet vaicājumu, pārslēdziet grupas un vērojiet, kā arhīvs reaģē tieši tāpat kā īstais.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Ceļa kartē",
   "roadmap.matrix": "Matrix atbalsts",
   "roadmap.categorization": "Kategorizēšana",
-  "roadmap.videogallery": "Video galerija",
+  "roadmap.videogallery": "Video un attēlu galerija",
   "roadmap.moderation": "Moderācijas rīki",
   "roadmap.localai": "Lokāls MI",
   "roadmap.multitenancy": "Daudznomnieku režīms",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Šifrēts pārraidē, nostiprināti resursdatori",
   "home.sec.point3": "Lokāls MI, bez trešo pušu mākoņiem",
   "home.sec.point4": "Satura ziņošana un moderācija",
-
   "demo.preview": "PRIEKŠSKATĪJUMS · PARAUGDATI",
   "demo.groups": "GRUPAS",
   "demo.allgroups": "Visas grupas",
@@ -94,7 +87,6 @@
   "demo.empty": "Neviena arhivēta ziņa neatbilst",
   "demo.archived": "arhivēts",
   "demo.attachment": "pielikums",
-
   "features.eyebrow": "Funkcijas",
   "features.title1": "Visu vispirms pārbauda ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Izstrādē vai projektēšanā. Secība un apjoms var mainīties, jo šī ir alfa programmatūra, un mēs labāk vispirms piegādājam aizsardzības mehānismus.",
   "features.rm.matrix.body": "Tas pats piekrišanā balstītais arhīvs un botu komplekts Matrix istabām.",
   "features.rm.categorization.body": "Automātiska arhivētā satura grupēšana pēc tēmām.",
-  "features.rm.videogallery.body": "Atsevišķa pārlūkošanas vide arhivētajiem video.",
+  "features.rm.videogallery.body": "Īpaša pārlūkošanas virsma arhivētiem video un attēliem.",
   "features.rm.moderation.body": "Masveida darbības, politikas un pārskatītāju rindas.",
   "features.rm.localai.body": "Pārbaude un kopsavilkumi, kas darbojas uz jūsu aparatūras.",
   "features.rm.multitenancy.body": "Viena izvietošana, daudzi izolēti arhīvi.",
-
   "pro.eyebrow": "Komerciālā versija",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Pārvaldīta mitināšana un spējas ārpus atvērtā kodola, operatoriem, kuri vēlas arhīvu bez infrastruktūras uzturēšanas. Tie paši aizsardzības mehānismi, tas pats atvērtais pamats, bez servera darbiem.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-pasts",
   "pro.customer.request": "Pieprasīt piekļuvi",
   "pro.customer.login": "Klientu pieteikšanās",
-
   "security.eyebrow": "Drošība un aizsardzība",
   "security.title1": "Drošība ir ",
   "security.title2": "pati būtība",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Atradāt ievainojamību?",
   "security.vuln.body": "Ziņojiet par to privāti, izmantojot drošības kontaktu repozitorijā. Mēs atzīmējam atbildīgu izpaušanu un nopietni izturamies pret katru ziņojumu.",
   "security.vuln.cta": "Drošības politika",
-
   "os.eyebrow": "Atvērtais kods",
   "os.title": "Atvērts kodols, atvērtas grāmatas",
   "os.lede": "Cinderella kodols ir brīva programmatūra ar AGPL-3.0 licenci. Uzturiet to paši, izlasiet katru rindiņu un turiet mūs pie vārda par to, ko šī vietne apgalvo. Uzticībai jābūt pārbaudāmai, nevis solītai.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Skatīt GitHub",
   "os.why.title": "Kāpēc AGPL-3.0",
   "os.why.body": "Arhīvs prasa uzticēšanos. AGPL garantē, ka ikvienam, kas darbina modificētu Cinderella versiju, šīs modifikācijas ir jāpublicē, tāpēc sabiedrība vienmēr var pārbaudīt kodu, kas apstrādā publiskas sarunas. Šī garantija ir licences uzdevums.",
-
   "legal.eyebrow": "Juridiskā informācija",
   "legal.title": "Juridiskā informācija",
   "legal.lede": "Vietturteksti, kas pirms palaišanas jāpārskata juristam. Izceltie lauki ir jāaizpilda.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Noteikumi",
   "legal.badge.template": "Veidne, nav juridiska konsultācija",
   "legal.badge.draft": "Melnraksts, gaida apstiprinājumu",
-
   "impressum.title": "Juridiskais paziņojums (Impressum)",
   "impressum.intro": "Informācija saskaņā ar § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Operators",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Mēs nevēlamies un mums nav pienākuma piedalīties strīdu izšķiršanas procedūrās patērētāju strīdu izšķiršanas iestādē.",
   "impressum.ypo.h": "Jaunatnes aizsardzības pilnvarotais (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella ir brīvprātīgi iecēlusi jaunatnes aizsardzības pilnvaroto:",
-
   "privacy.title": "Privātuma politika",
   "privacy.effective": "Spēkā no:",
   "privacy.effective.ph": "datums",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Mitināšanas pakalpojumu sniedzējs / atrašanās vieta; norāde, ka MI apstrāde notiek lokāli",
   "privacy.s5.h": "5. Jūsu tiesības",
   "privacy.s5.body": "Piekļuve, labošana, dzēšana, ierobežošana, pārnesamība, iebildumi: sazinieties ar operatoru. Jūs varat iesniegt sūdzību uzraudzības iestādei.",
-
   "terms.title": "Lietošanas noteikumi",
   "terms.effective": "Spēkā no:",
   "terms.effective.ph": "datums",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Arhivētais saturs nāk no publiskām grupām, kas devušas piekrišanu. Operators var noņemt saturu pēc ziņojumiem vai juridiska pienākuma dēļ.",
   "terms.s5.h": "5. Atbildība",
   "terms.s5.ph": "Atbildības klauzulu sagatavos jurists",
-
   "footer.blurb": "MI botu komplekts SimpleX un Matrix kopienām. Piekrišana vispirms, pastāvīgs, meklējams un atvērtais kods ar AGPL-3.0 licenci.",
   "footer.product": "Produkts",
   "footer.opensource": "Atvērtais kods",
@@ -269,20 +253,16 @@
   "footer.terms": "Noteikumi",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Balstīts uz SimpleX un Matrix. Nav saistīts ar SimpleX Chat vai Matrix Foundation.",
-
   "share.label": "Kopīgot šo lapu",
-
   "cookie.title": "Sīkdatnes",
   "cookie.text": "Šī vietne izmanto sesijas sīkdatni pieteikšanās vajadzībām un anonīmu lietojuma uzskaiti. Sīkāka informācija sadaļā",
   "cookie.policy": "Privātuma politika",
   "cookie.accept": "Piekrist",
   "cookie.reject": "Tikai nepieciešamās",
-
   "stub.badge": "Drīzumā",
   "stub.lead": "Šī lapa ir ceļā.",
   "stub.body": "Mēs to vēl rakstām. Pa to laiku arhīva spēja jau darbojas un kods ir atvērts, tāpēc gaidot ielūkojieties GitHub.",
   "stub.back": "Atpakaļ uz sākumu",
-
   "meta.home.title": "Cinderella · MI botu komplekts SimpleX un Matrix kopienām",
   "meta.home.description": "Cinderella ir ugunsmūris publiskā arhīva priekšā: katra ziņa un katrs fails iziet piekrišanas un CSAM pārbaudi, pirms jebkas nonāk tiešsaistē. Atvērtais kods ar AGPL-3.0 licenci.",
   "meta.features.title": "Funkcijas · Cinderella",

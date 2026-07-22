@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "SimpleX와 Matrix 커뮤니티를 위한 AI 봇 스위트",
-
   "a11y.skip": "본문으로 건너뛰기",
   "a11y.menu": "메뉴",
   "lang.label": "언어",
-
   "nav.home": "홈",
   "nav.features": "기능",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "문서",
   "nav.legal": "법적 정보",
   "nav.login": "로그인",
-
   "badge.alpha": "알파",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "운영 중",
   "badge.planned": "계획됨",
   "badge.indev": "개발 중",
   "badge.recommended": "추천",
-
   "hero.ann": "현재 알파 단계 · 동의 + CSAM 심사",
   "hero.title1": "심사를 통과하기 전에는",
   "hero.title2": "아무것도 게시되지 않습니다.",
@@ -43,7 +38,6 @@
   "trust.consent": "동의 우선",
   "trust.passkeys": "패스키",
   "trust.localai": "로컬 AI",
-
   "home.live.eyebrow": "라이브 아카이브",
   "home.live.title": "영구적인 공개 기록을 검색하세요",
   "home.live.lede": "전문 검색, 필터, 그리고 인증 뒤에 보호되는 미디어. 이 인터랙티브 미리보기는 샘플 데이터로 브라우저에서 완전히 실행됩니다. 검색어를 입력하고 그룹을 전환하며, 실제와 똑같이 반응하는 아카이브를 확인해 보십시오.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "로드맵",
   "roadmap.matrix": "Matrix 지원",
   "roadmap.categorization": "분류",
-  "roadmap.videogallery": "동영상 갤러리",
+  "roadmap.videogallery": "동영상 및 이미지 갤러리",
   "roadmap.moderation": "모더레이션 도구",
   "roadmap.localai": "로컬 AI",
   "roadmap.multitenancy": "멀티테넌시",
@@ -79,7 +73,6 @@
   "home.sec.point2": "전송 중 암호화, 강화된 호스트",
   "home.sec.point3": "로컬 AI, 서드파티 클라우드 없음",
   "home.sec.point4": "콘텐츠 신고 및 모더레이션",
-
   "demo.preview": "미리보기 · 샘플 데이터",
   "demo.groups": "그룹",
   "demo.allgroups": "모든 그룹",
@@ -94,7 +87,6 @@
   "demo.empty": "일치하는 보관 메시지가 없습니다",
   "demo.archived": "보관됨",
   "demo.attachment": "첨부 파일",
-
   "features.eyebrow": "기능",
   "features.title1": "모든 것은 ",
   "features.title2": "를 거칩니다.",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "개발 또는 설계 중입니다. 이것은 알파 소프트웨어이고 보호 장치를 먼저 출시하고자 하므로, 순서와 범위는 바뀔 수 있습니다.",
   "features.rm.matrix.body": "Matrix 룸을 위한 동일한 동의 우선 아카이브와 봇 스위트.",
   "features.rm.categorization.body": "보관된 콘텐츠 전반에 걸친 자동 주제 분류.",
-  "features.rm.videogallery.body": "보관된 동영상을 위한 전용 탐색 화면.",
+  "features.rm.videogallery.body": "보관된 동영상과 이미지를 위한 전용 탐색 화면.",
   "features.rm.moderation.body": "일괄 작업, 정책, 검토자 대기열.",
   "features.rm.localai.body": "여러분의 하드웨어에서 실행되는 심사와 요약.",
   "features.rm.multitenancy.body": "하나의 배포, 여러 개의 격리된 아카이브.",
-
   "pro.eyebrow": "상용 에디션",
   "pro.title": "Cinderella Pro",
   "pro.lede": "인프라를 직접 운영하지 않고 아카이브를 원하는 운영자를 위한, 관리형 호스팅과 오픈 코어를 넘어서는 기능. 같은 보호 장치, 같은 개방된 기반, 서버 작업은 없습니다.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "이메일",
   "pro.customer.request": "액세스 요청",
   "pro.customer.login": "고객 로그인",
-
   "security.eyebrow": "보안 및 안전",
   "security.title1": "보안은 부가 기능이 아니라 ",
   "security.title2": "핵심",
@@ -190,7 +180,6 @@
   "security.vuln.title": "취약점을 발견하셨나요?",
   "security.vuln.body": "저장소의 보안 연락처를 통해 비공개로 신고해 주십시오. 책임 있는 공개에는 감사를 표하며, 모든 신고를 진지하게 다룹니다.",
   "security.vuln.cta": "보안 정책",
-
   "os.eyebrow": "오픈 소스",
   "os.title": "오픈 코어, 열린 장부",
   "os.lede": "Cinderella의 코어는 AGPL-3.0 라이선스의 자유 소프트웨어입니다. 직접 운영하고, 모든 코드를 읽고, 이 사이트가 주장하는 바에 대해 우리에게 책임을 물으십시오. 신뢰는 약속되는 것이 아니라 검증 가능해야 합니다.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "GitHub에서 보기",
   "os.why.title": "왜 AGPL-3.0인가",
   "os.why.body": "아카이브는 신뢰를 요구합니다. AGPL은 수정된 Cinderella를 운영하는 누구든 그 수정 사항을 공개해야 함을 보장하므로, 공개 대화를 다루는 코드를 대중이 언제나 검토할 수 있습니다. 그 보장이 바로 라이선스가 제 역할을 하는 것입니다.",
-
   "legal.eyebrow": "법적 정보",
   "legal.title": "법적 정보",
   "legal.lede": "출시 전 법률 자문의 검토를 받아야 하는 자리 표시자 텍스트입니다. 강조된 필드는 반드시 작성해야 합니다.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "이용약관",
   "legal.badge.template": "템플릿, 법률 자문 아님",
   "legal.badge.draft": "초안, 확정 전",
-
   "impressum.title": "법적 고지 (Impressum)",
   "impressum.intro": "§ 5 TMG / § 18 MStV에 따른 정보입니다.",
   "impressum.operator.h": "운영자",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "당사는 소비자 중재 기구 앞에서의 분쟁 해결 절차에 참여할 의사와 의무가 없습니다.",
   "impressum.ypo.h": "청소년 보호 책임자 (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella는 자발적으로 청소년 보호 책임자를 선임했습니다:",
-
   "privacy.title": "개인정보 처리방침",
   "privacy.effective": "시행일:",
   "privacy.effective.ph": "날짜",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "호스팅 제공자 / 위치. AI 처리는 로컬에서 실행된다는 점을 명시",
   "privacy.s5.h": "5. 이용자의 권리",
   "privacy.s5.body": "열람, 정정, 삭제, 처리 제한, 이동, 반대: 운영자에게 문의하십시오. 감독 기관에 민원을 제기할 수도 있습니다.",
-
   "terms.title": "이용약관",
   "terms.effective": "시행일:",
   "terms.effective.ph": "날짜",
@@ -254,7 +239,6 @@
   "terms.s4.body": "보관된 콘텐츠는 동의한 공개 그룹에서 비롯됩니다. 운영자는 신고 또는 법적 의무에 따라 콘텐츠를 삭제할 수 있습니다.",
   "terms.s5.h": "5. 책임",
   "terms.s5.ph": "법률 자문이 제공할 책임 조항",
-
   "footer.blurb": "SimpleX와 Matrix 커뮤니티를 위한 AI 봇 스위트. 동의 우선, 영구적, 검색 가능하며 AGPL-3.0 오픈 소스입니다.",
   "footer.product": "제품",
   "footer.opensource": "오픈 소스",
@@ -269,20 +253,16 @@
   "footer.terms": "이용약관",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "SimpleX와 Matrix 위에 구축되었습니다. SimpleX Chat 또는 Matrix Foundation과 제휴 관계가 없습니다.",
-
   "share.label": "이 페이지 공유",
-
   "cookie.title": "쿠키",
   "cookie.text": "이 사이트는 로그인용 세션 쿠키를 사용하고 익명 사용량을 집계합니다. 자세한 내용은 다음에서 확인하십시오:",
   "cookie.policy": "개인정보 처리방침",
   "cookie.accept": "수락",
   "cookie.reject": "필수 항목만",
-
   "stub.badge": "곧 제공",
   "stub.lead": "이 페이지는 준비 중입니다.",
   "stub.body": "아직 작성 중입니다. 그동안 아카이브 기능은 운영 중이고 코드는 공개되어 있으니, 기다리시는 동안 GitHub에서 살펴보십시오.",
   "stub.back": "홈으로 돌아가기",
-
   "meta.home.title": "Cinderella · SimpleX & Matrix를 위한 AI 봇 스위트",
   "meta.home.description": "Cinderella는 공개 아카이브 앞에 놓인 방화벽입니다. 모든 메시지와 파일은 공개되기 전에 동의 확인과 CSAM 심사를 거칩니다. AGPL-3.0 오픈 소스.",
   "meta.features.title": "기능 · Cinderella",

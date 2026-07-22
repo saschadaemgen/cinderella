@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "SimpleX ve Matrix toplulukları için yapay zeka bot paketi",
-
   "a11y.skip": "İçeriğe atla",
   "a11y.menu": "Menü",
   "lang.label": "Dil",
-
   "nav.home": "Ana Sayfa",
   "nav.features": "Özellikler",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Belgeler",
   "nav.legal": "Yasal",
   "nav.login": "Giriş",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Yayında",
   "badge.planned": "Planlandı",
   "badge.indev": "Geliştiriliyor",
   "badge.recommended": "Önerilen",
-
   "hero.ann": "Artık alfa aşamasında · rıza + CSAM taraması",
   "hero.title1": "Taramadan geçmeden",
   "hero.title2": "hiçbir şey yayınlanmaz.",
@@ -43,7 +38,6 @@
   "trust.consent": "Önce rıza",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Yerel yapay zeka",
-
   "home.live.eyebrow": "Arşiv, canlı",
   "home.live.title": "Kalıcı, herkese açık bir kaydı arayın",
   "home.live.lede": "Tam metin arama, filtreler ve kimlik doğrulaması arkasında medya. Bu etkileşimli önizleme, örnek verilerle tamamen tarayıcınızda çalışır: bir sorgu yazın, gruplar arasında geçiş yapın ve arşivin gerçeğiyle birebir aynı şekilde yanıt verişini izleyin.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Yol haritasında",
   "roadmap.matrix": "Matrix desteği",
   "roadmap.categorization": "Kategorilendirme",
-  "roadmap.videogallery": "Video galerisi",
+  "roadmap.videogallery": "Video ve görsel galerisi",
   "roadmap.moderation": "Moderasyon araçları",
   "roadmap.localai": "Yerel yapay zeka",
   "roadmap.multitenancy": "Çoklu kiracılık",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Aktarımda şifreli, sıkılaştırılmış sunucular",
   "home.sec.point3": "Yerel yapay zeka, üçüncü taraf bulut yok",
   "home.sec.point4": "İçerik bildirimi ve moderasyon",
-
   "demo.preview": "ÖNİZLEME · ÖRNEK VERİ",
   "demo.groups": "GRUPLAR",
   "demo.allgroups": "Tüm gruplar",
@@ -94,7 +87,6 @@
   "demo.empty": "Eşleşen arşivlenmiş mesaj yok",
   "demo.archived": "arşivlendi",
   "demo.attachment": "ek",
-
   "features.eyebrow": "Özellikler",
   "features.title1": "Her şey ",
   "features.title2": "'dan geçer.",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Geliştirme veya tasarım aşamasında. Sıra ve kapsam değişebilir; çünkü bu bir alfa yazılımdır ve önce koruma mekanizmalarını yayınlamayı tercih ediyoruz.",
   "features.rm.matrix.body": "Aynı rıza öncelikli arşiv ve bot paketi, Matrix odaları için.",
   "features.rm.categorization.body": "Arşivlenen içerikte otomatik konu gruplandırma.",
-  "features.rm.videogallery.body": "Arşivlenen videolar için özel bir gezinme yüzeyi.",
+  "features.rm.videogallery.body": "Arşivlenmiş video ve görseller için özel bir gezinme yüzeyi.",
   "features.rm.moderation.body": "Toplu işlemler, politikalar ve inceleme kuyrukları.",
   "features.rm.localai.body": "Kendi donanımınızda çalışan tarama ve özetler.",
   "features.rm.multitenancy.body": "Tek kurulum, birbirinden yalıtılmış birçok arşiv.",
-
   "pro.eyebrow": "Ticari sürüm",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Altyapıyı işletmeden arşivi isteyen operatörler için yönetilen barındırma ve açık çekirdeğin ötesinde yetenekler. Aynı koruma mekanizmaları, aynı açık temel, sunucu işleri hariç.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-posta",
   "pro.customer.request": "Erişim isteyin",
   "pro.customer.login": "Müşteri girişi",
-
   "security.eyebrow": "Güvenlik ve koruma",
   "security.title1": "Güvenlik ",
   "security.title2": "işin özüdür",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Bir güvenlik açığı mı buldunuz?",
   "security.vuln.body": "Depodaki güvenlik iletişim adresi üzerinden gizli olarak bildirin. Sorumlu bildirim yapanları takdirle anıyor ve her raporu ciddiye alıyoruz.",
   "security.vuln.cta": "Güvenlik politikası",
-
   "os.eyebrow": "Açık Kaynak",
   "os.title": "Açık çekirdek, açık defter",
   "os.lede": "Cinderella'nın çekirdeği AGPL-3.0 altında özgür yazılımdır. Kendiniz çalıştırın, her satırı okuyun ve bu sitenin iddialarının hesabını bizden sorun. Güven vaat edilmemeli, doğrulanabilir olmalı.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "GitHub'da görüntüle",
   "os.why.title": "Neden AGPL-3.0",
   "os.why.body": "Bir arşiv güven ister. AGPL, değiştirilmiş bir Cinderella işleten herkesin bu değişiklikleri yayımlamasını garanti eder; böylece kamu, herkese açık konuşmaları işleyen kodu her zaman inceleyebilir. Bu güvence, lisansın görevini yapmasıdır.",
-
   "legal.eyebrow": "Yasal",
   "legal.title": "Yasal bilgiler",
   "legal.lede": "Yayına alınmadan önce hukuk danışmanınca gözden geçirilecek yer tutucu metinler. Vurgulanan alanlar doldurulmalıdır.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Koşullar",
   "legal.badge.template": "Şablon, hukuki tavsiye değildir",
   "legal.badge.draft": "Taslak, beklemede",
-
   "impressum.title": "Yasal Bildirim (Impressum)",
   "impressum.intro": "§ 5 TMG / § 18 MStV uyarınca bilgiler.",
   "impressum.operator.h": "İşletmeci",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Bir tüketici hakem heyeti önündeki uyuşmazlık çözüm süreçlerine katılmaya istekli veya yükümlü değiliz.",
   "impressum.ypo.h": "Gençlik Koruma Görevlisi (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella gönüllü olarak bir Gençlik Koruma Görevlisi atamıştır:",
-
   "privacy.title": "Gizlilik Politikası",
   "privacy.effective": "Yürürlük tarihi:",
   "privacy.effective.ph": "tarih",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Barındırma sağlayıcısı / konum; yapay zeka işlemenin yerel çalıştığı notu",
   "privacy.s5.h": "5. Haklarınız",
   "privacy.s5.body": "Erişim, düzeltme, silme, kısıtlama, taşınabilirlik, itiraz: işletmeciyle iletişime geçin. Bir denetim makamına şikayette bulunabilirsiniz.",
-
   "terms.title": "Kullanım Koşulları",
   "terms.effective": "Yürürlük tarihi:",
   "terms.effective.ph": "tarih",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Arşivlenen içerik, rıza göstermiş herkese açık gruplardan gelir. İşletmeci, bildirimler veya yasal yükümlülük üzerine içeriği kaldırabilir.",
   "terms.s5.h": "5. Sorumluluk",
   "terms.s5.ph": "Sorumluluk maddesi hukuk danışmanınca sağlanacaktır",
-
   "footer.blurb": "SimpleX ve Matrix toplulukları için yapay zeka bot paketi. Rıza öncelikli, kalıcı, aranabilir ve AGPL-3.0 altında açık kaynak.",
   "footer.product": "Ürün",
   "footer.opensource": "Açık Kaynak",
@@ -269,20 +253,16 @@
   "footer.terms": "Koşullar",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "SimpleX ve Matrix üzerine kuruludur. SimpleX Chat veya Matrix Foundation ile bağlantılı değildir.",
-
   "share.label": "Bu sayfayı paylaşın",
-
   "cookie.title": "Çerezler",
   "cookie.text": "Bu site, giriş için bir oturum çerezi ve anonim kullanım sayımı kullanır. Ayrıntılar:",
   "cookie.policy": "Gizlilik Politikası",
   "cookie.accept": "Kabul et",
   "cookie.reject": "Yalnızca gerekli olanlar",
-
   "stub.badge": "Çok yakında",
   "stub.lead": "Bu sayfa yolda.",
   "stub.body": "Bu sayfayı hâlâ yazıyoruz. Bu arada arşiv yeteneği yayında ve kod açık; beklerken GitHub'a göz atabilirsiniz.",
   "stub.back": "Ana sayfaya dön",
-
   "meta.home.title": "Cinderella · SimpleX ve Matrix için yapay zeka bot paketi",
   "meta.home.description": "Cinderella, herkese açık arşivin önünde duran bir güvenlik duvarıdır: her mesaj ve her dosya, yayına girmeden önce rıza kontrollerinden ve CSAM taramasından geçer. AGPL-3.0 altında açık kaynak.",
   "meta.features.title": "Özellikler · Cinderella",

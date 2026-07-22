@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "AI-bot-suiten til SimpleX- og Matrix-fællesskaber",
-
   "a11y.skip": "Spring til indhold",
   "a11y.menu": "Menu",
   "lang.label": "Sprog",
-
   "nav.home": "Forside",
   "nav.features": "Funktioner",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentation",
   "nav.legal": "Juridisk",
   "nav.login": "Log ind",
-
   "badge.alpha": "Alpha",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Live",
   "badge.planned": "Planlagt",
   "badge.indev": "Under udvikling",
   "badge.recommended": "Anbefalet",
-
   "hero.ann": "Nu i alpha · samtykke + CSAM-screening",
   "hero.title1": "Intet bliver offentliggjort,",
   "hero.title2": "før det er screenet.",
@@ -43,7 +38,6 @@
   "trust.consent": "Samtykke først",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Lokal AI",
-
   "home.live.eyebrow": "Arkivet, live",
   "home.live.title": "Søg i et permanent, offentligt arkiv",
   "home.live.lede": "Fuldtekstsøgning, filtre og medier bag autentificering. Denne interaktive forhåndsvisning kører helt i din browser med eksempeldata: skriv en søgning, skift gruppe, og se arkivet reagere præcis som det rigtige.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "På roadmappet",
   "roadmap.matrix": "Matrix-understøttelse",
   "roadmap.categorization": "Kategorisering",
-  "roadmap.videogallery": "Videogalleri",
+  "roadmap.videogallery": "Video- og billedgalleri",
   "roadmap.moderation": "Moderationsværktøjer",
   "roadmap.localai": "Lokal AI",
   "roadmap.multitenancy": "Multi-tenancy",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Krypteret under transport, hærdede servere",
   "home.sec.point3": "Lokal AI, ingen tredjeparts-clouds",
   "home.sec.point4": "Rapportering & moderation af indhold",
-
   "demo.preview": "FORHÅNDSVISNING · EKSEMPELDATA",
   "demo.groups": "GRUPPER",
   "demo.allgroups": "Alle grupper",
@@ -94,7 +87,6 @@
   "demo.empty": "Ingen arkiverede beskeder matcher",
   "demo.archived": "arkiveret",
   "demo.attachment": "vedhæftning",
-
   "features.eyebrow": "Funktioner",
   "features.title1": "Alt går gennem ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Under udvikling eller design. Rækkefølge og omfang kan ændre sig, for dette er alpha-software, og vi vil hellere levere sikkerhedsforanstaltningerne først.",
   "features.rm.matrix.body": "Det samme samtykke-først-arkiv og den samme bot-suite til Matrix-rum.",
   "features.rm.categorization.body": "Automatisk emnegruppering på tværs af arkiveret indhold.",
-  "features.rm.videogallery.body": "En dedikeret flade til at gennemse arkiveret video.",
+  "features.rm.videogallery.body": "En dedikeret gennemsynsflade til arkiverede videoer og billeder.",
   "features.rm.moderation.body": "Masseoperationer, politikker og gennemsynskøer.",
   "features.rm.localai.body": "Screening og opsummeringer, der kører på din egen hardware.",
   "features.rm.multitenancy.body": "Én installation, mange isolerede arkiver.",
-
   "pro.eyebrow": "Den kommercielle udgave",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Administreret hosting og funktioner ud over den åbne kerne, til operatører, der vil have arkivet uden at drive infrastrukturen. Samme sikkerhedsforanstaltninger, samme åbne fundament, intet serverarbejde.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-mail",
   "pro.customer.request": "Anmod om adgang",
   "pro.customer.login": "Kunde-login",
-
   "security.eyebrow": "Sikkerhed & beskyttelse",
   "security.title1": "Sikkerhed er ",
   "security.title2": "selve pointen",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Fundet en sårbarhed?",
   "security.vuln.body": "Rapportér den fortroligt via sikkerhedskontakten i repositoriet. Vi krediterer ansvarlig offentliggørelse og tager hver rapport alvorligt.",
   "security.vuln.cta": "Sikkerhedspolitik",
-
   "os.eyebrow": "Open Source",
   "os.title": "Åben kerne, åbne bøger",
   "os.lede": "Cinderellas kerne er fri software under AGPL-3.0. Kør den selv, læs hver linje, og hold os fast på det, dette website hævder. Tillid bør kunne efterprøves, ikke bare loves.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Se på GitHub",
   "os.why.title": "Hvorfor AGPL-3.0",
   "os.why.body": "Et arkiv beder om tillid. AGPL garanterer, at enhver, der driver en modificeret Cinderella, skal offentliggøre disse ændringer, så offentligheden altid kan efterse den kode, der håndterer offentlige samtaler. Den garanti er licensen, der gør sit arbejde.",
-
   "legal.eyebrow": "Juridisk",
   "legal.title": "Juridiske oplysninger",
   "legal.lede": "Pladsholdertekster, der skal gennemgås af en advokat før lancering. Fremhævede felter skal udfyldes.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Vilkår",
   "legal.badge.template": "Skabelon, ikke juridisk rådgivning",
   "legal.badge.draft": "Udkast, afventer",
-
   "impressum.title": "Juridisk meddelelse (Impressum)",
   "impressum.intro": "Oplysninger i henhold til § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Operatør",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Vi er hverken villige eller forpligtede til at deltage i tvistbilæggelsesprocedurer ved et forbrugerklagenævn.",
   "impressum.ypo.h": "Ungdomsbeskyttelsesansvarlig (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella har frivilligt udpeget en ungdomsbeskyttelsesansvarlig:",
-
   "privacy.title": "Privatlivspolitik",
   "privacy.effective": "Ikrafttrædelsesdato:",
   "privacy.effective.ph": "dato",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Hostingudbyder / placering; bemærk, at AI-behandling kører lokalt",
   "privacy.s5.h": "5. Dine rettigheder",
   "privacy.s5.body": "Indsigt, berigtigelse, sletning, begrænsning, dataportabilitet, indsigelse: kontakt operatøren. Du kan indgive en klage til en tilsynsmyndighed.",
-
   "terms.title": "Vilkår for brug",
   "terms.effective": "Ikrafttrædelsesdato:",
   "terms.effective.ph": "dato",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Arkiveret indhold stammer fra offentlige grupper, der har givet samtykke. Operatøren kan fjerne indhold efter rapporter eller retlig forpligtelse.",
   "terms.s5.h": "5. Ansvar",
   "terms.s5.ph": "Ansvarsklausul leveres af juridisk rådgiver",
-
   "footer.blurb": "AI-bot-suiten til SimpleX- og Matrix-fællesskaber. Samtykke først, permanent, søgbar og open source under AGPL-3.0.",
   "footer.product": "Produkt",
   "footer.opensource": "Open Source",
@@ -269,20 +253,16 @@
   "footer.terms": "Vilkår",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Bygget på SimpleX og Matrix. Ikke tilknyttet SimpleX Chat eller Matrix Foundation.",
-
   "share.label": "Del denne side",
-
   "cookie.title": "Cookies",
   "cookie.text": "Dette website bruger en sessionscookie til login og anonyme brugstal. Detaljer i",
   "cookie.policy": "privatlivspolitikken",
   "cookie.accept": "Accepter",
   "cookie.reject": "Kun nødvendige",
-
   "stub.badge": "Kommer snart",
   "stub.lead": "Denne side er på vej.",
   "stub.body": "Vi skriver stadig på denne. I mellemtiden er arkivfunktionen live, og koden er åben, så kig forbi GitHub, mens du venter.",
   "stub.back": "Tilbage til forsiden",
-
   "meta.home.title": "Cinderella · AI-bot-suite til SimpleX & Matrix",
   "meta.home.description": "Cinderella er en firewall foran det offentlige arkiv: hver besked og hver fil passerer samtykkekontrol og CSAM-screening, før noget går live. Open source under AGPL-3.0.",
   "meta.features.title": "Funktioner · Cinderella",

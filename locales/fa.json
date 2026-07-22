@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "rtl"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "مجموعه بات‌های هوش مصنوعی برای جامعه‌های SimpleX و Matrix",
-
   "a11y.skip": "پرش به محتوا",
   "a11y.menu": "منو",
   "lang.label": "زبان",
-
   "nav.home": "خانه",
   "nav.features": "ویژگی‌ها",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "مستندات",
   "nav.legal": "حقوقی",
   "nav.login": "ورود",
-
   "badge.alpha": "آلفا",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "فعال",
   "badge.planned": "برنامه‌ریزی‌شده",
   "badge.indev": "در حال توسعه",
   "badge.recommended": "پیشنهادی",
-
   "hero.ann": "اکنون در آلفا · بررسی رضایت و غربالگری CSAM",
   "hero.title1": "هیچ‌چیز منتشر نمی‌شود،",
   "hero.title2": "مگر پس از بررسی.",
@@ -43,7 +38,6 @@
   "trust.consent": "رضایت‌محور",
   "trust.passkeys": "Passkeys",
   "trust.localai": "هوش مصنوعی محلی",
-
   "home.live.eyebrow": "آرشیو، به‌صورت زنده",
   "home.live.title": "جست‌وجو در یک بایگانی دائمی و عمومی",
   "home.live.lede": "جست‌وجوی تمام‌متن، فیلترها و رسانه‌های پشت احراز هویت. این پیش‌نمایش تعاملی کاملاً در مرورگر شما و با داده‌های نمونه اجرا می‌شود: عبارتی را وارد کنید، گروه را تغییر دهید و ببینید که آرشیو دقیقاً مانند نسخه واقعی پاسخ می‌دهد.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "در نقشه راه",
   "roadmap.matrix": "پشتیبانی از Matrix",
   "roadmap.categorization": "دسته‌بندی",
-  "roadmap.videogallery": "گالری ویدئو",
+  "roadmap.videogallery": "گالری ویدئو و تصاویر",
   "roadmap.moderation": "ابزارهای مدیریت محتوا",
   "roadmap.localai": "هوش مصنوعی محلی",
   "roadmap.multitenancy": "چندمستأجری",
@@ -79,7 +73,6 @@
   "home.sec.point2": "رمزگذاری در حین انتقال، میزبان‌های مقاوم‌سازی‌شده",
   "home.sec.point3": "هوش مصنوعی محلی، بدون سرویس ابری شخص ثالث",
   "home.sec.point4": "گزارش‌دهی و مدیریت محتوا",
-
   "demo.preview": "پیش‌نمایش · داده نمونه",
   "demo.groups": "گروه‌ها",
   "demo.allgroups": "همه گروه‌ها",
@@ -94,7 +87,6 @@
   "demo.empty": "هیچ پیام بایگانی‌شده‌ای مطابقت ندارد",
   "demo.archived": "بایگانی‌شده",
   "demo.attachment": "پیوست",
-
   "features.eyebrow": "ویژگی‌ها",
   "features.title1": "همه چیز از ",
   "features.title2": " می‌گذرد.",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "در حال توسعه یا طراحی. ترتیب و دامنه ممکن است تغییر کند، چون این نرم‌افزار در مرحله آلفا است و ترجیح می‌دهیم نخست سازوکارهای حفاظتی را عرضه کنیم.",
   "features.rm.matrix.body": "همان آرشیو رضایت‌محور و مجموعه بات‌ها برای اتاق‌های Matrix.",
   "features.rm.categorization.body": "گروه‌بندی خودکار موضوعی در محتوای بایگانی‌شده.",
-  "features.rm.videogallery.body": "یک محیط مرور اختصاصی برای ویدئوهای بایگانی‌شده.",
+  "features.rm.videogallery.body": "یک سطح مرور اختصاصی برای ویدئوها و تصاویر بایگانی‌شده.",
   "features.rm.moderation.body": "اقدامات گروهی، خط‌مشی‌ها و صف‌های بازبینی.",
   "features.rm.localai.body": "غربالگری و خلاصه‌سازی که روی سخت‌افزار خودتان اجرا می‌شود.",
   "features.rm.multitenancy.body": "یک استقرار، چندین آرشیو مجزا.",
-
   "pro.eyebrow": "نسخه تجاری",
   "pro.title": "Cinderella Pro",
   "pro.lede": "میزبانی مدیریت‌شده و قابلیت‌هایی فراتر از هسته باز، برای اپراتورهایی که آرشیو را بدون اداره زیرساخت می‌خواهند. همان سازوکارهای حفاظتی، همان بنیان باز، بدون هیچ کار سروری.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "ایمیل",
   "pro.customer.request": "درخواست دسترسی",
   "pro.customer.login": "ورود مشتریان",
-
   "security.eyebrow": "امنیت و ایمنی",
   "security.title1": "امنیت ",
   "security.title2": "هدف اصلی",
@@ -190,7 +180,6 @@
   "security.vuln.title": "آسیب‌پذیری‌ای یافته‌اید؟",
   "security.vuln.body": "آن را به‌صورت خصوصی از طریق مخاطب امنیتی موجود در مخزن گزارش دهید. از افشای مسئولانه قدردانی می‌کنیم و هر گزارش را جدی می‌گیریم.",
   "security.vuln.cta": "خط‌مشی امنیتی",
-
   "os.eyebrow": "متن‌باز",
   "os.title": "هسته باز، شفافیت کامل",
   "os.lede": "هسته Cinderella نرم‌افزار آزاد تحت مجوز AGPL-3.0 است. خودتان آن را اجرا کنید، هر خط را بخوانید و ما را در برابر ادعاهای این سایت پاسخگو بدانید. اعتماد باید قابل راستی‌آزمایی باشد، نه صرفاً وعده داده شود.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "مشاهده در GitHub",
   "os.why.title": "چرا AGPL-3.0",
   "os.why.body": "یک آرشیو اعتماد می‌طلبد. مجوز AGPL تضمین می‌کند هر کسی که نسخه تغییریافته‌ای از Cinderella را اجرا کند باید آن تغییرات را منتشر کند، بنابراین عموم همیشه می‌توانند کدی را که گفتگوهای عمومی را پردازش می‌کند بازرسی کنند. این تضمین یعنی مجوز دارد کارش را انجام می‌دهد.",
-
   "legal.eyebrow": "حقوقی",
   "legal.title": "اطلاعات حقوقی",
   "legal.lede": "متن‌های جایگزین موقت، که پیش از راه‌اندازی باید توسط مشاور حقوقی بازبینی شوند. فیلدهای مشخص‌شده باید تکمیل گردند.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "شرایط استفاده",
   "legal.badge.template": "الگو، نه مشاوره حقوقی",
   "legal.badge.draft": "پیش‌نویس، در انتظار",
-
   "impressum.title": "اطلاعیه حقوقی (Impressum)",
   "impressum.intro": "اطلاعات مطابق با § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "اپراتور",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "ما نه مایل و نه موظف به شرکت در روند حل اختلاف نزد هیئت داوری مصرف‌کنندگان هستیم.",
   "impressum.ypo.h": "مسئول حمایت از نوجوانان (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella به‌صورت داوطلبانه یک مسئول حمایت از نوجوانان تعیین کرده است:",
-
   "privacy.title": "سیاست حفظ حریم خصوصی",
   "privacy.effective": "تاریخ اجرا:",
   "privacy.effective.ph": "تاریخ",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "ارائه‌دهنده میزبانی / محل؛ ذکر اینکه پردازش هوش مصنوعی به‌صورت محلی انجام می‌شود",
   "privacy.s5.h": "۵. حقوق شما",
   "privacy.s5.body": "دسترسی، اصلاح، حذف، محدودسازی، انتقال‌پذیری، اعتراض: با اپراتور تماس بگیرید. می‌توانید نزد یک مرجع نظارتی شکایت ثبت کنید.",
-
   "terms.title": "شرایط استفاده",
   "terms.effective": "تاریخ اجرا:",
   "terms.effective.ph": "تاریخ",
@@ -254,7 +239,6 @@
   "terms.s4.body": "محتوای بایگانی‌شده از گروه‌های عمومی رضایت‌دهنده سرچشمه می‌گیرد. اپراتور می‌تواند در پی گزارش‌ها یا الزام قانونی محتوا را حذف کند.",
   "terms.s5.h": "۵. مسئولیت",
   "terms.s5.ph": "بند مسئولیت توسط مشاور حقوقی تکمیل می‌شود",
-
   "footer.blurb": "مجموعه بات‌های هوش مصنوعی برای جامعه‌های SimpleX و Matrix. رضایت‌محور، دائمی، قابل جست‌وجو و متن‌باز تحت AGPL-3.0.",
   "footer.product": "محصول",
   "footer.opensource": "متن‌باز",
@@ -269,20 +253,16 @@
   "footer.terms": "شرایط استفاده",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "ساخته‌شده بر پایه SimpleX و Matrix. وابسته به SimpleX Chat یا Matrix Foundation نیست.",
-
   "share.label": "اشتراک‌گذاری این صفحه",
-
   "cookie.title": "کوکی‌ها",
   "cookie.text": "این سایت یک کوکی نشست برای ورود و شمارش ناشناس استفاده به کار می‌برد. جزئیات در",
   "cookie.policy": "سیاست حفظ حریم خصوصی",
   "cookie.accept": "پذیرش",
   "cookie.reject": "فقط موارد ضروری",
-
   "stub.badge": "به‌زودی",
   "stub.lead": "این صفحه در راه است.",
   "stub.body": "هنوز در حال نوشتن آن هستیم. در این میان، قابلیت آرشیو فعال است و کد باز است، پس تا آن زمان نگاهی به GitHub بیندازید.",
   "stub.back": "بازگشت به خانه",
-
   "meta.home.title": "Cinderella · مجموعه بات‌های هوش مصنوعی برای SimpleX و Matrix",
   "meta.home.description": "Cinderella فایروالی در برابر آرشیو عمومی است: هر پیام و هر فایل پیش از انتشار از بررسی رضایت و غربالگری CSAM عبور می‌کند. متن‌باز تحت AGPL-3.0.",
   "meta.features.title": "ویژگی‌ها · Cinderella",

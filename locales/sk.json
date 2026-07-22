@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "Sada AI botov pre komunity SimpleX a Matrix",
-
   "a11y.skip": "Preskočiť na obsah",
   "a11y.menu": "Menu",
   "lang.label": "Jazyk",
-
   "nav.home": "Domov",
   "nav.features": "Funkcie",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentácia",
   "nav.legal": "Právne informácie",
   "nav.login": "Prihlásenie",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "V prevádzke",
   "badge.planned": "Plánované",
   "badge.indev": "Vo vývoji",
   "badge.recommended": "Odporúčané",
-
   "hero.ann": "Teraz v alfe · kontrola súhlasu + CSAM",
   "hero.title1": "Nič sa nezverejní,",
   "hero.title2": "kým to neprejde kontrolou.",
@@ -43,7 +38,6 @@
   "trust.consent": "Súhlas na prvom mieste",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Lokálna AI",
-
   "home.live.eyebrow": "Archív naživo",
   "home.live.title": "Prehľadávajte trvalý verejný záznam",
   "home.live.lede": "Fulltextové vyhľadávanie, filtre a médiá za autentifikáciou. Táto interaktívna ukážka beží celá vo vašom prehliadači so vzorovými dátami: zadajte dopyt, prepnite skupinu a sledujte, ako archív reaguje presne ako ten skutočný.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "V pláne rozvoja",
   "roadmap.matrix": "Podpora Matrix",
   "roadmap.categorization": "Kategorizácia",
-  "roadmap.videogallery": "Videogaléria",
+  "roadmap.videogallery": "Galéria videí a obrázkov",
   "roadmap.moderation": "Nástroje na moderovanie",
   "roadmap.localai": "Lokálna AI",
   "roadmap.multitenancy": "Multitenancia",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Šifrované počas prenosu, zodolnené servery",
   "home.sec.point3": "Lokálna AI, žiadne cloudy tretích strán",
   "home.sec.point4": "Nahlasovanie a moderovanie obsahu",
-
   "demo.preview": "UKÁŽKA · VZOROVÉ DÁTA",
   "demo.groups": "SKUPINY",
   "demo.allgroups": "Všetky skupiny",
@@ -94,7 +87,6 @@
   "demo.empty": "Žiadne archivované správy sa nezhodujú",
   "demo.archived": "archivované",
   "demo.attachment": "príloha",
-
   "features.eyebrow": "Funkcie",
   "features.title1": "Všetko najprv posúdi ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Vo vývoji alebo v návrhu. Poradie a rozsah sa môžu zmeniť, pretože ide o alfa softvér a ochranné mechanizmy chceme dodať ako prvé.",
   "features.rm.matrix.body": "Rovnaký archív so súhlasom na prvom mieste a rovnaká sada botov pre miestnosti Matrix.",
   "features.rm.categorization.body": "Automatické tematické zoskupovanie archivovaného obsahu.",
-  "features.rm.videogallery.body": "Samostatné rozhranie na prezeranie archivovaného videa.",
+  "features.rm.videogallery.body": "Vyhradené rozhranie na prehliadanie archivovaných videí a obrázkov.",
   "features.rm.moderation.body": "Hromadné akcie, pravidlá a rady pre posudzovateľov.",
   "features.rm.localai.body": "Kontrola a súhrny bežiace na vašom vlastnom hardvéri.",
   "features.rm.multitenancy.body": "Jedno nasadenie, mnoho izolovaných archívov.",
-
   "pro.eyebrow": "Komerčná edícia",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Spravovaný hosting a schopnosti nad rámec otvoreného jadra, pre prevádzkovateľov, ktorí chcú archív bez starostí o infraštruktúru. Rovnaké ochranné mechanizmy, rovnaký otvorený základ, žiadna práca so servermi.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-mail",
   "pro.customer.request": "Požiadať o prístup",
   "pro.customer.login": "Prihlásenie pre zákazníkov",
-
   "security.eyebrow": "Bezpečnosť a ochrana",
   "security.title1": "Bezpečnosť je ",
   "security.title2": "podstata",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Našli ste zraniteľnosť?",
   "security.vuln.body": "Nahláste ju dôverne cez bezpečnostný kontakt v repozitári. Zodpovedné nahlásenie uvádzame s poďakovaním a každé hlásenie berieme vážne.",
   "security.vuln.cta": "Bezpečnostná politika",
-
   "os.eyebrow": "Open Source",
   "os.title": "Otvorené jadro, otvorené karty",
   "os.lede": "Jadro systému Cinderella je slobodný softvér pod licenciou AGPL-3.0. Prevádzkujte ho sami, prečítajte si každý riadok a chytajte nás za slovo pri všetkom, čo táto stránka tvrdí. Dôvera má byť overiteľná, nie sľubovaná.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Zobraziť na GitHube",
   "os.why.title": "Prečo AGPL-3.0",
   "os.why.body": "Archív si žiada dôveru. AGPL zaručuje, že každý, kto prevádzkuje upravenú verziu systému Cinderella, musí tieto úpravy zverejniť, takže verejnosť si vždy môže preveriť kód, ktorý spracúva verejné konverzácie. Presne to je úloha tejto licencie.",
-
   "legal.eyebrow": "Právne informácie",
   "legal.title": "Právne informácie",
   "legal.lede": "Zástupné texty, pred spustením ich musí posúdiť právny poradca. Zvýraznené polia treba doplniť.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Podmienky",
   "legal.badge.template": "Šablóna, nie právne poradenstvo",
   "legal.badge.draft": "Návrh, čaká sa",
-
   "impressum.title": "Právne oznámenie (Impressum)",
   "impressum.intro": "Informácie podľa § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Prevádzkovateľ",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Nie sme ochotní ani povinní zúčastňovať sa na konaniach o riešení sporov pred spotrebiteľským rozhodcovským orgánom.",
   "impressum.ypo.h": "Poverenec pre ochranu mládeže (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella dobrovoľne vymenovala poverenca pre ochranu mládeže:",
-
   "privacy.title": "Zásady ochrany osobných údajov",
   "privacy.effective": "Dátum účinnosti:",
   "privacy.effective.ph": "dátum",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Poskytovateľ hostingu / lokalita; poznámka, že spracovanie AI prebieha lokálne",
   "privacy.s5.h": "5. Vaše práva",
   "privacy.s5.body": "Prístup, oprava, vymazanie, obmedzenie, prenosnosť, námietka: obráťte sa na prevádzkovateľa. Sťažnosť môžete podať dozornému orgánu.",
-
   "terms.title": "Podmienky používania",
   "terms.effective": "Dátum účinnosti:",
   "terms.effective.ph": "dátum",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Archivovaný obsah pochádza z verejných skupín, ktoré udelili súhlas. Prevádzkovateľ môže obsah odstrániť na základe nahlásení alebo právnej povinnosti.",
   "terms.s5.h": "5. Zodpovednosť",
   "terms.s5.ph": "Klauzulu o zodpovednosti dodá právny poradca",
-
   "footer.blurb": "Sada AI botov pre komunity SimpleX a Matrix. Súhlas na prvom mieste, trvalé, prehľadateľné a open source pod AGPL-3.0.",
   "footer.product": "Produkt",
   "footer.opensource": "Open Source",
@@ -269,20 +253,16 @@
   "footer.terms": "Podmienky",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Postavené na SimpleX a Matrix. Nie je prepojené so SimpleX Chat ani s Matrix Foundation.",
-
   "share.label": "Zdieľať túto stránku",
-
   "cookie.title": "Cookies",
   "cookie.text": "Táto stránka používa cookie relácie na prihlásenie a anonymné počítanie návštevnosti. Podrobnosti nájdete v dokumente",
   "cookie.policy": "Zásady ochrany osobných údajov",
   "cookie.accept": "Prijať",
   "cookie.reject": "Len nevyhnutné",
-
   "stub.badge": "Už čoskoro",
   "stub.lead": "Táto stránka je na ceste.",
   "stub.body": "Ešte na nej pracujeme. Archív je medzitým v prevádzke a kód je otvorený, pozrite sa teda zatiaľ na GitHube.",
   "stub.back": "Späť na domovskú stránku",
-
   "meta.home.title": "Cinderella · Sada AI botov pre SimpleX a Matrix",
   "meta.home.description": "Cinderella je firewall pred verejným archívom: každá správa a každý súbor prechádza kontrolou súhlasu a kontrolou CSAM skôr, než sa čokoľvek zverejní. Open source pod AGPL-3.0.",
   "meta.features.title": "Funkcie · Cinderella",

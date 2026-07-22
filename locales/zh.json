@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "面向 SimpleX 与 Matrix 社区的 AI 机器人套件",
-
   "a11y.skip": "跳转到内容",
   "a11y.menu": "菜单",
   "lang.label": "语言",
-
   "nav.home": "首页",
   "nav.features": "功能",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "文档",
   "nav.legal": "法律信息",
   "nav.login": "登录",
-
   "badge.alpha": "Alpha",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "已上线",
   "badge.planned": "已规划",
   "badge.indev": "开发中",
   "badge.recommended": "推荐",
-
   "hero.ann": "Alpha 版现已发布 · 同意机制 + CSAM 审查",
   "hero.title1": "未经审查，",
   "hero.title2": "绝不发布。",
@@ -43,7 +38,6 @@
   "trust.consent": "同意优先",
   "trust.passkeys": "通行密钥",
   "trust.localai": "本地 AI",
-
   "home.live.eyebrow": "存档，实时呈现",
   "home.live.title": "搜索一份永久的公共记录",
   "home.live.lede": "全文搜索、筛选器，以及需认证访问的媒体文件。此交互式预览完全在您的浏览器中运行，使用示例数据：输入查询、切换群组，即可看到存档像真实系统一样响应。",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "路线图上",
   "roadmap.matrix": "Matrix 支持",
   "roadmap.categorization": "内容分类",
-  "roadmap.videogallery": "视频画廊",
+  "roadmap.videogallery": "视频与图片库",
   "roadmap.moderation": "审核工具",
   "roadmap.localai": "本地 AI",
   "roadmap.multitenancy": "多租户",
@@ -79,7 +73,6 @@
   "home.sec.point2": "传输加密，主机加固",
   "home.sec.point3": "本地 AI，无第三方云",
   "home.sec.point4": "内容举报与审核",
-
   "demo.preview": "预览 · 示例数据",
   "demo.groups": "群组",
   "demo.allgroups": "全部群组",
@@ -94,7 +87,6 @@
   "demo.empty": "没有匹配的已存档消息",
   "demo.archived": "已存档",
   "demo.attachment": "附件",
-
   "features.eyebrow": "功能",
   "features.title1": "一切都要经过 ",
   "features.title2": "。",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "处于开发或设计阶段。顺序和范围可能调整，因为这是 Alpha 软件，我们宁愿先交付保护机制。",
   "features.rm.matrix.body": "为 Matrix 房间提供同样的同意优先存档与机器人套件。",
   "features.rm.categorization.body": "对已存档内容进行自动主题分组。",
-  "features.rm.videogallery.body": "专门用于浏览已存档视频的界面。",
+  "features.rm.videogallery.body": "用于浏览已归档视频和图片的专用界面。",
   "features.rm.moderation.body": "批量操作、策略与审核队列。",
   "features.rm.localai.body": "在您自己的硬件上运行的审查与摘要功能。",
   "features.rm.multitenancy.body": "一次部署，多个相互隔离的存档。",
-
   "pro.eyebrow": "商业版本",
   "pro.title": "Cinderella Pro",
   "pro.lede": "托管服务与超越开源核心的能力，面向希望使用存档而无需自行运维基础设施的运营者。同样的保护机制，同样的开源根基，省去所有服务器工作。",
@@ -170,7 +161,6 @@
   "pro.customer.email": "电子邮箱",
   "pro.customer.request": "申请访问",
   "pro.customer.login": "客户登录",
-
   "security.eyebrow": "安全与保护",
   "security.title1": "安全是",
   "security.title2": "核心目的",
@@ -190,7 +180,6 @@
   "security.vuln.title": "发现了安全漏洞？",
   "security.vuln.body": "请通过仓库中的安全联系方式私下报告。我们会为负责任的披露署名致谢，并认真对待每一份报告。",
   "security.vuln.cta": "安全政策",
-
   "os.eyebrow": "开源",
   "os.title": "开放核心，开诚布公",
   "os.lede": "Cinderella 的核心是 AGPL-3.0 许可下的自由软件。您可以自行运行、逐行阅读，并用本站的每一句承诺来检验我们。信任应当可以验证，而不是仅凭承诺。",
@@ -199,7 +188,6 @@
   "os.repo.cta": "在 GitHub 上查看",
   "os.why.title": "为什么选择 AGPL-3.0",
   "os.why.body": "存档需要人们的信任。AGPL 保证：任何运营修改版 Cinderella 的人都必须公开这些修改，因此公众始终可以审查处理公共对话的代码。这份保证正是该许可证的职责所在。",
-
   "legal.eyebrow": "法律信息",
   "legal.title": "法律信息",
   "legal.lede": "以下为占位文本，上线前需经法律顾问审核。高亮字段必须填写完整。",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "使用条款",
   "legal.badge.template": "模板，不构成法律意见",
   "legal.badge.draft": "草稿，待定稿",
-
   "impressum.title": "法律声明（Impressum）",
   "impressum.intro": "根据 § 5 TMG / § 18 MStV 提供的信息。",
   "impressum.operator.h": "运营者",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "我们不愿意也无义务参与消费者仲裁机构的争议解决程序。",
   "impressum.ypo.h": "青少年保护专员（Jugendschutzbeauftragter）",
   "impressum.ypo.intro": "Cinderella 已自愿任命一名青少年保护专员：",
-
   "privacy.title": "隐私政策",
   "privacy.effective": "生效日期：",
   "privacy.effective.ph": "日期",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "托管服务商 / 地点；注明 AI 处理在本地运行",
   "privacy.s5.h": "5. 您的权利",
   "privacy.s5.body": "查阅、更正、删除、限制处理、数据可携、反对：请联系运营者。您也可以向监管机构提出投诉。",
-
   "terms.title": "使用条款",
   "terms.effective": "生效日期：",
   "terms.effective.ph": "日期",
@@ -254,7 +239,6 @@
   "terms.s4.body": "存档内容来自已同意的公共群组。运营者可依据举报或法律义务移除内容。",
   "terms.s5.h": "5. 责任",
   "terms.s5.ph": "责任条款由法律顾问提供",
-
   "footer.blurb": "面向 SimpleX 与 Matrix 社区的 AI 机器人套件。同意优先、永久保存、可搜索，并以 AGPL-3.0 开源。",
   "footer.product": "产品",
   "footer.opensource": "开源",
@@ -269,20 +253,16 @@
   "footer.terms": "使用条款",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "构建于 SimpleX 与 Matrix 之上。与 SimpleX Chat 或 Matrix Foundation 无关联。",
-
   "share.label": "分享此页面",
-
   "cookie.title": "Cookie",
   "cookie.text": "本网站使用一个用于登录的会话 Cookie，并进行匿名使用统计。详情请见",
   "cookie.policy": "隐私政策",
   "cookie.accept": "接受",
   "cookie.reject": "仅保留必要项",
-
   "stub.badge": "即将推出",
   "stub.lead": "此页面正在路上。",
   "stub.body": "我们仍在撰写这一页。与此同时，存档能力已经上线，代码也已开源，欢迎先到 GitHub 上看看。",
   "stub.back": "返回首页",
-
   "meta.home.title": "Cinderella · 面向 SimpleX 与 Matrix 的 AI 机器人套件",
   "meta.home.description": "Cinderella 是公共存档前的一道防火墙：每条消息和每个文件都要先通过同意核验和 CSAM 审查才会上线。以 AGPL-3.0 开源。",
   "meta.features.title": "功能 · Cinderella",

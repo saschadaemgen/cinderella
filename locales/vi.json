@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "Bộ bot AI cho các cộng đồng SimpleX và Matrix",
-
   "a11y.skip": "Chuyển đến nội dung",
   "a11y.menu": "Menu",
   "lang.label": "Ngôn ngữ",
-
   "nav.home": "Trang chủ",
   "nav.features": "Tính năng",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Tài liệu",
   "nav.legal": "Pháp lý",
   "nav.login": "Đăng nhập",
-
   "badge.alpha": "Alpha",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Đang hoạt động",
   "badge.planned": "Dự kiến",
   "badge.indev": "Đang phát triển",
   "badge.recommended": "Khuyên dùng",
-
   "hero.ann": "Hiện ở giai đoạn alpha · đồng thuận + sàng lọc CSAM",
   "hero.title1": "Không nội dung nào được công bố",
   "hero.title2": "trước khi qua sàng lọc.",
@@ -43,7 +38,6 @@
   "trust.consent": "Đồng thuận trước tiên",
   "trust.passkeys": "Passkeys",
   "trust.localai": "AI cục bộ",
-
   "home.live.eyebrow": "Kho lưu trữ, trực tiếp",
   "home.live.title": "Tìm kiếm trong một kho hồ sơ công khai, lưu giữ lâu dài",
   "home.live.lede": "Tìm kiếm toàn văn, bộ lọc, và nội dung đa phương tiện đặt sau lớp xác thực. Bản xem trước tương tác này chạy hoàn toàn trong trình duyệt của bạn với dữ liệu mẫu: hãy nhập một truy vấn, chuyển đổi giữa các nhóm, và xem kho lưu trữ phản hồi đúng như phiên bản thật.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Trong lộ trình",
   "roadmap.matrix": "Hỗ trợ Matrix",
   "roadmap.categorization": "Phân loại",
-  "roadmap.videogallery": "Thư viện video",
+  "roadmap.videogallery": "Thư viện video và hình ảnh",
   "roadmap.moderation": "Công cụ kiểm duyệt",
   "roadmap.localai": "AI cục bộ",
   "roadmap.multitenancy": "Đa người thuê",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Mã hóa khi truyền tải, máy chủ được gia cố",
   "home.sec.point3": "AI cục bộ, không đám mây bên thứ ba",
   "home.sec.point4": "Báo cáo nội dung & kiểm duyệt",
-
   "demo.preview": "XEM TRƯỚC · DỮ LIỆU MẪU",
   "demo.groups": "NHÓM",
   "demo.allgroups": "Tất cả nhóm",
@@ -94,7 +87,6 @@
   "demo.empty": "Không có tin nhắn lưu trữ nào khớp",
   "demo.archived": "đã lưu trữ",
   "demo.attachment": "tệp đính kèm",
-
   "features.eyebrow": "Tính năng",
   "features.title1": "Mọi thứ đều đi qua ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Đang được phát triển hoặc thiết kế. Thứ tự và phạm vi có thể thay đổi, vì đây là phần mềm alpha và chúng tôi muốn hoàn thiện các biện pháp bảo vệ trước tiên.",
   "features.rm.matrix.body": "Cùng một kho lưu trữ đồng thuận trước tiên và bộ bot, dành cho các phòng Matrix.",
   "features.rm.categorization.body": "Tự động nhóm chủ đề trên toàn bộ nội dung đã lưu trữ.",
-  "features.rm.videogallery.body": "Một giao diện duyệt riêng cho video đã lưu trữ.",
+  "features.rm.videogallery.body": "Một bề mặt duyệt chuyên dụng cho video và hình ảnh đã lưu trữ.",
   "features.rm.moderation.body": "Thao tác hàng loạt, chính sách, và hàng đợi cho người xem xét.",
   "features.rm.localai.body": "Sàng lọc và tóm tắt chạy trên chính phần cứng của bạn.",
   "features.rm.multitenancy.body": "Một lần triển khai, nhiều kho lưu trữ tách biệt.",
-
   "pro.eyebrow": "Phiên bản thương mại",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Hosting được quản lý và các năng lực vượt ngoài phần lõi mở, dành cho những người vận hành muốn có kho lưu trữ mà không phải tự vận hành hạ tầng. Cùng các biện pháp bảo vệ, cùng nền tảng mở, không chút việc máy chủ nào.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "Email",
   "pro.customer.request": "Yêu cầu truy cập",
   "pro.customer.login": "Đăng nhập khách hàng",
-
   "security.eyebrow": "Bảo mật & an toàn",
   "security.title1": "Bảo mật là ",
   "security.title2": "mục đích",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Phát hiện lỗ hổng bảo mật?",
   "security.vuln.body": "Hãy báo cáo một cách riêng tư qua đầu mối liên hệ bảo mật trong kho mã nguồn. Chúng tôi ghi nhận việc tiết lộ có trách nhiệm và xem xét nghiêm túc mọi báo cáo.",
   "security.vuln.cta": "Chính sách bảo mật",
-
   "os.eyebrow": "Mã nguồn mở",
   "os.title": "Lõi mở, sổ sách mở",
   "os.lede": "Phần lõi của Cinderella là phần mềm tự do theo giấy phép AGPL-3.0. Hãy tự vận hành, đọc từng dòng mã, và buộc chúng tôi giữ đúng những gì trang này tuyên bố. Niềm tin phải kiểm chứng được, không phải chỉ hứa suông.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Xem trên GitHub",
   "os.why.title": "Vì sao chọn AGPL-3.0",
   "os.why.body": "Một kho lưu trữ đòi hỏi niềm tin. AGPL bảo đảm rằng bất kỳ ai vận hành một bản Cinderella đã sửa đổi đều phải công bố các sửa đổi đó, để công chúng luôn có thể kiểm tra đoạn mã xử lý các cuộc trò chuyện công khai. Sự bảo đảm đó chính là giấy phép đang làm đúng việc của nó.",
-
   "legal.eyebrow": "Pháp lý",
   "legal.title": "Thông tin pháp lý",
   "legal.lede": "Văn bản tạm thời, sẽ được luật sư rà soát trước khi ra mắt. Các trường được đánh dấu cần được hoàn thiện.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Điều khoản",
   "legal.badge.template": "Mẫu, không phải tư vấn pháp lý",
   "legal.badge.draft": "Bản nháp, đang chờ",
-
   "impressum.title": "Thông báo pháp lý (Impressum)",
   "impressum.intro": "Thông tin theo § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Đơn vị vận hành",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Chúng tôi không sẵn lòng và cũng không có nghĩa vụ tham gia thủ tục giải quyết tranh chấp trước hội đồng trọng tài tiêu dùng.",
   "impressum.ypo.h": "Cán bộ Bảo vệ Thanh thiếu niên (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella đã tự nguyện bổ nhiệm một Cán bộ Bảo vệ Thanh thiếu niên:",
-
   "privacy.title": "Chính sách quyền riêng tư",
   "privacy.effective": "Ngày hiệu lực:",
   "privacy.effective.ph": "ngày",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Nhà cung cấp hosting / vị trí; lưu ý rằng xử lý AI chạy cục bộ",
   "privacy.s5.h": "5. Quyền của bạn",
   "privacy.s5.body": "Truy cập, cải chính, xóa, hạn chế, chuyển giao dữ liệu, phản đối: hãy liên hệ đơn vị vận hành. Bạn có thể khiếu nại lên cơ quan giám sát.",
-
   "terms.title": "Điều khoản sử dụng",
   "terms.effective": "Ngày hiệu lực:",
   "terms.effective.ph": "ngày",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Nội dung lưu trữ bắt nguồn từ các nhóm công khai đã đồng thuận. Đơn vị vận hành có thể gỡ nội dung theo báo cáo hoặc theo nghĩa vụ pháp lý.",
   "terms.s5.h": "5. Trách nhiệm pháp lý",
   "terms.s5.ph": "Điều khoản trách nhiệm sẽ do luật sư cung cấp",
-
   "footer.blurb": "Bộ bot AI cho các cộng đồng SimpleX và Matrix. Đồng thuận trước tiên, lâu dài, có thể tìm kiếm, và mã nguồn mở theo AGPL-3.0.",
   "footer.product": "Sản phẩm",
   "footer.opensource": "Mã nguồn mở",
@@ -269,20 +253,16 @@
   "footer.terms": "Điều khoản",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Xây dựng trên SimpleX và Matrix. Không liên kết với SimpleX Chat hay Matrix Foundation.",
-
   "share.label": "Chia sẻ trang này",
-
   "cookie.title": "Cookie",
   "cookie.text": "Trang này dùng một cookie phiên cho việc đăng nhập và đếm lượt sử dụng ẩn danh. Chi tiết trong",
   "cookie.policy": "Chính sách quyền riêng tư",
   "cookie.accept": "Chấp nhận",
   "cookie.reject": "Từ chối, chỉ giữ mức cần thiết",
-
   "stub.badge": "Sắp ra mắt",
   "stub.lead": "Trang này đang trên đường đến.",
   "stub.body": "Chúng tôi vẫn đang viết trang này. Trong lúc đó, năng lực lưu trữ đã hoạt động và mã nguồn đã mở, hãy ghé xem trên GitHub trong khi chờ đợi.",
   "stub.back": "Về trang chủ",
-
   "meta.home.title": "Cinderella · Bộ bot AI cho SimpleX & Matrix",
   "meta.home.description": "Cinderella là một bức tường lửa đứng trước kho lưu trữ công khai: mọi tin nhắn và tệp đều đi qua kiểm tra đồng thuận và sàng lọc CSAM trước khi bất cứ thứ gì được công bố. Mã nguồn mở theo AGPL-3.0.",
   "meta.features.title": "Tính năng · Cinderella",

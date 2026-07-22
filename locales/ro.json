@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "Suita de boți AI pentru comunitățile SimpleX și Matrix",
-
   "a11y.skip": "Salt la conținut",
   "a11y.menu": "Meniu",
   "lang.label": "Limbă",
-
   "nav.home": "Acasă",
   "nav.features": "Funcții",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Documentație",
   "nav.legal": "Legal",
   "nav.login": "Autentificare",
-
   "badge.alpha": "Alpha",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Activ",
   "badge.planned": "Planificat",
   "badge.indev": "În dezvoltare",
   "badge.recommended": "Recomandat",
-
   "hero.ann": "Acum în alpha · consimțământ + verificare CSAM",
   "hero.title1": "Nimic nu se publică",
   "hero.title2": "până nu este verificat.",
@@ -43,7 +38,6 @@
   "trust.consent": "Bazat pe consimțământ",
   "trust.passkeys": "Passkeys",
   "trust.localai": "AI local",
-
   "home.live.eyebrow": "Arhiva, în direct",
   "home.live.title": "Căutați într-o arhivă publică permanentă",
   "home.live.lede": "Căutare full-text, filtre și media protejată prin autentificare. Această previzualizare interactivă rulează integral în browserul dumneavoastră, cu date de exemplu: introduceți o interogare, schimbați grupurile și urmăriți cum arhiva răspunde exact ca cea reală.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Pe roadmap",
   "roadmap.matrix": "Suport Matrix",
   "roadmap.categorization": "Categorizare",
-  "roadmap.videogallery": "Galerie video",
+  "roadmap.videogallery": "Galerie video și imagini",
   "roadmap.moderation": "Instrumente de moderare",
   "roadmap.localai": "AI local",
   "roadmap.multitenancy": "Multi-tenancy",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Criptare în tranzit, gazde securizate",
   "home.sec.point3": "AI local, fără cloud-uri terțe",
   "home.sec.point4": "Raportare și moderare a conținutului",
-
   "demo.preview": "PREVIZUALIZARE · DATE DE EXEMPLU",
   "demo.groups": "GRUPURI",
   "demo.allgroups": "Toate grupurile",
@@ -94,7 +87,6 @@
   "demo.empty": "Niciun mesaj arhivat nu corespunde",
   "demo.archived": "arhivat",
   "demo.attachment": "atașament",
-
   "features.eyebrow": "Funcții",
   "features.title1": "Totul trece prin ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "În dezvoltare sau în faza de proiectare. Ordinea și amploarea se pot schimba, pentru că acesta este software în alpha, iar noi preferăm să livrăm mai întâi mecanismele de protecție.",
   "features.rm.matrix.body": "Aceeași arhivă bazată pe consimțământ și aceeași suită de boți pentru camerele Matrix.",
   "features.rm.categorization.body": "Grupare automată pe subiecte a conținutului arhivat.",
-  "features.rm.videogallery.body": "O interfață dedicată pentru parcurgerea videoclipurilor arhivate.",
+  "features.rm.videogallery.body": "O suprafață de navigare dedicată pentru videoclipurile și imaginile arhivate.",
   "features.rm.moderation.body": "Acțiuni în masă, politici și cozi de revizuire.",
   "features.rm.localai.body": "Verificare și rezumate care rulează pe propriul dumneavoastră hardware.",
   "features.rm.multitenancy.body": "O singură instalare, mai multe arhive izolate.",
-
   "pro.eyebrow": "Ediția comercială",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Găzduire administrată și capabilități dincolo de nucleul deschis, pentru operatorii care vor arhiva fără a administra infrastructura. Aceleași mecanisme de protecție, aceeași fundație deschisă, fără nicio muncă de server.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-mail",
   "pro.customer.request": "Solicitați acces",
   "pro.customer.login": "Autentificare clienți",
-
   "security.eyebrow": "Securitate și siguranță",
   "security.title1": "Securitatea este ",
   "security.title2": "scopul",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Ați găsit o vulnerabilitate?",
   "security.vuln.body": "Raportați-o confidențial prin contactul de securitate din repository. Recunoaștem public dezvăluirea responsabilă și tratăm cu seriozitate fiecare raport.",
   "security.vuln.cta": "Politica de securitate",
-
   "os.eyebrow": "Open Source",
   "os.title": "Nucleu deschis, registre deschise",
   "os.lede": "Nucleul Cinderella este software liber sub AGPL-3.0. Rulați-l singuri, citiți fiecare linie și trageți-ne la răspundere pentru ce afirmă acest site. Încrederea ar trebui să fie verificabilă, nu promisă.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Vedeți pe GitHub",
   "os.why.title": "De ce AGPL-3.0",
   "os.why.body": "O arhivă cere încredere. AGPL garantează că oricine operează o versiune modificată a Cinderella trebuie să publice acele modificări, astfel încât publicul să poată inspecta oricând codul care gestionează conversațiile publice. Exact aceasta este menirea licenței.",
-
   "legal.eyebrow": "Legal",
   "legal.title": "Informații legale",
   "legal.lede": "Texte provizorii, de revizuit de un consilier juridic înainte de lansare. Câmpurile evidențiate trebuie completate.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Condiții",
   "legal.badge.template": "Șablon, nu consultanță juridică",
   "legal.badge.draft": "Schiță, în așteptare",
-
   "impressum.title": "Notă legală (Impressum)",
   "impressum.intro": "Informații conform § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Operator",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Nu suntem dispuși și nici obligați să participăm la proceduri de soluționare a litigiilor în fața unei comisii de arbitraj pentru consumatori.",
   "impressum.ypo.h": "Responsabil pentru protecția minorilor (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella a desemnat în mod voluntar un responsabil pentru protecția minorilor:",
-
   "privacy.title": "Politica de confidențialitate",
   "privacy.effective": "Data intrării în vigoare:",
   "privacy.effective.ph": "data",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Furnizorul de găzduire / locația; de menționat că prelucrarea AI rulează local",
   "privacy.s5.h": "5. Drepturile dumneavoastră",
   "privacy.s5.body": "Acces, rectificare, ștergere, restricționare, portabilitate, opoziție: contactați operatorul. Puteți depune o plângere la o autoritate de supraveghere.",
-
   "terms.title": "Condiții de utilizare",
   "terms.effective": "Data intrării în vigoare:",
   "terms.effective.ph": "data",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Conținutul arhivat provine din grupuri publice care și-au dat consimțământul. Operatorul poate elimina conținut în urma rapoartelor sau a unei obligații legale.",
   "terms.s5.h": "5. Răspundere",
   "terms.s5.ph": "Clauza de răspundere urmează să fie furnizată de consilierul juridic",
-
   "footer.blurb": "Suita de boți AI pentru comunitățile SimpleX și Matrix. Bazată pe consimțământ, permanentă, căutabilă și open source sub AGPL-3.0.",
   "footer.product": "Produs",
   "footer.opensource": "Open Source",
@@ -269,20 +253,16 @@
   "footer.terms": "Condiții",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Construit pe SimpleX și Matrix. Neafiliat cu SimpleX Chat sau cu Matrix Foundation.",
-
   "share.label": "Distribuiți această pagină",
-
   "cookie.title": "Cookie-uri",
   "cookie.text": "Acest site folosește un cookie de sesiune pentru autentificare și contorizează anonim utilizarea. Detalii în",
   "cookie.policy": "Politica de confidențialitate",
   "cookie.accept": "Acceptați",
   "cookie.reject": "Doar cele necesare",
-
   "stub.badge": "În curând",
   "stub.lead": "Această pagină este pe drum.",
   "stub.body": "Încă lucrăm la ea. Între timp, capabilitatea de arhivare este activă, iar codul este deschis, așa că aruncați o privire pe GitHub până atunci.",
   "stub.back": "Înapoi la pagina principală",
-
   "meta.home.title": "Cinderella · Suita de boți AI pentru SimpleX și Matrix",
   "meta.home.description": "Cinderella este un firewall în fața arhivei publice: fiecare mesaj și fiecare fișier trece prin verificări de consimțământ și prin filtrarea CSAM înainte ca orice să devină public. Open source sub AGPL-3.0.",
   "meta.features.title": "Funcții · Cinderella",

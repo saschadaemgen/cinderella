@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "Az AI-botcsalád SimpleX- és Matrix-közösségek számára",
-
   "a11y.skip": "Ugrás a tartalomra",
   "a11y.menu": "Menü",
   "lang.label": "Nyelv",
-
   "nav.home": "Kezdőlap",
   "nav.features": "Funkciók",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentáció",
   "nav.legal": "Jogi tudnivalók",
   "nav.login": "Bejelentkezés",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Élő",
   "badge.planned": "Tervezett",
   "badge.indev": "Fejlesztés alatt",
   "badge.recommended": "Ajánlott",
-
   "hero.ann": "Már alfa fázisban · hozzájárulás + CSAM-szűrés",
   "hero.title1": "Semmi sem jelenik meg,",
   "hero.title2": "amíg át nem megy a szűrésen.",
@@ -43,7 +38,6 @@
   "trust.consent": "Hozzájárulás az első",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Helyi AI",
-
   "home.live.eyebrow": "Az archívum, élőben",
   "home.live.title": "Keressen egy állandó, nyilvános archívumban",
   "home.live.lede": "Teljes szöveges keresés, szűrők és hitelesítés mögötti médiatartalom. Ez az interaktív előnézet teljes egészében az Ön böngészőjében fut, mintaadatokkal: írjon be egy keresést, váltson csoportot, és nézze, ahogy az archívum pontosan úgy reagál, mint az igazi.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Az ütemterven",
   "roadmap.matrix": "Matrix-támogatás",
   "roadmap.categorization": "Kategorizálás",
-  "roadmap.videogallery": "Videógaléria",
+  "roadmap.videogallery": "Videó- és képgaléria",
   "roadmap.moderation": "Moderációs eszközök",
   "roadmap.localai": "Helyi AI",
   "roadmap.multitenancy": "Több-bérlős működés",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Titkosított átvitel, megerősített kiszolgálók",
   "home.sec.point3": "Helyi AI, harmadik fél felhője nélkül",
   "home.sec.point4": "Tartalombejelentés és moderáció",
-
   "demo.preview": "ELŐNÉZET · MINTAADATOK",
   "demo.groups": "CSOPORTOK",
   "demo.allgroups": "Minden csoport",
@@ -94,7 +87,6 @@
   "demo.empty": "Nincs egyező archivált üzenet",
   "demo.archived": "archiválva",
   "demo.attachment": "melléklet",
-
   "features.eyebrow": "Funkciók",
   "features.title1": "Minden ezen halad át: ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Fejlesztés vagy tervezés alatt. A sorrend és a terjedelem változhat, mert ez alfa állapotú szoftver, és inkább a védelmi mechanizmusokat szállítjuk le először.",
   "features.rm.matrix.body": "Ugyanaz a hozzájárulás-alapú archívum és botcsalád Matrix-szobákhoz.",
   "features.rm.categorization.body": "Automatikus témák szerinti csoportosítás az archivált tartalomban.",
-  "features.rm.videogallery.body": "Külön böngészőfelület az archivált videókhoz.",
+  "features.rm.videogallery.body": "Külön böngészőfelület az archivált videókhoz és képekhez.",
   "features.rm.moderation.body": "Tömeges műveletek, szabályok és ellenőrzési sorok.",
   "features.rm.localai.body": "Szűrés és összefoglalók, amelyek az Ön saját hardverén futnak.",
   "features.rm.multitenancy.body": "Egy telepítés, sok elkülönített archívum.",
-
   "pro.eyebrow": "A kereskedelmi kiadás",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Üzemeltetett hoszting és a nyílt magon túli képességek azoknak az üzemeltetőknek, akik az archívumot saját infrastruktúra nélkül szeretnék. Ugyanazok a védelmi mechanizmusok, ugyanaz a nyílt alap, szerverekkel járó munka nélkül.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-mail",
   "pro.customer.request": "Hozzáférés kérése",
   "pro.customer.login": "Ügyfélbelépés",
-
   "security.eyebrow": "Biztonság és védelem",
   "security.title1": "A biztonság ",
   "security.title2": "a lényeg",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Talált egy sebezhetőséget?",
   "security.vuln.body": "Jelentse bizalmasan a repository biztonsági kapcsolattartóján keresztül. A felelős bejelentőket név szerint elismerjük, és minden bejelentést komolyan veszünk.",
   "security.vuln.cta": "Biztonsági szabályzat",
-
   "os.eyebrow": "Nyílt forráskód",
   "os.title": "Nyílt mag, nyitott könyvek",
   "os.lede": "A Cinderella magja szabad szoftver AGPL-3.0 licenc alatt. Futtassa saját maga, olvassa el minden sorát, és kérje számon rajtunk, amit ez az oldal állít. A bizalomnak ellenőrizhetőnek kell lennie, nem ígéretnek.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Megtekintés a GitHubon",
   "os.why.title": "Miért AGPL-3.0",
   "os.why.body": "Egy archívum bizalmat kér. Az AGPL garantálja, hogy aki módosított Cinderellát üzemeltet, köteles közzétenni a módosításait, így a nyilvánosság mindig megvizsgálhatja a nyilvános beszélgetéseket kezelő kódot. Pontosan ez a licenc feladata.",
-
   "legal.eyebrow": "Jogi tudnivalók",
   "legal.title": "Jogi információk",
   "legal.lede": "Helyőrző szövegek, amelyeket indulás előtt jogásznak kell átnéznie. A kiemelt mezőket ki kell tölteni.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Feltételek",
   "legal.badge.template": "Sablon, nem jogi tanácsadás",
   "legal.badge.draft": "Vázlat, függőben",
-
   "impressum.title": "Jogi közlemény (Impressum)",
   "impressum.intro": "Tájékoztatás a § 5 TMG / § 18 MStV szerint.",
   "impressum.operator.h": "Üzemeltető",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Fogyasztói békéltető testület előtti vitarendezési eljárásban nem vagyunk hajlandók és nem vagyunk kötelesek részt venni.",
   "impressum.ypo.h": "Ifjúságvédelmi megbízott (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "A Cinderella önkéntesen ifjúságvédelmi megbízottat nevezett ki:",
-
   "privacy.title": "Adatvédelmi tájékoztató",
   "privacy.effective": "Hatálybalépés:",
   "privacy.effective.ph": "dátum",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Hoszting-szolgáltató / helyszín; megjegyzés, hogy az AI-feldolgozás helyben történik",
   "privacy.s5.h": "5. Az Ön jogai",
   "privacy.s5.body": "Hozzáférés, helyesbítés, törlés, korlátozás, adathordozhatóság, tiltakozás: forduljon az üzemeltetőhöz. Panaszt tehet a felügyeleti hatóságnál is.",
-
   "terms.title": "Felhasználási feltételek",
   "terms.effective": "Hatálybalépés:",
   "terms.effective.ph": "dátum",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Az archivált tartalom hozzájáruló nyilvános csoportokból származik. Az üzemeltető bejelentés vagy jogi kötelezettség alapján eltávolíthat tartalmat.",
   "terms.s5.h": "5. Felelősség",
   "terms.s5.ph": "Felelősségi záradék, jogász által kidolgozandó",
-
   "footer.blurb": "AI-botcsalád SimpleX- és Matrix-közösségeknek. Hozzájárulás-alapú, állandó, kereshető és nyílt forráskódú, AGPL-3.0 licenc alatt.",
   "footer.product": "Termék",
   "footer.opensource": "Nyílt forráskód",
@@ -269,20 +253,16 @@
   "footer.terms": "Felhasználási feltételek",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "A SimpleX és a Matrix hálózatra épül. Nem áll kapcsolatban sem a SimpleX Chattel, sem a Matrix Foundationnel.",
-
   "share.label": "Oldal megosztása",
-
   "cookie.title": "Sütik",
   "cookie.text": "Ez az oldal munkamenet-sütit használ a belépéshez, valamint anonim látogatottsági számlálást végez. Részletek:",
   "cookie.policy": "Adatvédelmi tájékoztató",
   "cookie.accept": "Elfogadás",
   "cookie.reject": "Csak a szükségesek",
-
   "stub.badge": "Hamarosan",
   "stub.lead": "Ez az oldal készülőben van.",
   "stub.body": "Ezt az oldalt még írjuk. Addig is: az archívum képesség már élő, a kód pedig nyílt, nézzen körül a GitHubon, amíg vár.",
   "stub.back": "Vissza a kezdőlapra",
-
   "meta.home.title": "Cinderella · AI-botcsalád SimpleX és Matrix közösségeknek",
   "meta.home.description": "A Cinderella tűzfal a nyilvános archívum előtt: minden üzenet és fájl hozzájárulás-ellenőrzésen és CSAM-szűrésen halad át, mielőtt bármi élesbe kerülne. Nyílt forráskód AGPL-3.0 licenc alatt.",
   "meta.features.title": "Funkciók · Cinderella",

@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "rtl"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "חבילת בוטי הבינה המלאכותית לקהילות SimpleX ו-Matrix",
-
   "a11y.skip": "דילוג לתוכן",
   "a11y.menu": "תפריט",
   "lang.label": "שפה",
-
   "nav.home": "בית",
   "nav.features": "יכולות",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "תיעוד",
   "nav.legal": "מידע משפטי",
   "nav.login": "התחברות",
-
   "badge.alpha": "אלפא",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "פעיל",
   "badge.planned": "מתוכנן",
   "badge.indev": "בפיתוח",
   "badge.recommended": "מומלץ",
-
   "hero.ann": "כעת באלפא · בדיקת הסכמה וסינון CSAM",
   "hero.title1": "שום דבר לא מתפרסם",
   "hero.title2": "עד שהוא עובר סינון.",
@@ -43,7 +38,6 @@
   "trust.consent": "הסכמה תחילה",
   "trust.passkeys": "Passkeys",
   "trust.localai": "AI מקומי",
-
   "home.live.eyebrow": "הארכיון, בפעולה",
   "home.live.title": "חפשו בתיעוד ציבורי וקבוע",
   "home.live.lede": "חיפוש טקסט מלא, מסננים ומדיה מאחורי אימות. התצוגה המקדימה האינטראקטיבית הזו רצה כולה בדפדפן שלכם עם נתוני דוגמה: הקלידו שאילתה, החליפו קבוצות וראו כיצד הארכיון מגיב בדיוק כמו האמיתי.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "במפת הדרכים",
   "roadmap.matrix": "תמיכה ב-Matrix",
   "roadmap.categorization": "קטגוריזציה",
-  "roadmap.videogallery": "גלריית וידאו",
+  "roadmap.videogallery": "גלריית וידאו ותמונות",
   "roadmap.moderation": "כלי מודרציה",
   "roadmap.localai": "AI מקומי",
   "roadmap.multitenancy": "ריבוי דיירים",
@@ -79,7 +73,6 @@
   "home.sec.point2": "הצפנה בתעבורה, שרתים מוקשחים",
   "home.sec.point3": "AI מקומי, ללא ענני צד שלישי",
   "home.sec.point4": "דיווח ומודרציה של תוכן",
-
   "demo.preview": "תצוגה מקדימה · נתוני דוגמה",
   "demo.groups": "קבוצות",
   "demo.allgroups": "כל הקבוצות",
@@ -94,7 +87,6 @@
   "demo.empty": "אין הודעות מאורכבות תואמות",
   "demo.archived": "מאורכב",
   "demo.attachment": "קובץ מצורף",
-
   "features.eyebrow": "יכולות",
   "features.title1": "הכול עובר דרך ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "בפיתוח או בתכנון. הסדר וההיקף עשויים להשתנות, כי זו תוכנת אלפא ואנחנו מעדיפים לשחרר קודם את מנגנוני ההגנה.",
   "features.rm.matrix.body": "אותו ארכיון מבוסס הסכמה ואותה חבילת בוטים לחדרי Matrix.",
   "features.rm.categorization.body": "קיבוץ נושאים אוטומטי על פני תוכן מאורכב.",
-  "features.rm.videogallery.body": "ממשק עיון ייעודי לווידאו מאורכב.",
+  "features.rm.videogallery.body": "משטח עיון ייעודי לסרטונים ותמונות בארכיון.",
   "features.rm.moderation.body": "פעולות מרובות, כללי מדיניות ותורי בודקים.",
   "features.rm.localai.body": "סינון ותקצירים שרצים על החומרה שלכם.",
   "features.rm.multitenancy.body": "פריסה אחת, ארכיונים מבודדים רבים.",
-
   "pro.eyebrow": "המהדורה המסחרית",
   "pro.title": "Cinderella Pro",
   "pro.lede": "אירוח מנוהל ויכולות מעבר לליבה הפתוחה, למפעילים שרוצים את הארכיון בלי לתפעל את התשתית. אותם מנגנוני הגנה, אותו יסוד פתוח, בלי עבודת השרתים.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "אימייל",
   "pro.customer.request": "בקשת גישה",
   "pro.customer.login": "כניסת לקוחות",
-
   "security.eyebrow": "אבטחה ובטיחות",
   "security.title1": "האבטחה היא ",
   "security.title2": "העיקר",
@@ -190,7 +180,6 @@
   "security.vuln.title": "מצאתם פגיעות אבטחה?",
   "security.vuln.body": "דווחו עליה באופן פרטי דרך איש הקשר לאבטחה שבמאגר הקוד. אנחנו מוקירים חשיפה אחראית ומתייחסים ברצינות לכל דיווח.",
   "security.vuln.cta": "מדיניות האבטחה",
-
   "os.eyebrow": "קוד פתוח",
   "os.title": "ליבה פתוחה, ספרים פתוחים",
   "os.lede": "הליבה של Cinderella היא תוכנה חופשית תחת AGPL-3.0. הפעילו אותה בעצמכם, קראו כל שורה, ובחנו אותנו מול מה שהאתר הזה טוען. אמון צריך להיות ניתן לאימות, לא רק מובטח.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "צפייה ב-GitHub",
   "os.why.title": "למה AGPL-3.0",
   "os.why.body": "ארכיון מבקש אמון. ה-AGPL מבטיחה שכל מי שמפעיל גרסה ששונתה של Cinderella חייב לפרסם את השינויים האלה, כך שהציבור תמיד יכול לבחון את הקוד שמטפל בשיחות ציבוריות. הערובה הזו היא הרישיון שעושה את עבודתו.",
-
   "legal.eyebrow": "מידע משפטי",
   "legal.title": "מידע משפטי",
   "legal.lede": "טקסטים זמניים, לבדיקת יועץ משפטי לפני ההשקה. שדות מודגשים יש להשלים.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "תנאי שימוש",
   "legal.badge.template": "תבנית, לא ייעוץ משפטי",
   "legal.badge.draft": "טיוטה, בהמתנה",
-
   "impressum.title": "הודעה משפטית (Impressum)",
   "impressum.intro": "מידע בהתאם ל-§ 5 TMG / § 18 MStV.",
   "impressum.operator.h": "מפעיל",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "איננו מוכנים ואיננו מחויבים להשתתף בהליכי יישוב סכסוכים בפני מוסד בוררות צרכני.",
   "impressum.ypo.h": "ממונה הגנת הנוער (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella מינתה מרצונה ממונה על הגנת הנוער:",
-
   "privacy.title": "מדיניות פרטיות",
   "privacy.effective": "תאריך כניסה לתוקף:",
   "privacy.effective.ph": "תאריך",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "ספק האירוח / מיקום; לציין שעיבוד הבינה המלאכותית מתבצע מקומית",
   "privacy.s5.h": "5. הזכויות שלכם",
   "privacy.s5.body": "עיון, תיקון, מחיקה, הגבלה, ניידות, התנגדות: פנו למפעיל. באפשרותכם להגיש תלונה לרשות פיקוח.",
-
   "terms.title": "תנאי שימוש",
   "terms.effective": "תאריך כניסה לתוקף:",
   "terms.effective.ph": "תאריך",
@@ -254,7 +239,6 @@
   "terms.s4.body": "תוכן מאורכב מקורו בקבוצות ציבוריות שהסכימו לכך. המפעיל רשאי להסיר תוכן בעקבות דיווחים או חובה משפטית.",
   "terms.s5.h": "5. אחריות",
   "terms.s5.ph": "סעיף אחריות יסופק על ידי יועץ משפטי",
-
   "footer.blurb": "חבילת בוטי הבינה המלאכותית לקהילות SimpleX ו-Matrix. הסכמה תחילה, קבוע, ניתן לחיפוש וקוד פתוח תחת AGPL-3.0.",
   "footer.product": "מוצר",
   "footer.opensource": "קוד פתוח",
@@ -269,20 +253,16 @@
   "footer.terms": "תנאי שימוש",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "בנוי על SimpleX ועל Matrix. אינו קשור ל-SimpleX Chat או ל-Matrix Foundation.",
-
   "share.label": "שיתוף העמוד הזה",
-
   "cookie.title": "עוגיות",
   "cookie.text": "אתר זה משתמש בעוגיית התחברות לצורך כניסה וסופר שימוש אנונימי. פרטים במסמך",
   "cookie.policy": "מדיניות הפרטיות",
   "cookie.accept": "אישור",
   "cookie.reject": "רק הנחוצות",
-
   "stub.badge": "בקרוב",
   "stub.lead": "העמוד הזה בדרך.",
   "stub.body": "אנחנו עדיין כותבים אותו. בינתיים, יכולת הארכיון פעילה והקוד פתוח, אז מוזמנים להציץ ב-GitHub בזמן ההמתנה.",
   "stub.back": "חזרה לדף הבית",
-
   "meta.home.title": "Cinderella · חבילת בוטי AI ל-SimpleX ול-Matrix",
   "meta.home.description": "Cinderella היא חומת אש לפני הארכיון הציבורי: כל הודעה וכל קובץ עוברים בדיקות הסכמה וסינון CSAM לפני שדבר כלשהו עולה לאוויר. קוד פתוח תחת AGPL-3.0.",
   "meta.features.title": "יכולות · Cinderella",

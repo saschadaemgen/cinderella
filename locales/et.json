@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "ltr"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "AI-botide komplekt SimpleX- ja Matrix-kogukondadele",
-
   "a11y.skip": "Liigu sisu juurde",
   "a11y.menu": "Menüü",
   "lang.label": "Keel",
-
   "nav.home": "Avaleht",
   "nav.features": "Funktsioonid",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "Dokumentatsioon",
   "nav.legal": "Õigusteave",
   "nav.login": "Logi sisse",
-
   "badge.alpha": "Alfa",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "Töös",
   "badge.planned": "Kavas",
   "badge.indev": "Arendamisel",
   "badge.recommended": "Soovitatud",
-
   "hero.ann": "Nüüd alfas · nõusoleku- ja CSAM-kontroll",
   "hero.title1": "Midagi ei avaldata",
   "hero.title2": "enne kontrollimist.",
@@ -43,7 +38,6 @@
   "trust.consent": "Nõusolek ennekõike",
   "trust.passkeys": "Passkeys",
   "trust.localai": "Kohalik AI",
-
   "home.live.eyebrow": "Arhiiv, otse",
   "home.live.title": "Otsige püsivast avalikust arhiivist",
   "home.live.lede": "Täistekstiotsing, filtrid ja meedia autentimise taga. See interaktiivne eelvaade töötab täielikult teie brauseris näidisandmetega: sisestage otsing, vahetage gruppi ja vaadake, kuidas arhiiv reageerib täpselt nagu päris.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "Teekaardil",
   "roadmap.matrix": "Matrix-tugi",
   "roadmap.categorization": "Kategoriseerimine",
-  "roadmap.videogallery": "Videogalerii",
+  "roadmap.videogallery": "Video- ja pildigalerii",
   "roadmap.moderation": "Modereerimistööriistad",
   "roadmap.localai": "Kohalik AI",
   "roadmap.multitenancy": "Mitme rentniku tugi",
@@ -79,7 +73,6 @@
   "home.sec.point2": "Krüpteeritud edastus, tugevdatud serverid",
   "home.sec.point3": "Kohalik AI, ei mingeid kolmandate osapoolte pilvi",
   "home.sec.point4": "Sisust teatamine ja modereerimine",
-
   "demo.preview": "EELVAADE · NÄIDISANDMED",
   "demo.groups": "GRUPID",
   "demo.allgroups": "Kõik grupid",
@@ -94,7 +87,6 @@
   "demo.empty": "Ühtegi vastavat arhiveeritud sõnumit ei leitud",
   "demo.archived": "arhiveeritud",
   "demo.attachment": "manus",
-
   "features.eyebrow": "Funktsioonid",
   "features.title1": "Kõik käib läbi ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "Arendamisel või kavandamisel. Järjekord ja ulatus võivad muutuda, sest tegu on alfatarkvaraga ja me eelistame esmalt valmis saada kaitsemeetmed.",
   "features.rm.matrix.body": "Sama nõusolekupõhine arhiiv ja botikomplekt Matrix-tubadele.",
   "features.rm.categorization.body": "Arhiveeritud sisu automaatne teemapõhine rühmitamine.",
-  "features.rm.videogallery.body": "Eraldi sirvimisvaade arhiveeritud videote jaoks.",
+  "features.rm.videogallery.body": "Eraldi sirvimispind arhiveeritud videote ja piltide jaoks.",
   "features.rm.moderation.body": "Hulgitoimingud, reeglid ja ülevaatusjärjekorrad.",
   "features.rm.localai.body": "Kontroll ja kokkuvõtted, mis töötavad teie enda riistvaral.",
   "features.rm.multitenancy.body": "Üks paigaldus, palju eraldatud arhiive.",
-
   "pro.eyebrow": "Kommertsversioon",
   "pro.title": "Cinderella Pro",
   "pro.lede": "Hallatud majutus ja võimekused üle avatud tuuma, operaatoritele, kes soovivad arhiivi ilma taristut ise haldamata. Samad kaitsemeetmed, sama avatud vundament, ainult ilma serveritööta.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "E-post",
   "pro.customer.request": "Taotle ligipääsu",
   "pro.customer.login": "Kliendi sisselogimine",
-
   "security.eyebrow": "Turvalisus ja ohutus",
   "security.title1": "Turvalisus on ",
   "security.title2": "kogu mõte",
@@ -190,7 +180,6 @@
   "security.vuln.title": "Leidsite haavatavuse?",
   "security.vuln.body": "Teatage sellest privaatselt repositooriumis oleva turvakontakti kaudu. Tunnustame vastutustundlikku avalikustamist ja võtame iga teadet tõsiselt.",
   "security.vuln.cta": "Turvapoliitika",
-
   "os.eyebrow": "Avatud lähtekood",
   "os.title": "Avatud tuum, avatud raamatud",
   "os.lede": "Cinderella tuum on vaba tarkvara AGPL-3.0 litsentsi all. Käitage seda ise, lugege iga rida ja mõõtke meid selle järgi, mida see leht väidab. Usaldus peab olema kontrollitav, mitte pelgalt lubatud.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "Vaata GitHubis",
   "os.why.title": "Miks AGPL-3.0",
   "os.why.body": "Arhiiv eeldab usaldust. AGPL tagab, et igaüks, kes käitab Cinderella muudetud versiooni, peab need muudatused avaldama, nii et avalikkus saab alati kontrollida koodi, mis avalikke vestlusi töötleb. See ongi litsentsi ülesanne.",
-
   "legal.eyebrow": "Õigusteave",
   "legal.title": "Õiguslik teave",
   "legal.lede": "Kohatäitetekstid, mille peab enne avalikustamist üle vaatama jurist. Esiletõstetud väljad tuleb täita.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "Tingimused",
   "legal.badge.template": "Mall, mitte õigusnõu",
   "legal.badge.draft": "Mustand, ootel",
-
   "impressum.title": "Õigusteade (Impressum)",
   "impressum.intro": "Teave vastavalt § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "Teenuse osutaja",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "Me ei ole valmis ega kohustatud osalema vaidluste lahendamise menetluses tarbijavaidluste komisjoni ees.",
   "impressum.ypo.h": "Noorsookaitse volinik (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "Cinderella on vabatahtlikult määranud noorsookaitse voliniku:",
-
   "privacy.title": "Privaatsuspoliitika",
   "privacy.effective": "Kehtiv alates:",
   "privacy.effective.ph": "kuupäev",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "Majutusteenuse pakkuja / asukoht; märkus, et AI-töötlus toimub kohapeal",
   "privacy.s5.h": "5. Teie õigused",
   "privacy.s5.body": "Juurdepääs, parandamine, kustutamine, piiramine, ülekantavus, vastuväide: pöörduge teenuse osutaja poole. Teil on õigus esitada kaebus järelevalveasutusele.",
-
   "terms.title": "Kasutustingimused",
   "terms.effective": "Kehtiv alates:",
   "terms.effective.ph": "kuupäev",
@@ -254,7 +239,6 @@
   "terms.s4.body": "Arhiveeritud sisu pärineb nõusoleku andnud avalikest gruppidest. Teenuse osutaja võib sisu eemaldada teadete või õigusliku kohustuse alusel.",
   "terms.s5.h": "5. Vastutus",
   "terms.s5.ph": "Vastutusklausel, mille esitab õigusnõustaja",
-
   "footer.blurb": "AI-botide komplekt SimpleX- ja Matrix-kogukondadele. Nõusolek ennekõike, püsiv, otsitav ja avatud lähtekoodiga AGPL-3.0 all.",
   "footer.product": "Toode",
   "footer.opensource": "Avatud lähtekood",
@@ -269,20 +253,16 @@
   "footer.terms": "Tingimused",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "Aluseks on SimpleX ja Matrix. Ei ole seotud rakendusega SimpleX Chat ega sihtasutusega Matrix Foundation.",
-
   "share.label": "Jaga seda lehte",
-
   "cookie.title": "Küpsised",
   "cookie.text": "See veebileht kasutab seansiküpsist sisselogimiseks ja anonüümset kasutusstatistikat. Üksikasjad leiate dokumendist",
   "cookie.policy": "Privaatsuspoliitika",
   "cookie.accept": "Nõustu",
   "cookie.reject": "Ainult vajalikud",
-
   "stub.badge": "Peagi tulekul",
   "stub.lead": "See leht on teel.",
   "stub.body": "Me alles kirjutame seda. Seniks on arhiivivõimekus juba töös ja kood avatud, nii et vaadake oodates ringi GitHubis.",
   "stub.back": "Tagasi avalehele",
-
   "meta.home.title": "Cinderella · AI-botide komplekt SimpleX- ja Matrix-kogukondadele",
   "meta.home.description": "Cinderella on tulemüür avaliku arhiivi ees: iga sõnum ja fail läbib nõusolekukontrolli ja CSAM-kontrolli, enne kui midagi avalikuks saab. Avatud lähtekood AGPL-3.0 all.",
   "meta.features.title": "Funktsioonid · Cinderella",

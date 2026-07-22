@@ -7,14 +7,11 @@
     "status": "CCB-S3-001: machine-translated from the English master; pending native-speaker review.",
     "dir": "rtl"
   },
-
   "brand.name": "Cinderella",
   "brand.tagline": "حزمة روبوتات الذكاء الاصطناعي لمجتمعات SimpleX وMatrix",
-
   "a11y.skip": "الانتقال إلى المحتوى",
   "a11y.menu": "القائمة",
   "lang.label": "اللغة",
-
   "nav.home": "الرئيسية",
   "nav.features": "الميزات",
   "nav.pro": "Pro",
@@ -23,14 +20,12 @@
   "nav.docs": "التوثيق",
   "nav.legal": "الشؤون القانونية",
   "nav.login": "تسجيل الدخول",
-
   "badge.alpha": "ألفا",
   "badge.agpl": "AGPL-3.0",
   "badge.live": "مباشر",
   "badge.planned": "مخطط له",
   "badge.indev": "قيد التطوير",
   "badge.recommended": "موصى به",
-
   "hero.ann": "متاح الآن في مرحلة ألفا · الموافقة + فحص CSAM",
   "hero.title1": "لا يُنشر أي شيء",
   "hero.title2": "قبل أن يخضع للفحص.",
@@ -43,7 +38,6 @@
   "trust.consent": "الموافقة أولًا",
   "trust.passkeys": "مفاتيح المرور (Passkeys)",
   "trust.localai": "ذكاء اصطناعي محلي",
-
   "home.live.eyebrow": "الأرشيف مباشرةً",
   "home.live.title": "ابحث في سجل عام دائم",
   "home.live.lede": "بحث بالنص الكامل، ومرشحات، ووسائط خلف المصادقة. تعمل هذه المعاينة التفاعلية بالكامل في متصفحك ببيانات تجريبية: اكتب استعلامًا، وبدّل بين المجموعات، وشاهد الأرشيف يستجيب تمامًا كما في النسخة الحقيقية.",
@@ -67,7 +61,7 @@
   "home.suite.roadmap.title": "على خارطة الطريق",
   "roadmap.matrix": "دعم Matrix",
   "roadmap.categorization": "التصنيف",
-  "roadmap.videogallery": "معرض الفيديو",
+  "roadmap.videogallery": "معرض الفيديو والصور",
   "roadmap.moderation": "أدوات الإشراف",
   "roadmap.localai": "ذكاء اصطناعي محلي",
   "roadmap.multitenancy": "تعدد المستأجرين",
@@ -79,7 +73,6 @@
   "home.sec.point2": "تشفير أثناء النقل، وخوادم محصَّنة",
   "home.sec.point3": "ذكاء اصطناعي محلي، دون سحابات طرف ثالث",
   "home.sec.point4": "الإبلاغ عن المحتوى والإشراف",
-
   "demo.preview": "معاينة · بيانات تجريبية",
   "demo.groups": "المجموعات",
   "demo.allgroups": "كل المجموعات",
@@ -94,7 +87,6 @@
   "demo.empty": "لا توجد رسائل مؤرشفة مطابقة",
   "demo.archived": "مؤرشفة",
   "demo.attachment": "مرفق",
-
   "features.eyebrow": "الميزات",
   "features.title1": "كل شيء يمر عبر ",
   "features.title2": ".",
@@ -124,11 +116,10 @@
   "features.roadmap.lede": "قيد التطوير أو التصميم. قد يتغير الترتيب والنطاق، لأن هذا برنامج في مرحلة ألفا، ونفضّل إطلاق الضمانات أولًا.",
   "features.rm.matrix.body": "الأرشيف نفسه القائم على الموافقة أولًا وحزمة الروبوتات نفسها لغرف Matrix.",
   "features.rm.categorization.body": "تجميع تلقائي للمواضيع عبر المحتوى المؤرشف.",
-  "features.rm.videogallery.body": "واجهة تصفح مخصصة للفيديو المؤرشف.",
+  "features.rm.videogallery.body": "واجهة تصفح مخصصة للفيديوهات والصور المؤرشفة.",
   "features.rm.moderation.body": "إجراءات جماعية، وسياسات، وطوابير للمراجعين.",
   "features.rm.localai.body": "فحص وملخصات تعمل على عتادك الخاص.",
   "features.rm.multitenancy.body": "نشر واحد، وأرشيفات معزولة متعددة.",
-
   "pro.eyebrow": "النسخة التجارية",
   "pro.title": "Cinderella Pro",
   "pro.lede": "استضافة مُدارة وقدرات تتجاوز النواة المفتوحة، للمشغّلين الذين يريدون الأرشيف دون إدارة البنية التحتية. الضمانات نفسها، والأساس المفتوح نفسه، ودون أي عمل على الخوادم.",
@@ -170,7 +161,6 @@
   "pro.customer.email": "البريد الإلكتروني",
   "pro.customer.request": "طلب وصول",
   "pro.customer.login": "تسجيل دخول العملاء",
-
   "security.eyebrow": "الأمان والسلامة",
   "security.title1": "الأمان هو ",
   "security.title2": "الغاية نفسها",
@@ -190,7 +180,6 @@
   "security.vuln.title": "وجدت ثغرة أمنية؟",
   "security.vuln.body": "أبلغ عنها بشكل خاص عبر جهة الاتصال الأمنية في المستودع. نُقدّر الإفصاح المسؤول ونأخذ كل بلاغ على محمل الجد.",
   "security.vuln.cta": "سياسة الأمان",
-
   "os.eyebrow": "المصدر المفتوح",
   "os.title": "نواة مفتوحة، وشفافية كاملة",
   "os.lede": "نواة Cinderella برمجية حرة بترخيص AGPL-3.0. شغّلها بنفسك، واقرأ كل سطر، وحاسبنا على ما يدّعيه هذا الموقع. الثقة يجب أن تكون قابلة للتحقق، لا مجرد وعد.",
@@ -199,7 +188,6 @@
   "os.repo.cta": "عرض على GitHub",
   "os.why.title": "لماذا AGPL-3.0",
   "os.why.body": "الأرشيف يطلب الثقة. يضمن ترخيص AGPL أن أي جهة تشغّل نسخة معدّلة من Cinderella ملزمة بنشر تلك التعديلات، بحيث يستطيع الجمهور دائمًا فحص الشيفرة التي تتعامل مع المحادثات العامة. هذا الضمان هو الترخيص وهو يؤدي وظيفته.",
-
   "legal.eyebrow": "الشؤون القانونية",
   "legal.title": "المعلومات القانونية",
   "legal.lede": "نصوص مؤقتة، ستُراجع من قبل مستشار قانوني قبل الإطلاق. الحقول المميزة يجب إكمالها.",
@@ -208,7 +196,6 @@
   "legal.tab.terms": "الشروط",
   "legal.badge.template": "قالب، وليس استشارة قانونية",
   "legal.badge.draft": "مسودة، قيد الإعداد",
-
   "impressum.title": "الإشعار القانوني (Impressum)",
   "impressum.intro": "معلومات وفقًا لأحكام § 5 TMG / § 18 MStV.",
   "impressum.operator.h": "المشغّل",
@@ -224,7 +211,6 @@
   "impressum.dispute.body": "لسنا مستعدين ولا ملزمين بالمشاركة في إجراءات تسوية النزاعات أمام هيئة تحكيم للمستهلكين.",
   "impressum.ypo.h": "مسؤول حماية الشباب (Jugendschutzbeauftragter)",
   "impressum.ypo.intro": "عيّنت Cinderella طوعًا مسؤولًا لحماية الشباب:",
-
   "privacy.title": "سياسة الخصوصية",
   "privacy.effective": "تاريخ السريان:",
   "privacy.effective.ph": "التاريخ",
@@ -240,7 +226,6 @@
   "privacy.s4.ph": "مزود الاستضافة / الموقع؛ مع ملاحظة أن معالجة الذكاء الاصطناعي تتم محليًا",
   "privacy.s5.h": "5. حقوقك",
   "privacy.s5.body": "الوصول والتصحيح والمحو وتقييد المعالجة وقابلية النقل والاعتراض: تواصل مع المشغّل. ويحق لك تقديم شكوى لدى سلطة رقابية.",
-
   "terms.title": "شروط الاستخدام",
   "terms.effective": "تاريخ السريان:",
   "terms.effective.ph": "التاريخ",
@@ -254,7 +239,6 @@
   "terms.s4.body": "المحتوى المؤرشف مصدره مجموعات عامة موافقة. ويجوز للمشغّل إزالة محتوى بناءً على بلاغات أو التزام قانوني.",
   "terms.s5.h": "5. المسؤولية",
   "terms.s5.ph": "بند المسؤولية سيقدمه المستشار القانوني",
-
   "footer.blurb": "حزمة روبوتات الذكاء الاصطناعي لمجتمعات SimpleX وMatrix. قائمة على الموافقة أولًا، دائمة، قابلة للبحث، ومفتوحة المصدر بترخيص AGPL-3.0.",
   "footer.product": "المنتج",
   "footer.opensource": "المصدر المفتوح",
@@ -269,20 +253,16 @@
   "footer.terms": "الشروط",
   "footer.copyright": "© 2026 Sascha Dämgen IT and More Systems",
   "footer.built": "مبني على SimpleX وMatrix. غير تابع لـ SimpleX Chat أو Matrix Foundation.",
-
   "share.label": "شارك هذه الصفحة",
-
   "cookie.title": "ملفات تعريف الارتباط",
   "cookie.text": "يستخدم هذا الموقع ملف تعريف ارتباط للجلسة لتسجيل الدخول وإحصاءات استخدام مجهولة. التفاصيل في",
   "cookie.policy": "سياسة الخصوصية",
   "cookie.accept": "قبول",
   "cookie.reject": "الاكتفاء بالضروري فقط",
-
   "stub.badge": "قريبًا",
   "stub.lead": "هذه الصفحة في الطريق.",
   "stub.body": "ما زلنا نكتب هذه الصفحة. في هذه الأثناء، قدرة الأرشيف متاحة والشيفرة مفتوحة، فألقِ نظرة على GitHub بينما تنتظر.",
   "stub.back": "العودة إلى الرئيسية",
-
   "meta.home.title": "Cinderella · حزمة روبوتات الذكاء الاصطناعي لمجتمعات SimpleX وMatrix",
   "meta.home.description": "Cinderella جدار حماية أمام الأرشيف العام: كل رسالة وكل ملف يمران عبر التحقق من الموافقة وفحص CSAM قبل نشر أي شيء. مفتوح المصدر بترخيص AGPL-3.0.",
   "meta.features.title": "الميزات · Cinderella",
