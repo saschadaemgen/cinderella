@@ -68,6 +68,8 @@ export class CoinMarketCapProvider implements PriceProvider {
   readonly capabilities: ProviderCapabilities = {
     canResolve: true,
     requiresKey: true,
+    // Prices by an id of its own, never by a contract address.
+    pricesByContract: false,
     attribution: 'Data provided by CoinMarketCap.com',
     maxCacheSeconds: Number.POSITIVE_INFINITY,
     note: 'Best at telling apart tokens that share a ticker. Needs an API key. Check your plan permits showing the data to a group.',
@@ -173,6 +175,8 @@ export class CoinGeckoProvider implements PriceProvider {
   readonly capabilities: ProviderCapabilities = {
     canResolve: true,
     requiresKey: false,
+    // Prices by an id of its own, never by a contract address.
+    pricesByContract: false,
     attribution: 'Powered by CoinGecko',
     // Their terms require cached data to be refreshed at least daily.
     maxCacheSeconds: 24 * 60 * 60,
@@ -318,6 +322,8 @@ export class DexscreenerProvider implements PriceProvider {
   readonly capabilities: ProviderCapabilities = {
     canResolve: true,
     requiresKey: false,
+    // The only source here that prices by chain + contract.
+    pricesByContract: true,
     attribution: '',
     maxCacheSeconds: Number.POSITIVE_INFINITY,
     note: 'Keyless on-chain pair data; the best source for thin tokens. Needs the chain, because forked chains reuse contract addresses.',

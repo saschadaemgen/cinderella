@@ -4,7 +4,13 @@
  * global interaction settings — that is what makes a second plugin free.
  */
 
-import { applySecretUpdate, describeSecret } from '../secrets.js';
+import {
+  applySecretUpdate,
+  describeSecret,
+  encryptSecret,
+  isEncrypted,
+  repairSecret,
+} from '../secrets.js';
 
 /**
  * Default chain order (CCB-S3-006 §8). CoinGecko leads: it answers reliably,
@@ -124,10 +130,30 @@ export function normalizeCryptoPrices(
   for (const name of known) {
     const p = rec(provIn[name]);
     const prev = previous.providers[name] ?? d.providers[name] ?? providerDefaults(true);
-    const submittedKey = str(p['apiKey'], '', 400);
+    // `apiKey` is the STORED envelope; `apiKeyInput` is what an operator typed.
+    // They are separate field names on purpose. When they were one field, loading
+    // the stored settings looked exactly like submitting the form, so every boot
+    // re-encrypted the key and the providers were handed ciphertext as their
+    // credential (CCB-S3-008 §2). A stored value now passes through untouched.
+    // NOT length-clamped. Clamping the STORED field truncated long envelopes,
+    // and a truncated envelope fails authentication, so the repair below would
+    // have written the truncation back and destroyed the key while reporting
+    // success.
+    const rawStored = typeof p['apiKey'] === 'string' ? p['apiKey'] : '';
+    const storedKey = isEncrypted(rawStored)
+      ? (repairSecret(rawStored) ?? rawStored)
+      : // A value here that is NOT an envelope is a plaintext key that reached
+        // the storage field — an older form post, or a hand-edited settings row.
+        // It must be encrypted, never passed through: storing it as-is would put
+        // a live credential in clear in the settings table and therefore in every
+        // backup, while the console reported "no key set".
+        rawStored
+          ? encryptSecret(rawStored.trim().slice(0, 400))
+          : '';
+    const typedKey = str(p['apiKeyInput'], '', 400);
     providers[name] = {
       enabled: bool(p['enabled'], prev.enabled),
-      apiKey: applySecretUpdate(prev.apiKey, submittedKey, bool(p['clearApiKey'], false)),
+      apiKey: applySecretUpdate(storedKey || prev.apiKey, typedKey, bool(p['clearApiKey'], false)),
       timeoutMs: int(p['timeoutMs'], 1000, 30000, prev.timeoutMs),
       rateLimitPerMinute: int(p['rateLimitPerMinute'], 1, 600, prev.rateLimitPerMinute),
       minLiquidityUsd: int(p['minLiquidityUsd'], 0, 100_000_000, prev.minLiquidityUsd ?? 0),

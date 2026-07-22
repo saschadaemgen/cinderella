@@ -31,7 +31,21 @@ import {
   CoinGeckoProvider,
   DexscreenerProvider,
 } from '../src/plugins/crypto-prices/providers/adapters.js';
-import { applySecretUpdate, decryptSecret, describeSecret } from '../src/plugins/secrets.js';
+import {
+  applySecretUpdate,
+  decryptSecret,
+  describeSecret,
+  encryptSecret,
+  isEncrypted,
+  repairSecret,
+  secretLayers,
+  unwrapSecret,
+} from '../src/plugins/secrets.js';
+import {
+  classifyFailure,
+  providerHealth,
+  recentAttempts,
+} from '../src/plugins/crypto-prices/attempts.js';
 import {
   listPlugins,
   normalizePluginStates,
@@ -171,11 +185,18 @@ async function main(): Promise<void> {
   );
   check('an undecryptable value degrades to unset, not a crash', decryptSecret('v1.a.b.c') === '');
 
+  // A TYPED key arrives as `apiKeyInput`. These assertions used to submit it as
+  // `apiKey` — the same field the stored envelope lives in — which is why they
+  // passed for a build in which no provider key had ever worked (CCB-S3-008 §2).
   const withKey = normalizeCryptoPrices({
-    providers: { coinmarketcap: { apiKey: 'k-123', enabled: true } },
+    providers: { coinmarketcap: { apiKeyInput: 'k-123', enabled: true } },
   });
   check('settings store the key encrypted', !JSON.stringify(withKey).includes('k-123'));
   check('and report only its presence', providerKeyStatus(withKey, 'coinmarketcap').set === true);
+  check(
+    'and it decrypts back to the typed key in ONE step',
+    decryptSecret(withKey.providers['coinmarketcap']?.apiKey ?? '') === 'k-123',
+  );
   const resaved = normalizeCryptoPrices(
     { providers: { coinmarketcap: { enabled: true } } },
     withKey,
@@ -531,6 +552,192 @@ async function main(): Promise<void> {
     'the Dexscreener liquidity floor and 60/min limit ship as defaults',
     DEFAULT_CRYPTO_PRICES.providers['dexscreener']?.rateLimitPerMinute === 60 &&
       DEFAULT_CRYPTO_PRICES.providers['dexscreener']?.minLiquidityUsd === 25_000,
+  );
+
+  /* ── 10c. CCB-S3-008 — keys, pin serviceability, diagnosability ────── */
+
+  section('10c. CCB-S3-008 — stored keys, pin self-check, failure diagnosis');
+
+  // THE LIVE DEFECT. Loading stored settings looked exactly like submitting the
+  // form, so each boot wrapped the stored key in another layer of encryption and
+  // the providers were handed a `v1.…` envelope as their credential. The
+  // operator's keys had never once worked, and the only symptom was "the markets
+  // are out of earshot".
+  const typed = normalizeCryptoPrices({
+    providers: { coingecko: { apiKeyInput: 'CG-a-real-looking-key' } },
+  });
+  const storedOnce = typed.providers['coingecko']?.apiKey ?? '';
+  check('a typed key is stored encrypted', isEncrypted(storedOnce));
+  check('and decrypts to exactly what was typed', decryptSecret(storedOnce) === 'CG-a-real-looking-key');
+
+  // Load → normalize → load → normalize, the boot path, repeatedly.
+  let reloaded = typed;
+  for (let i = 0; i < 3; i++) reloaded = normalizeCryptoPrices(reloaded, DEFAULT_CRYPTO_PRICES);
+  check(
+    'reloading the stored settings does NOT re-encrypt the key',
+    decryptSecret(reloaded.providers['coingecko']?.apiKey ?? '') === 'CG-a-real-looking-key',
+    `got a ${String(decryptSecret(reloaded.providers['coingecko']?.apiKey ?? '').slice(0, 3))}… value`,
+  );
+  check(
+    'so the value the provider is handed is a key, not an envelope',
+    !isEncrypted(decryptSecret(reloaded.providers['coingecko']?.apiKey ?? '')),
+  );
+
+  // An instance already written by the buggy path heals itself.
+  const doubled = encryptSecret(encryptSecret('CG-doubly-wrapped'));
+  check('a doubly-encrypted value is detected', unwrapSecret(doubled).layers === 2);
+  const healed = normalizeCryptoPrices({ providers: { coingecko: { apiKey: doubled } } });
+  check(
+    'and is repaired on load',
+    decryptSecret(healed.providers['coingecko']?.apiKey ?? '') === 'CG-doubly-wrapped',
+  );
+
+  // A blank submission still leaves an existing key alone (the write-only rule).
+  const untouched = normalizeCryptoPrices(
+    { providers: { coingecko: { apiKeyInput: '' } } },
+    reloaded,
+  );
+  check(
+    'submitting the form without touching the field keeps the key',
+    decryptSecret(untouched.providers['coingecko']?.apiKey ?? '') === 'CG-a-real-looking-key',
+  );
+
+  // A HEALTHY key must not be rewritten on every boot: `encryptSecret` uses a
+  // fresh IV, so any repair keyed off string inequality would loop forever.
+  check(
+    'a healthy single-layer key needs no repair',
+    repairSecret(storedOnce) === null && secretLayers(storedOnce) === 1,
+  );
+  check('and a doubly-wrapped one reports two layers', secretLayers(doubled) === 2);
+  // Unwrapping that cannot finish must NOT be reported as repaired.
+  check(
+    'a value still wrapped after unwrapping is left alone, not "repaired"',
+    repairSecret(encryptSecret('v1.not.real.envelope')) === null ||
+      !isEncrypted(unwrapSecret(repairSecret(encryptSecret('v1.not.real.envelope')) ?? '').value),
+  );
+  // A typed value shaped like an envelope is still ENCRYPTED, never stored raw.
+  const lookalike = normalizeCryptoPrices({
+    providers: { coingecko: { apiKeyInput: 'v1.a.b.c' } },
+  });
+  check(
+    'a typed key that merely looks like an envelope is still encrypted',
+    !JSON.stringify(lookalike).includes('"v1.a.b.c"'),
+  );
+  // A plaintext that reached the STORAGE field is encrypted, never passed through.
+  const strayPlaintext = normalizeCryptoPrices({
+    providers: { coingecko: { apiKey: 'PLAINTEXT-KEY-123' } },
+  });
+  check(
+    'a plaintext in the storage field is encrypted, not stored in clear',
+    !JSON.stringify(strayPlaintext).includes('PLAINTEXT-KEY-123') &&
+      decryptSecret(strayPlaintext.providers['coingecko']?.apiKey ?? '') === 'PLAINTEXT-KEY-123',
+  );
+
+  // §3 §1 — the alternates argument the engine had been passing since CCB-S3-006
+  // and the service had been silently discarding.
+  await upsertMapping(db, {
+    symbol: 'BITCOIN',
+    scope: '*',
+    kind: 'crypto',
+    displayName: 'Bitcoin',
+    providerIds: { coingecko: 'bitcoin' },
+    source: 'seed',
+    locked: true,
+  });
+  const altSvc = new CryptoPriceService({ db, settings: () => settings, now: () => nowMs });
+  check(
+    'an unpinned base gives way to a pinned alternate from the same sentence',
+    await altSvc.isPinned('BITCOIN'),
+  );
+  const viaAlt = await altSvc.price('real', undefined, 1, '*', ['bitcoin']);
+  check(
+    'so "one real bitcoin" prices bitcoin, not "real"',
+    viaAlt.kind !== 'unknown-asset',
+    viaAlt.kind,
+  );
+
+  // §2 — a pin no enabled provider can serve.
+  // Leaving a provider out of the ORDER does not disable it, so the ones that
+  // could serve this pin are switched off outright.
+  // The live shape of the defect: a chain that IS working (CoinMarketCap first,
+  // with a key) but holds no id for this pin, and the provider that does hold one
+  // is switched off. The pin then fails every lookup, silently.
+  settings = normalizeCryptoPrices({
+    chain: 'coinmarketcap',
+    providers: {
+      coinmarketcap: { enabled: true, apiKeyInput: 'cmc-key' },
+      coingecko: { enabled: false },
+      dexscreener: { enabled: false },
+    },
+  });
+  const pinSvc = new CryptoPriceService({ db, settings: () => settings, now: () => nowMs });
+  await upsertMapping(db, {
+    symbol: 'ORPHAN',
+    scope: '*',
+    kind: 'crypto',
+    displayName: 'Orphan',
+    providerIds: { coingecko: 'orphan' },
+    source: 'manual',
+    locked: false,
+  });
+  const checks = await pinSvc.checkPins();
+  const orphan = checks.find((c) => c.symbol === 'ORPHAN');
+  check(
+    'the self-check names a pin no enabled provider can serve',
+    orphan !== undefined && !orphan.ok,
+    orphan?.reason,
+  );
+  check(
+    'and says WHY — the enabled chain holds no id for it',
+    orphan?.reason === 'no enabled provider holds an id for this pin',
+    orphan?.reason,
+  );
+  settings = normalizeCryptoPrices({ chain: 'coingecko, coinmarketcap, dexscreener' });
+  const served = (await pinSvc.checkPins()).find((c) => c.symbol === 'ORPHAN');
+  check('and clears it once a provider that holds its id is enabled', served?.ok === true);
+
+  // A CONTRACT-ONLY pin is servable by a DEX source and by nobody else. Counting
+  // every provider gave exactly this pin a false all-clear.
+  await upsertMapping(db, {
+    symbol: 'DEXONLY',
+    scope: '*',
+    kind: 'crypto',
+    displayName: 'Dex Only',
+    chain: 'ethereum',
+    contract: '0x0000000000000000000000000000000000000001',
+    providerIds: {},
+    source: 'resolved',
+    locked: false,
+  });
+  settings = normalizeCryptoPrices({
+    chain: 'coingecko',
+    providers: {
+      coingecko: { enabled: true },
+      dexscreener: { enabled: false },
+      coinmarketcap: { enabled: false },
+    },
+  });
+  const dexOnly = (await pinSvc.checkPins()).find((c) => c.symbol === 'DEXONLY');
+  check(
+    'a contract-only pin is NOT reported as servable by a provider that cannot use it',
+    dexOnly !== undefined && !dexOnly.ok,
+    dexOnly?.servedBy.join(', '),
+  );
+  settings = normalizeCryptoPrices({ chain: 'dexscreener, coingecko' });
+  const dexOk = (await pinSvc.checkPins()).find((c) => c.symbol === 'DEXONLY');
+  check('and IS once the DEX source is enabled', dexOk?.ok === true);
+
+  // §3 — failures are classified rather than all looking alike.
+  check('a 401 is read as a rejected credential', classifyFailure('HTTP 401').outcome === 'unauthorized');
+  check('a 429 is read as throttling', classifyFailure('HTTP 429').outcome === 'throttled');
+  check('a timeout is read as unreachable', classifyFailure('request timed out').outcome === 'unreachable');
+  check(
+    'attempts are recorded with provider, symbol and outcome',
+    recentAttempts(50).some((a) => a.provider !== '' && a.symbol !== ''),
+  );
+  check(
+    'and health is summarised per provider',
+    providerHealth(['coingecko']).length === 1,
   );
 
   /* ── 11. Live (keyless providers only) ─────────────────────────────── */

@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-008**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -257,6 +257,14 @@ The history below records the pre-CCB-S2-003 state.
       revocation changes a body without changing the id set, so an already-open tab keeps
       the pre-redaction text until reload. `withhold` has no such gap. The same limitation
       applies to a member EDITING a published message, so it predates CCB-S3-007.
+- [x] **Carry-over, keys and diagnosability (CCB-S3-008)** — an inherited intent can no longer
+      invent an asset out of an interjection; the double-encryption defect that made every
+      configured provider key unusable is fixed and self-healing; provider attempts are logged
+      with cause and latency and shown on the plugin page; pins that no enabled provider can
+      serve are reported at boot and on demand.
+- [ ] **The provider-attempt log does not survive a restart.** It is deliberately in memory, like
+      the near-miss log — but it means a failure that happened before the last restart cannot be
+      investigated. Persisting it would make provider behaviour reviewable over time.
 - [ ] **More assets and a second provider** — only HEX, BTC, ETH, USD and EUR ship. Adding an
       asset is a registry line in the admin, no code change; adding a second provider is an
       implementation of the `PriceProvider` interface. A fallback chain across providers is

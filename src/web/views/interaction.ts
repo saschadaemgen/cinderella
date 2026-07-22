@@ -181,6 +181,7 @@ const PERSONA_META: Record<PersonaKey, { label: string; vars: string }> = {
   priceUnknownAsset: { label: 'Price — asset not in the registry', vars: '{symbol}' },
   priceAmbiguous: { label: 'Price — symbol is ambiguous', vars: '{symbol} {options}' },
   priceUnavailable: { label: 'Price — market data unreachable', vars: '' },
+  priceThrottled: { label: 'Price — asked too often, try again shortly', vars: '' },
   redactedMember: {
     label: 'Stands in for a member who has not opted in',
     vars: 'Not a reply. When one of her published messages names a member who has not opted in, this replaces the name.',

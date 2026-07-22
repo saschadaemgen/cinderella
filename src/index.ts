@@ -195,6 +195,34 @@ async function startCaptureWorker(
         `resolver "${activeResolverName()}".`,
     );
 
+    // A pin that no enabled provider can serve fails SILENTLY and forever
+    // (CCB-S3-008 §2), which is strictly worse than having no pin, so it is
+    // checked at boot and named in the log rather than waiting for a member to
+    // ask and get "the markets are out of earshot".
+    try {
+      const pins = await prices.checkPins();
+      const broken = pins.filter((p) => !p.ok);
+      if (broken.length > 0) {
+        const names = broken.map((p) => p.symbol).join(', ');
+        log.warn(
+          `Price: ${broken.length} of ${pins.length} pinned asset(s) cannot be served by any ` +
+            `enabled provider — ${names}. They will fail every lookup until the chain, a key, ` +
+            `or the pin is corrected.`,
+        );
+        status.error(
+          `${broken.length} pinned asset(s) have no enabled provider that can serve them: ${names}.`,
+        );
+      } else {
+        log.info(`Price: all ${pins.length} pinned asset(s) have an enabled provider.`);
+      }
+    } catch (err) {
+      log.warn(
+        `Price: could not check the pinned assets (${
+          err instanceof Error ? err.message : String(err)
+        }).`,
+      );
+    }
+
     // Push the avatar to group members: the core only sends the member-profile
     // update (XInfo, incl. avatar) when the bot next sends a GROUP message. This
     // sends one minimal message per distinct avatar (marker-gated — no spam).

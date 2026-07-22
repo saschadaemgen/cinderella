@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-008**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -395,6 +395,10 @@ languages with real persona copy are offered.
 `whats my publish status?` at STATUS instead of PUBLISH. Consent prompts appear only because
 someone asked for the action.
 
+**Carry-over may reuse knowledge, never create it (CCB-S3-008).** An inherited intent may only
+act on an asset already pinned in `asset_mappings`, and may never ask a question of its own.
+See D-045.
+
 **Elliptical follow-ups (CCB-S3-006).** Inside the window, a short UNKNOWN fragment inherits
 the member's previous READ-ONLY intent, so `monero?` after a price answer is a price
 question. Bounded twice: only PRICE and SEARCH are inheritable, and only fragments of four
@@ -504,6 +508,23 @@ answered.
 **Prices are always fetched on request** — never preloaded. The only thing between a question
 and a provider is a short TTL cache, capped per provider by what its licence permits, plus a
 per-member and per-chat budget on price questions.
+
+## 15a. Provider diagnostics and pin serviceability (CCB-S3-008)
+
+Every attempt against a provider is recorded in an in-memory ring buffer
+(`src/plugins/crypto-prices/attempts.ts`): provider, operation, symbol, outcome, latency and
+HTTP status, including attempts that were never made and why (no id for this pin; our own
+per-provider budget). The plugin page shows per-provider health and the recent failures.
+
+`checkPins()` reports any pinned asset that no enabled provider could serve. It runs at boot
+as a warning and on demand from the plugin page. The reason it exists: a pin pointing at a
+provider that is disabled, keyless or simply holds no id for it fails EVERY lookup, silently
+and forever, whereas an unpinned symbol would simply be resolved and answered.
+
+**Secrets, and the shape of the bug that hid here.** A typed API key arrives under
+`apiKeyInput`; `apiKey` is storage only. When they were one field, `PluginService.load()`
+looked exactly like a form submission and re-encrypted the stored key on every boot, so
+providers were handed ciphertext as their credential — see D-046.
 
 ## Appendix: divergences (code wins)
 

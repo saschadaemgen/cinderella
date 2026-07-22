@@ -17,7 +17,12 @@ import type { ViewContext } from '../server.js';
 import { card, pageHeader } from './ui.js';
 import { CRYPTO_PRICES_ID } from '../../plugins/crypto-prices/plugin.js';
 import { providerKeyStatus } from '../../plugins/crypto-prices/settings.js';
-import { CryptoPriceService } from '../../plugins/crypto-prices/service.js';
+import { CryptoPriceService, type PinCheck } from '../../plugins/crypto-prices/service.js';
+import {
+  providerHealth,
+  recentFailures,
+  type AttemptOutcome,
+} from '../../plugins/crypto-prices/attempts.js';
 import {
   deleteMapping,
   listMappings,
@@ -149,7 +154,7 @@ export function registerPlugins(app: FastifyInstance, ctx: ViewContext): void {
 
   /* ── Crypto Prices ───────────────────────────────────────────────────── */
 
-  app.get<{ Querystring: { saved?: string; error?: string } }>(
+  app.get<{ Querystring: { saved?: string; error?: string; pins?: string } }>(
     '/plugins/crypto-prices',
     async (req, reply) => {
       const csrf = req.session?.csrfToken ?? '';
@@ -158,6 +163,9 @@ export function registerPlugins(app: FastifyInstance, ctx: ViewContext): void {
       const mappings = await listMappings(db, 100);
       const service = new CryptoPriceService({ db, settings: () => s });
       const status = service.providerStatus();
+      // Only run the pin check when the operator asked for it — it walks every
+      // mapping, and this page is otherwise cheap.
+      const pinChecks: PinCheck[] | null = req.query.pins ? await service.checkPins() : null;
 
       const form = (section: string, inner: SafeHtml): SafeHtml =>
         html`<form method="post" action="/plugins/crypto-prices" class="flex flex-col gap-3">
@@ -246,7 +254,7 @@ export function registerPlugins(app: FastifyInstance, ctx: ViewContext): void {
                     ${field(
                       'API key',
                       html`<input
-                        name="providers.${name}.apiKey"
+                        name="providers.${name}.apiKeyInput"
                         type="password"
                         value=""
                         autocomplete="off"
@@ -412,6 +420,118 @@ export function registerPlugins(app: FastifyInstance, ctx: ViewContext): void {
           )}`,
       );
 
+      /* ── Provider health and recent failures (CCB-S3-008 §3) ──────────── */
+
+      const ago = (at: number | undefined): string => {
+        if (at === undefined) return 'never';
+        const secs = Math.max(0, Math.round((Date.now() - at) / 1000));
+        if (secs < 60) return `${secs}s ago`;
+        if (secs < 3600) return `${Math.round(secs / 60)}m ago`;
+        return `${Math.round(secs / 3600)}h ago`;
+      };
+      // Said in the operator's terms, not the wire's. "Rejected the key" is the
+      // one an operator can actually act on, and it used to be invisible.
+      const OUTCOME_LABEL: Record<AttemptOutcome, string> = {
+        ok: 'answered',
+        'not-found': 'does not know it',
+        unauthorized: 'rejected the key',
+        throttled: 'throttled us',
+        'skipped-rate-limit': 'skipped — our own limit',
+        'skipped-no-id': 'skipped — no id for this pin',
+        unreachable: 'unreachable',
+        'bad-response': 'unusable answer',
+      };
+
+      const health = providerHealth(s.chain);
+      const failures = recentFailures(15);
+
+      const healthCard = card(
+        'Provider health',
+        html`<p class="mb-3 text-sm text-slate-600">
+            What each provider in the chain has actually done, this run. A provider
+            that keeps rejecting the key is a settings problem, not a quiet market —
+            the difference used to be invisible from both sides.
+          </p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="text-xs uppercase text-slate-500">
+                <tr>
+                  <th class="py-1 pr-4">Provider</th>
+                  <th class="py-1 pr-4">Last success</th>
+                  <th class="py-1 pr-4">Last failure</th>
+                  <th class="py-1 pr-4">Cause</th>
+                  <th class="py-1">Attempts</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${health.map(
+                  (h) => html`<tr class="border-t border-slate-100">
+                    <td class="py-1 pr-4 font-medium">${h.provider}</td>
+                    <td class="py-1 pr-4 ${h.lastOk ? 'text-emerald-700' : 'text-slate-400'}">
+                      ${ago(h.lastOk)}
+                    </td>
+                    <td class="py-1 pr-4 ${h.lastFail ? 'text-red-700' : 'text-slate-400'}">
+                      ${ago(h.lastFail)}
+                    </td>
+                    <td class="py-1 pr-4 text-slate-600">
+                      ${h.lastFailOutcome ? OUTCOME_LABEL[h.lastFailOutcome] : '—'}
+                    </td>
+                    <td class="py-1 text-slate-500">${String(h.ok)} / ${String(h.attempts)}</td>
+                  </tr>`,
+                )}
+              </tbody>
+            </table>
+          </div>
+          ${
+            failures.length === 0
+              ? html`<p class="mt-3 text-sm text-slate-500">No failures recorded this run.</p>`
+              : html`<div class="mt-4">
+                  <div class="mb-1 text-xs uppercase text-slate-500">Recent failures</div>
+                  <ul class="flex flex-col gap-1 text-sm">
+                    ${failures.map(
+                      (f) => html`<li class="flex flex-wrap gap-x-2 text-slate-600">
+                        <span class="text-slate-400">${ago(f.at)}</span>
+                        <span class="font-medium">${f.provider}</span>
+                        <span>${f.op}</span>
+                        <span class="font-mono">${f.symbol}</span>
+                        <span class="text-red-700">${OUTCOME_LABEL[f.outcome]}</span>
+                        ${f.status ? html`<span class="text-slate-400">HTTP ${String(f.status)}</span>` : null}
+                      </li>`,
+                    )}
+                  </ul>
+                </div>`
+          }
+          ${form(
+            'checkpins',
+            html`<button
+              type="submit"
+              class="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50"
+            >
+              Check every pinned asset
+            </button>`,
+          )}
+          ${
+            pinChecks === null
+              ? html`<p class="mt-2 text-xs text-slate-500">
+                  Verifies that each pin can be served by an enabled provider. A pin that cannot is
+                  worse than no pin: it fails every lookup, silently.
+                </p>`
+              : pinChecks.filter((c) => !c.ok).length === 0
+                ? html`<p class="mt-2 text-sm text-emerald-700">
+                    All ${String(pinChecks.length)} pinned asset(s) can be served.
+                  </p>`
+                : html`<ul class="mt-2 flex flex-col gap-1 text-sm text-red-700">
+                    ${pinChecks
+                      .filter((c) => !c.ok)
+                      .map(
+                        (c) => html`<li>
+                          <span class="font-mono">${c.symbol}</span> — ${c.displayName}: ${c.reason}
+                        </li>`,
+                      )}
+                  </ul>`
+          }`,
+      );
+
       const body = html`
         ${pageHeader('Crypto Prices', 'Market data, pinned to the assets you actually mean')}
         ${
@@ -430,7 +550,7 @@ export function registerPlugins(app: FastifyInstance, ctx: ViewContext): void {
               : null
         }
         <div class="flex flex-col gap-6">
-          ${statusCard} ${chainCard} ${behaviourCard} ${mappingCard}
+          ${statusCard} ${chainCard} ${healthCard} ${behaviourCard} ${mappingCard}
         </div>
       `;
       reply.type('text/html');
@@ -450,13 +570,18 @@ export function registerPlugins(app: FastifyInstance, ctx: ViewContext): void {
     const str = (k: string): string => (typeof body[k] === 'string' ? body[k] : '');
 
     try {
-      if (section === 'chain') {
+      if (section === 'checkpins') {
+        return reply.redirect('/plugins/crypto-prices?pins=1');
+      } else if (section === 'chain') {
         const current = plugins.getCryptoPrices();
         const providers: Record<string, unknown> = {};
         for (const name of Object.keys(current.providers)) {
           providers[name] = {
             enabled: `providers.${name}.enabled` in body,
-            apiKey: str(`providers.${name}.apiKey`),
+            // The typed key travels as `apiKeyInput`; `apiKey` is reserved for the
+            // stored envelope, so a form post can never be mistaken for storage
+            // being loaded back (CCB-S3-008 §2).
+            apiKeyInput: str(`providers.${name}.apiKeyInput`),
             clearApiKey: `providers.${name}.clearApiKey` in body,
             timeoutMs: str(`providers.${name}.timeoutMs`),
             rateLimitPerMinute: str(`providers.${name}.rateLimitPerMinute`),

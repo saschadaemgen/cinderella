@@ -21,6 +21,7 @@ import { log } from '../../log.js';
 import type { Queryable } from '../../db/pool.js';
 import {
   findMapping,
+  listMappings,
   touchMapping,
   upsertMapping,
   type AssetMapping,
@@ -34,6 +35,12 @@ import {
   type AdapterOptions,
 } from './providers/adapters.js';
 import { ProviderError, type AssetCandidate, type PriceProvider } from './providers/types.js';
+import {
+  classifyFailure,
+  recentAttempts,
+  recordAttempt,
+  type AttemptOutcome,
+} from './attempts.js';
 import type { CryptoPricesSettings } from './settings.js';
 
 export interface PriceServiceDeps {
@@ -67,7 +74,27 @@ export type PriceOutcome =
     }
   | { kind: 'ambiguous'; symbol: string; options: AssetCandidate[]; provider: string }
   | { kind: 'unknown-asset'; symbol: string }
-  | { kind: 'unavailable' };
+  /**
+   * Nothing could answer. `reason` exists so the member is told the right thing
+   * (§3): being throttled is temporary and worth saying so, while a rejected
+   * credential is the operator's problem and must not be dressed up as a quiet
+   * market. It never carries any detail beyond the class.
+   */
+  | { kind: 'unavailable'; reason?: 'throttled' | 'unreachable' };
+
+/** One pinned asset's serviceability (CCB-S3-008 §2). */
+export interface PinCheck {
+  symbol: string;
+  displayName: string;
+  locked: boolean;
+  /** Enabled providers in the chain that hold an id (or chain+contract) for it. */
+  servedBy: string[];
+  ok: boolean;
+  /** Set when `ok` is false, or when a probe failed. */
+  reason?: string;
+  /** Which provider actually answered, when probed. */
+  provider?: string;
+}
 
 /** Fiat currencies are not resolved at a provider; they are the quote side. */
 export interface FiatAsset {
@@ -222,7 +249,10 @@ export class CryptoPriceService {
     let sawProvider = false;
     for (const provider of chain) {
       if (!provider.capabilities.canResolve) continue;
-      if (!this.allowCall(provider.name)) continue;
+      if (!this.allowCall(provider.name)) {
+        this.note('resolve', provider.name, symbol, 'skipped-rate-limit', 0);
+        continue;
+      }
       try {
         const candidates = await provider.resolveSymbol(symbol);
         sawProvider = true;
@@ -248,6 +278,7 @@ export class CryptoPriceService {
         if (factor > 0 && weightOf(top) > 0 && weightOf(top) >= weightOf(runnerUp) * factor) {
           const mapping = await this.pin(symbol, top, provider.name, 'resolved', scope);
           log.info(`Price: "${symbol}" auto-resolved to ${top.name} (dominant by ${factor}x).`);
+          this.note('resolve', provider.name, symbol, 'ok', 0);
           return { kind: 'mapping', mapping, autoResolved: true };
         }
 
@@ -256,14 +287,101 @@ export class CryptoPriceService {
         // More than one asset claims the ticker — ask, never choose.
         // The provider is carried along: ids belong to ONE provider's
         // namespace, so the member's pick must be pinned under the same one.
+        this.note('resolve', provider.name, symbol, 'ok', 0);
         return { kind: 'ambiguous', options: candidates, provider: provider.name };
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         this.noteHealth(provider.name, false, detail);
-        log.warn(`Price: ${provider.name} failed to resolve "${symbol}" (${detail}).`);
+        const notFound = err instanceof ProviderError && err.notFound;
+        const cls = notFound ? { outcome: 'not-found' as AttemptOutcome } : classifyFailure(detail);
+        this.note(
+          'resolve',
+          provider.name,
+          symbol,
+          cls.outcome,
+          0,
+          detail,
+          'status' in cls ? cls.status : undefined,
+        );
+        log.warn(
+          `Price: ${provider.name} failed to resolve "${symbol}" ` +
+            `(${cls.outcome}${'status' in cls && cls.status ? ` HTTP ${cls.status}` : ''}).`,
+        );
       }
     }
+    // "Every provider answered and none knows it" is a DIFFERENT thing from
+    // "nothing answered", and the member is told a different thing (§3).
     return sawProvider ? { kind: 'unknown' } : { kind: 'unavailable' };
+  }
+
+  /**
+   * Has this symbol already been resolved on this instance (CCB-S3-008 §1)?
+   *
+   * Reads ONLY the pin table. That is the whole point: the interaction layer uses
+   * this to decide whether an inferred follow-up may become a price lookup, and
+   * answering it by asking a provider would be the very resolution the rule
+   * forbids — a fresh resolution is a deliberate act that follows an explicit
+   * question.
+   */
+  async isPinned(symbol: string, scope = '*'): Promise<boolean> {
+    const clean = symbol.trim();
+    if (!clean) return false;
+    // A fiat code is knowledge we ship, not something a member's noise created.
+    if (asFiat(clean)) return true;
+    return (await findMapping(this.deps.db, clean, scope)) !== null;
+  }
+
+  /**
+   * Checks that every pinned asset can actually be served (CCB-S3-008 §2).
+   *
+   * A pin pointing at a provider that is disabled, keyless, or simply has no id
+   * for it is WORSE than no pin at all: an unpinned symbol gets resolved and
+   * answered, while a bad pin fails silently and forever. That is exactly what
+   * migration 012 had to repair, and it is what happened again here — a
+   * CoinGecko-only pin behind a chain whose first provider was rejecting the
+   * credential.
+   *
+   * Read-only and cheap: it asks whether SOME enabled provider in the chain could
+   * serve each pin, and only makes a network call when `probe` is set.
+   */
+  async checkPins(opts: { probe?: boolean; limit?: number } = {}): Promise<PinCheck[]> {
+    const chain = this.chain();
+    const mappings = await listMappings(this.deps.db, opts.limit ?? 200);
+    const out: PinCheck[] = [];
+    for (const m of mappings) {
+      // A pin with chain+contract is only servable by a provider that PRICES by
+      // chain+contract. Counting every provider gave a green all-clear to exactly
+      // the silent-bad-pin class this check exists to find: a Dexscreener-shaped
+      // pin with Dexscreener disabled would report "all pins can be served" while
+      // every lookup of it failed forever.
+      const servedBy = chain
+        .filter((p) =>
+          m.providerIds[p.name]
+            ? true
+            : Boolean(m.chain && m.contract && p.capabilities.pricesByContract),
+        )
+        .map((p) => p.name);
+      const check: PinCheck = {
+        symbol: m.symbol,
+        displayName: m.displayName,
+        locked: m.locked,
+        servedBy,
+        ok: servedBy.length > 0,
+      };
+      if (check.ok && opts.probe) {
+        const q = await this.quote(m, this.deps.settings().baseCurrency);
+        check.ok = q !== null;
+        if (q) check.provider = q.provider;
+        else check.reason = 'no enabled provider answered';
+      } else if (!check.ok) {
+        check.reason =
+          chain.length === 0
+            ? 'no provider is enabled'
+            : 'no enabled provider holds an id for this pin';
+      }
+      out.push(check);
+    }
+    return out;
   }
 
   /** Pins a candidate, learning the id under the provider that produced it. */
@@ -314,9 +432,19 @@ export class CryptoPriceService {
       const id = mapping.providerIds[provider.name];
       // Dexscreener identifies by chain+contract rather than an id it owns.
       const usable = id ?? (mapping.chain && mapping.contract ? undefined : null);
-      if (usable === null) continue;
-      if (!this.allowCall(provider.name)) continue;
+      // Every skip is recorded too (§3). "This provider was never asked, because
+      // the pin holds no id it understands" is exactly the diagnosis that was
+      // missing when a CoinGecko-only pin sat behind a CoinMarketCap-first chain.
+      if (usable === null) {
+        this.note('quote', provider.name, mapping.symbol, 'skipped-no-id', 0);
+        continue;
+      }
+      if (!this.allowCall(provider.name)) {
+        this.note('quote', provider.name, mapping.symbol, 'skipped-rate-limit', 0);
+        continue;
+      }
 
+      const startedAt = this.now();
       try {
         const q = await provider.fetchQuote(
           {
@@ -336,16 +464,75 @@ export class CryptoPriceService {
         };
         this.cache.set(key, { quote: result, storedAt: this.now() });
         this.noteHealth(provider.name, true, 'quoted');
+        this.note('quote', provider.name, mapping.symbol, 'ok', this.now() - startedAt);
         return result;
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         this.noteHealth(provider.name, false, detail);
-        if (!(err instanceof ProviderError) || !err.notFound) {
-          log.warn(`Price: ${provider.name} failed to quote ${mapping.symbol} (${detail}).`);
+        const notFound = err instanceof ProviderError && err.notFound;
+        const cls = notFound ? { outcome: 'not-found' as AttemptOutcome } : classifyFailure(detail);
+        this.note(
+          'quote',
+          provider.name,
+          mapping.symbol,
+          cls.outcome,
+          this.now() - startedAt,
+          detail,
+          'status' in cls ? cls.status : undefined,
+        );
+        if (!notFound) {
+          log.warn(
+            `Price: ${provider.name} failed to quote ${mapping.symbol} ` +
+              `(${cls.outcome}${'status' in cls && cls.status ? ` HTTP ${cls.status}` : ''}, ` +
+              `${this.now() - startedAt}ms).`,
+          );
         }
       }
     }
     return null;
+  }
+
+  /**
+   * Why did the last set of attempts fail? Read back off the attempt log rather
+   * than threaded through every return, so a new failure path cannot forget it.
+   */
+  private unavailableSince(
+    since: number,
+    symbols: readonly string[],
+  ): { kind: 'unavailable'; reason?: 'throttled' | 'unreachable' } {
+    // Scoped by TIME AND SYMBOL. The buffer is process-global and members are
+    // served concurrently, so a time-only window let one member's rate limit
+    // decide what a different member was told about an unrelated failure.
+    const wanted = new Set(symbols.map((x) => x.trim().toUpperCase()).filter((x) => x));
+    const mine = recentAttempts().filter(
+      (a) => a.at >= since && wanted.has(a.symbol.trim().toUpperCase()),
+    );
+    if (mine.some((a) => a.outcome === 'throttled' || a.outcome === 'skipped-rate-limit')) {
+      return { kind: 'unavailable', reason: 'throttled' };
+    }
+    return { kind: 'unavailable', reason: 'unreachable' };
+  }
+
+  /** One place that writes the attempt log, so no branch can forget a field. */
+  private note(
+    op: 'resolve' | 'quote',
+    provider: string,
+    symbol: string,
+    outcome: AttemptOutcome,
+    ms: number,
+    detail?: string,
+    status?: number,
+  ): void {
+    recordAttempt({
+      at: this.now(),
+      provider,
+      op,
+      symbol,
+      outcome,
+      ms,
+      ...(status !== undefined ? { status } : {}),
+      ...(detail !== undefined ? { detail: detail.slice(0, 160) } : {}),
+    });
   }
 
   /** The configured TTL, capped by what a provider's licence permits. */
@@ -366,11 +553,38 @@ export class CryptoPriceService {
    * base currency, because direct pairs mostly do not exist.
    */
   async price(
-    baseText: string,
+    baseTextIn: string,
     quoteText: string | undefined,
     amount: number,
     scope = '*',
+    /**
+     * Other words from the same sentence that could be the asset (CCB-S3-006 §3).
+     * If the chosen base is not pinned but one of these IS, the pinned one wins:
+     * "one real bitcoin" picks `bitcoin` over `real`.
+     *
+     * This parameter did not exist until CCB-S3-008. The engine had been passing
+     * it since CCB-S3-006 and TypeScript accepted the narrower implementation, so
+     * the argument was silently discarded and two comments described a mechanism
+     * that was never wired up.
+     */
+    alternates?: readonly string[],
   ): Promise<PriceOutcome> {
+    // Marks the start of THIS question, so the failure reason reported below is
+    // read from this run's attempts and not from an older one's.
+    const askedAt = this.now();
+    // Prefer a word this instance already knows over one it does not. Checked
+    // against the pin table only — no provider call — so it cannot itself become
+    // a resolution.
+    let chosen = baseTextIn;
+    if (alternates && alternates.length > 0 && !(await this.isPinned(baseTextIn, scope))) {
+      for (const alt of alternates) {
+        if (alt && alt !== baseTextIn && (await this.isPinned(alt, scope))) {
+          chosen = alt;
+          break;
+        }
+      }
+    }
+    const baseText = chosen;
     const baseFiat = asFiat(baseText);
     const baseRes = baseFiat ? null : await this.resolve(baseText, scope);
     if (baseRes?.kind === 'ambiguous') {
@@ -382,7 +596,7 @@ export class CryptoPriceService {
       };
     }
     if (baseRes?.kind === 'unknown') return { kind: 'unknown-asset', symbol: baseText };
-    if (baseRes?.kind === 'unavailable') return { kind: 'unavailable' };
+    if (baseRes?.kind === 'unavailable') return this.unavailableSince(askedAt, [baseText, quoteText ?? '']);
     if (!baseRes && baseFiat) {
       // "what is USD worth" is not a question this answers.
       return { kind: 'unknown-asset', symbol: baseText };
@@ -410,11 +624,11 @@ export class CryptoPriceService {
       // Not every provider prices in every fiat (Dexscreener is USD only), so
       // fall back to a cross through the base currency.
       const via = asFiat(settings.baseCurrency);
-      if (!via || via.symbol === quoteFiat.symbol) return { kind: 'unavailable' };
+      if (!via || via.symbol === quoteFiat.symbol) return this.unavailableSince(askedAt, [baseText, quoteText ?? '']);
       const baseUsd = await this.quote(base, via.symbol.toLowerCase());
-      if (!baseUsd) return { kind: 'unavailable' };
+      if (!baseUsd) return this.unavailableSince(askedAt, [baseText, quoteText ?? '']);
       const fx = await this.fiatRate(via.symbol, quoteFiat.symbol);
-      if (fx === null) return { kind: 'unavailable' };
+      if (fx === null) return this.unavailableSince(askedAt, [baseText, quoteText ?? '']);
       return {
         kind: 'price',
         amount,
@@ -438,7 +652,7 @@ export class CryptoPriceService {
       };
     }
     if (otherRes.kind === 'unknown') return { kind: 'unknown-asset', symbol: quoteName };
-    if (otherRes.kind === 'unavailable') return { kind: 'unavailable' };
+    if (otherRes.kind === 'unavailable') return this.unavailableSince(askedAt, [baseText, quoteText ?? '']);
     const other = otherRes.mapping;
 
     if (other.id === base.id) {
@@ -455,11 +669,11 @@ export class CryptoPriceService {
     }
 
     const via = asFiat(settings.baseCurrency);
-    if (!via) return { kind: 'unavailable' };
+    if (!via) return this.unavailableSince(askedAt, [baseText, quoteText ?? '']);
     const vs = via.symbol.toLowerCase();
     const a = await this.quote(base, vs);
     const b = await this.quote(other, vs);
-    if (!a || !b || b.price === 0) return { kind: 'unavailable' };
+    if (!a || !b || b.price === 0) return this.unavailableSince(askedAt, [baseText, quoteText ?? '']);
     return {
       kind: 'conversion',
       amount,

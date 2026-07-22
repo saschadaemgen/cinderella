@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-008**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -53,6 +53,73 @@ import — no change to the sidebar, the resolver, or the settings framework.
 `src/interaction/intent.ts` (`setActiveIntents`, `isActiveIntent`);
 `src/interaction/resolver.ts`; `src/interaction/rules.ts`; `src/web/views/plugins.ts`;
 `scripts/verify-price.ts` §1.
+
+---
+
+### D-045 — Carry-over may reuse knowledge, never create it
+
+**Status: IMPLEMENTED (CCB-S3-008 §1).**
+**Decision.** An intent inherited from the previous turn may only act on an asset this instance
+has ALREADY resolved — the check reads `asset_mappings`, never a provider. A carried lookup
+can answer; it can never ask. If the fragment is not a known asset, carry-over does not apply
+and the ordinary rules take over, which inside the window with a weak signal means silence.
+An admin-editable interjection stop-list and a "contains no letters at all" test sit under
+that as a cheap second layer.
+**Rationale.** D-040 framed the rule as "read-only intents, short fragments". That was not
+enough, and the live group showed why within a day: after two price answers a member wrote
+`nice :)))))))`, and she offered a choice between "Nice" and "Bury Nice Token". Applause had
+been turned into a symbol, sent to a provider, and made into a question — one keystroke away
+from writing a permanent pin. A length bound can never fix this, because an interjection is
+short by nature. The correct invariant is about PROVENANCE, not size: a resolution is a
+deliberate act that follows an explicit question, so an inferred intent must not be able to
+start one.
+**Evidence.** `src/interaction/engine.ts` (`isInterjection`, `isPinnedAsset`, the `carried`
+branch of `answerPrice`); `src/plugins/crypto-prices/service.ts` (`isPinned`);
+`scripts/verify-interaction.ts` §18 — including the live fragment verbatim, asserting both
+that she stays silent and that no provider is contacted.
+
+---
+
+### D-046 — A stored secret and a submitted secret are different fields
+
+**Status: IMPLEMENTED (CCB-S3-008 §2).**
+**Decision.** A typed API key arrives as `apiKeyInput`; `apiKey` holds only the stored
+envelope and is passed through untouched. `applySecretUpdate` additionally refuses to encrypt
+a value that is already an envelope, and instances written by the old path are unwrapped and
+rewritten once at load.
+**Rationale.** `PluginService.load()` fed the stored settings back through the same normalizer
+the admin form uses, and the normalizer could not tell them apart — so every boot encrypted
+the stored key again. The runtime decrypts exactly once, so each provider was handed a
+`v1.…` envelope as its credential. The operator's keys had never worked, from the moment they
+were entered, and the only symptom anyone could see was "the markets are out of earshot".
+Confirmed on the live host: unwrapping two layers produced a well-formed key for both
+providers.
+**What this cost.** Every authenticated provider call since CCB-S3-004. The harness did not
+catch it because its own assertions submitted the key under the STORAGE field name, which is
+the same mistake in miniature — they were rewritten to assert a one-step round trip.
+**Evidence.** `src/plugins/secrets.ts` (`isEncrypted`, `unwrapSecret`, `repairSecret`);
+`src/plugins/crypto-prices/settings.ts`; `src/plugins/service.ts`;
+`scripts/verify-price.ts` §10c.
+
+---
+
+### D-047 — A failure that cannot be told apart from a quiet market is not a failure report
+
+**Status: IMPLEMENTED (CCB-S3-008 §3).**
+**Decision.** Every provider attempt is recorded with provider, operation, symbol, outcome,
+latency and HTTP status, including attempts that were SKIPPED and why. The admin console shows
+per-provider health and the recent failures. Members are told apart: an asset nothing knows
+gets "I do not know that one", a throttled chain gets "ask again shortly", and only a genuine
+outage gets the markets line. An operator-triggered check reports any pin no enabled provider
+can serve.
+**Rationale.** One message covered a missing key, a bad pin, a rate limit and an outage alike,
+which is how D-046 survived in production: nothing distinguished "your credential is being
+rejected" from "the market is quiet". A pin nobody can serve is worse than no pin at all,
+because an unpinned symbol is resolved and answered while a bad pin fails silently forever —
+the same class of defect migration 012 had to repair by hand.
+**Evidence.** `src/plugins/crypto-prices/attempts.ts`; `src/plugins/crypto-prices/service.ts`
+(`note`, `unavailableSince`, `checkPins`); `src/web/views/plugins.ts` (provider health);
+`scripts/verify-price.ts` §10c.
 
 ---
 

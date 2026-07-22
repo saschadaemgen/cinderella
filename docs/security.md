@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-008**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -506,6 +506,25 @@ browser tab already showing the card keeps it until reloaded (the live reconcile
 adds and removes whole cards, it does not rewrite one in place). `withhold`
 removes the row from the feed and from the live stream, and is the stronger choice
 where that matters.
+
+## 9c. Plugin secrets — stored once, never twice (CCB-S3-008)
+
+Provider API keys are encrypted at rest with a key derived from `SESSION_SECRET`, are never
+rendered back into the form, and never reach a log or an audit entry. CCB-S3-008 fixed a defect
+in that machinery worth recording, because it failed in the safe direction and was therefore
+invisible.
+
+The admin form and the stored settings shared one field name, so loading the stored settings was
+indistinguishable from submitting the form, and each boot encrypted the stored key again. The
+runtime decrypts exactly once, so providers were sent `v1.<iv>.<tag>.<ct>` as their API key. No
+secret leaked — the failure mode was a credential that could not work — but every authenticated
+provider call had been failing since the feature shipped, reported to the operator only as "the
+markets are out of earshot".
+
+The fix is structural: a submitted key arrives as `apiKeyInput` and a stored one as `apiKey`,
+so the two can no longer be confused. `applySecretUpdate` also refuses to encrypt a value that
+already looks like an envelope, and existing doubled values are unwrapped and rewritten once at
+load, with a count logged and the value never named.
 
 ## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
 

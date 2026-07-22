@@ -124,9 +124,37 @@ async function main(): Promise<void> {
   const replies: string[] = [];
   const sent: { text: string; quote: boolean }[] = [];
 
+  // Pinned assets this instance "already knows" (CCB-S3-008 §1). Carry-over may
+  // only ever reuse one of these; anything else must not reach a provider.
+  const pinned = new Set(['MONERO', 'XMR', 'BTC']);
+  /** Symbols a carried-over lookup actually asked about — must stay noise-free. */
+  const priceAsked: string[] = [];
+
   const engine = new InteractionEngine({
     db,
     settings: () => settings,
+    prices: {
+      price: async (base) => {
+        priceAsked.push(base);
+        return Promise.resolve({
+          kind: 'price' as const,
+          amount: 1,
+          base: { symbol: base.toUpperCase(), decimals: 8 },
+          quote: { symbol: 'USD', decimals: 2 },
+          value: 349.41,
+          at: clock.now(),
+          provider: 'coingecko',
+          attribution: 'Data by CoinGecko',
+        });
+      },
+      pin: () => Promise.resolve({}),
+      isPinned: (symbol: string) => Promise.resolve(pinned.has(symbol.trim().toUpperCase())),
+    },
+    priceSettings: () => ({
+      rateLimitPerMember: 100,
+      rateLimitPerChat: 100,
+      disclaimer: '',
+    }),
     send: async (_msg, text, opts) => {
       replies.push(text);
       sent.push({ text, quote: opts.quote });
@@ -1271,10 +1299,11 @@ async function main(): Promise<void> {
   clock.advanceSeconds(5);
   // Seed the remembered intent the way a real price answer would.
   engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  priceAsked.length = 0;
   const elliptical = await say('monero?');
   check(
     'an elliptical follow-up inherits the previous read-only intent',
-    elliptical.handled,
+    elliptical.handled && priceAsked.includes('monero'),
     elliptical.replies[0]?.slice(0, 40),
   );
 
@@ -1282,6 +1311,63 @@ async function main(): Promise<void> {
   engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
   const elliptical2 = await say('and of monero?');
   check('filler is stripped from the follow-up too', elliptical2.handled);
+
+  /* ── CCB-S3-008 §1 — carry-over may reuse knowledge, never create it ────── */
+
+  // The live defect, verbatim: after two price answers a member wrote this, and
+  // she offered "Nice" and "Bury Nice Token" as assets to choose between.
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  priceAsked.length = 0;
+  const applause = await say('nice :)))))))');
+  check(
+    'an interjection after a price answer produces NO reply',
+    !applause.handled && applause.replies.length === 0,
+    applause.replies[0]?.slice(0, 60),
+  );
+  check('and never reaches a provider at all', priceAsked.length === 0);
+
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  const cool = await say('cool');
+  check('"cool" is silence too', !cool.handled && cool.replies.length === 0);
+
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  const smiley = await say(':)))))))');
+  check(
+    'a message with no letters at all never carries over',
+    !smiley.handled && smiley.replies.length === 0,
+  );
+
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  priceAsked.length = 0;
+  const unknownWord = await say('quux?');
+  check(
+    'an UNPINNED word is silence, never a disambiguation',
+    !unknownWord.handled && unknownWord.replies.length === 0,
+    unknownWord.replies[0]?.slice(0, 60),
+  );
+  check('and no resolution was started for it', priceAsked.length === 0);
+
+  // The rule is about knowledge, not about the word: pin it, and it carries.
+  pinned.add('QUUX');
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  priceAsked.length = 0;
+  const nowKnown = await say('quux?');
+  check(
+    'once pinned, the same fragment does carry over',
+    nowKnown.handled && priceAsked.includes('quux'),
+  );
+  pinned.delete('QUUX');
+
+  check(
+    'settings: the stop-list ships with the words seen in the live group',
+    DEFAULT_INTERACTION.carryOverStopWords.includes('nice') &&
+      DEFAULT_INTERACTION.carryOverStopWords.includes('danke'),
+  );
 
   // The structural guard: carry-over must NEVER produce a consent action.
   clock.advanceSeconds(5);

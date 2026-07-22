@@ -98,6 +98,8 @@ export interface InteractionDeps {
       provider: string,
       source: 'member-choice',
     ): Promise<unknown>;
+    /** Already resolved on this instance? Reads the pin table, never a provider. */
+    isPinned(symbol: string): Promise<boolean>;
   };
   /** Live plugin settings for the price feature. */
   priceSettings?: () => {
@@ -142,9 +144,13 @@ function matchChoice(
 ): PendingChoice['options'][number] | undefined {
   const t = instruction.trim().toLowerCase();
   if (!t) return undefined;
-  const asIndex = Number.parseInt(t, 10);
-  if (Number.isInteger(asIndex) && asIndex >= 1 && asIndex <= choice.options.length) {
-    return choice.options[asIndex - 1];
+  // The WHOLE message must be the number. `Number.parseInt` reads a prefix, so
+  // "2 min" and "1x" used to select an option and write a permanent global pin
+  // out of somebody saying how long something would take.
+  if (/^\d{1,2}$/.test(t)) {
+    const asIndex = Number.parseInt(t, 10);
+    if (asIndex >= 1 && asIndex <= choice.options.length) return choice.options[asIndex - 1];
+    return undefined;
   }
   for (const o of choice.options) {
     if (o.name.toLowerCase() === t) return o;
@@ -166,6 +172,28 @@ const IMPLICIT_MIN_CONFIDENCE = 0.8;
 
 /** Longest fragment that still counts as an elliptical follow-up (§7c). */
 const CARRY_OVER_MAX_TOKENS = 4;
+
+
+/**
+ * Is this fragment pure reaction rather than an instruction (§1)?
+ *
+ * Two ways to be one. It is made only of stop-words the operator listed, or it
+ * carries no letters at all — `:)))))))`, `!!!`, an emoji. The length guard alone
+ * could never catch these, because an interjection is short BY NATURE; that is
+ * precisely what made the earlier "short fragments only" rule insufficient.
+ */
+export function isInterjection(text: string, stopWords: readonly string[]): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  // No letter anywhere: emoticons, punctuation, emoji.
+  if (!/\p{L}/u.test(trimmed)) return true;
+
+  const tokens = normTokens(trimmed);
+  if (tokens.length === 0) return true;
+  const stops = new Set<string>();
+  for (const w of stopWords) for (const t of normTokens(w)) stops.add(t);
+  return tokens.every((t) => stops.has(t));
+}
 
 export class InteractionEngine {
   private readonly state = new ConversationState();
@@ -338,6 +366,9 @@ export class InteractionEngine {
     if (
       result.intent === 'UNKNOWN' &&
       s.intentCarryover &&
+      // Applause is not a ticker (§1). Checked before anything is looked up, so
+      // an interjection never reaches a provider at all.
+      !isInterjection(instruction, s.carryOverStopWords) &&
       // An elliptical follow-up is SHORT — "monero?", "and of monero?". Without
       // this bound, any ordinary sentence inside the window that happened to
       // contain a noun became a price question, which is the same
@@ -346,11 +377,38 @@ export class InteractionEngine {
       this.state.inFollowUp(msg.groupId, msg.senderMemberId, now)
     ) {
       const previous = this.state.rememberedIntent(msg.groupId, msg.senderMemberId, now);
-      if (previous === 'PRICE' || previous === 'SEARCH') {
+      // PRICE only. A carried SEARCH took the fragment VERBATIM as the query, so
+      // "nice one" after a search answer produced "I found 0 moments where this
+      // group spoke of nice one" — the same invention this rule exists to stop,
+      // with no pin table to check it against. A search query is created
+      // content, not reused knowledge, so it cannot satisfy the invariant at all.
+      if (previous === 'PRICE') {
         const inherited = carryOverSlots(instruction, previous);
-        if (inherited) {
-          result = { ...inherited, lang };
-          carried = true;
+        // THE INVARIANT (§1): carry-over may REUSE knowledge, never CREATE it.
+        //
+        // An inferred intent must not be able to start a resolution. Live, the
+        // fragment `nice :)))))))` inherited PRICE, was sent to a provider as a
+        // symbol, and came back as a disambiguation prompt offering "Nice" and
+        // "Bury Nice Token" — a lookup invented out of applause, and a pin one
+        // keystroke away from being written. So a carried PRICE is allowed only
+        // for an asset THIS INSTANCE HAS ALREADY RESOLVED, and it is checked
+        // against the pin table, not against the provider.
+        if (inherited?.intent === 'PRICE') {
+          const base = inherited.slots.base;
+          // BOTH sides must already be known. The quote side matters just as
+          // much: "btc to the moon" parses as base=btc (pinned, so the gate would
+          // pass) with quote=moon, and the quote side is resolved through the
+          // full provider chain and PINNED on a dominant candidate — a permanent
+          // global mapping written out of a figure of speech.
+          const quote = inherited.slots.quote;
+          const known =
+            base !== undefined &&
+            (await this.isPinnedAsset(base)) &&
+            (quote === undefined || (await this.isPinnedAsset(quote)));
+          if (known) {
+            result = { ...inherited, lang };
+            carried = true;
+          }
         }
       }
     }
@@ -442,7 +500,7 @@ export class InteractionEngine {
         return this.performUndo(msg, s, lang);
 
       case 'PRICE':
-        return this.answerPrice(msg, s, lang, result.slots, now);
+        return this.answerPrice(msg, s, lang, result.slots, now, carried);
 
       case 'UNKNOWN':
       default:
@@ -549,6 +607,27 @@ export class InteractionEngine {
     this.state.openFollowUp(groupId, memberId, this.now(), s.followUpSeconds * 1000);
   }
 
+  /**
+   * Has this instance already resolved this symbol? The check is against the pin
+   * table, deliberately NOT against a provider: asking a provider would be the
+   * very resolution that carry-over is not allowed to start.
+   */
+  private async isPinnedAsset(symbol: string): Promise<boolean> {
+    const prices = this.deps.prices;
+    if (!prices) return false;
+    try {
+      // Called through the service so `this` stays bound to it.
+      return await prices.isPinned(symbol);
+    } catch (err) {
+      log.debug(
+        `Price: could not check whether "${symbol}" is pinned (${
+          err instanceof Error ? err.message : String(err)
+        }); treating it as unknown.`,
+      );
+      return false;
+    }
+  }
+
   /** Test hook: seed the remembered intent that drives carry-over (§7c). */
   rememberIntentForTest(groupId: number, memberId: string, intent: 'PRICE' | 'SEARCH'): void {
     this.state.rememberIntent(groupId, memberId, intent);
@@ -570,6 +649,12 @@ export class InteractionEngine {
     lang: string,
     slots: { base?: string; quote?: string; amount?: number; baseAlternates?: string[] },
     now: number,
+    /**
+     * True when this question was INFERRED from the previous turn rather than
+     * asked. Such a lookup may answer, but it may never ask a question of its
+     * own — see the ambiguity branch (§1).
+     */
+    carried = false,
   ): Promise<boolean> {
     const prices = this.deps.prices;
     const cfg = this.deps.priceSettings?.();
@@ -609,12 +694,33 @@ export class InteractionEngine {
       slots.baseAlternates,
     );
 
+    // A carried-over question was INFERRED, not asked. It may answer, and it may
+    // stay silent. Anything else — "I do not know that one", "which did you
+    // mean?", "the markets are quiet" — is her interrupting a conversation on the
+    // strength of a guess, which is the whole complaint behind §1. Only a real
+    // answer survives this gate.
+    if (carried && outcome.kind !== 'price' && outcome.kind !== 'conversion') {
+      log.debug(
+        `Price: carried-over lookup ended as "${outcome.kind}"; staying silent rather than interrupting.`,
+      );
+      return false;
+    }
+
     switch (outcome.kind) {
       case 'unknown-asset':
         await this.reply(msg, s, lang, 'priceUnknownAsset', { symbol: outcome.symbol });
         return true;
 
       case 'ambiguous': {
+        // A carried-over fragment never earns a question (§1). The member did not
+        // ask about this word; inferring a question from it is how `nice` became
+        // a disambiguation prompt in the live group.
+        if (carried) {
+          log.debug(
+            `Price: carried-over "${outcome.symbol}" is ambiguous; staying silent rather than asking.`,
+          );
+          return false;
+        }
         // Ask, never choose — and remember the options so the member's answer
         // can be pinned globally and nobody is asked again (§1).
         const options = outcome.options.slice(0, 5);
@@ -648,8 +754,16 @@ export class InteractionEngine {
       }
 
       case 'unavailable':
-        // Honest failure. Never a stale or invented number.
-        await this.reply(msg, s, lang, 'priceUnavailable', {});
+        // Honest failure, and now a SPECIFIC one (§3). Being throttled is
+        // temporary and the member can act on it; anything else is the operator's
+        // to fix and must not be dressed up as a quiet market.
+        await this.reply(
+          msg,
+          s,
+          lang,
+          outcome.reason === 'throttled' ? 'priceThrottled' : 'priceUnavailable',
+          {},
+        );
         return true;
 
       default: {

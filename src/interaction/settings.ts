@@ -52,6 +52,7 @@ export const PERSONA_KEYS = [
   'priceUnknownAsset', // PRICE — {symbol}
   'priceAmbiguous', // PRICE — {symbol} {options}
   'priceUnavailable', // PRICE — provider unreachable
+  'priceThrottled', // PRICE — rate-limited; worth saying "try again shortly"
   'redactedMember', // CCB-S3-007 §2 — stands in for a member who has not opted in
 ] as const;
 export type PersonaKey = (typeof PERSONA_KEYS)[number];
@@ -83,6 +84,7 @@ export const PERSONA_CATEGORY: Record<PersonaKey, ReplyCategory> = {
   price: 'price',
   conversion: 'price',
   priceUnavailable: 'price',
+  priceThrottled: 'price',
   // Both of these echo a member's own typing back — the ticker they asked about,
   // and the candidate list built from it — so they sit with the disambiguation
   // questions, which are excluded by default.
@@ -172,6 +174,11 @@ export interface InteractionSettings {
    * question. Never yields a consent action — see the guard in the engine.
    */
   intentCarryover: boolean;
+  /**
+   * Words that never carry an intent forward, however the conversation was going
+   * (CCB-S3-008 §1). "nice" after a price answer is applause, not a ticker.
+   */
+  carryOverStopWords: string[];
   /**
    * Whether her replies quote the triggering message, carry the member's name,
    * or are simply plain group messages (CCB-S3-003).
@@ -263,6 +270,7 @@ const PERSONA_EN: PersonaStrings = {
   priceAmbiguous:
     '🕯️ More than one *{symbol}* is known to me. Which do you mean?\n\n{options}\n\nAnswer with a number.',
   priceUnavailable: '🌙 The markets are out of earshot just now. Try again in a moment.',
+  priceThrottled: '🌙 I have been asking the markets too often. Give me a minute and ask again.',
   // Not a reply — the name she puts in place of a member who has not opted in,
   // so a published sentence of hers still reads as a sentence (CCB-S3-007 §2).
   redactedMember: 'that member',
@@ -307,6 +315,7 @@ const PERSONA_DE: PersonaStrings = {
   priceAmbiguous:
     '🕯️ Ich kenne mehr als ein *{symbol}*. Welches meinst du?\n\n{options}\n\nAntworte mit einer Zahl.',
   priceUnavailable: '🌙 Die Märkte sind gerade außer Hörweite. Versuch es gleich noch einmal.',
+  priceThrottled: '🌙 Ich habe die Märkte zu oft gefragt. Gib mir eine Minute und frag noch einmal.',
   redactedMember: 'dieses Mitglied',
 };
 
@@ -355,6 +364,14 @@ export const DEFAULT_INTERACTION: InteractionSettings = {
   replyLanguageMode: 'auto',
   rememberMemberLanguage: true,
   intentCarryover: true,
+  // A cheap second layer under the structural rule that carry-over may only
+  // reuse an asset already pinned. These are the words that actually followed a
+  // price answer in the live group.
+  carryOverStopWords: [
+    'nice', 'cool', 'thanks', 'thank you', 'thx', 'wow', 'lol', 'haha', 'hehe',
+    'ok', 'okay', 'k', 'great', 'super', 'nett', 'danke', 'geil', 'krass',
+    'stark', 'top', 'perfekt', 'alles klar',
+  ],
   // Non-quoting by default (CCB-S3-003). Switch to `mention` to have her address
   // the member by name, or back to `quote` for the original behaviour.
   replyMode: 'plain',
@@ -646,6 +663,10 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
     replyLanguageMode,
     rememberMemberLanguage: bool(o['rememberMemberLanguage'], d.rememberMemberLanguage),
     intentCarryover: bool(o['intentCarryover'], d.intentCarryover),
+    carryOverStopWords:
+      'carryOverStopWords' in o
+        ? parseList(o['carryOverStopWords'], { max: 120, maxLen: 40 })
+        : [...d.carryOverStopWords],
     replyMode,
     namePrefix: {
       enabled: bool(prefix['enabled'], d.namePrefix.enabled),

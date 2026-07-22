@@ -57,6 +57,13 @@ export interface ProviderCapabilities {
   /** Whether it needs an API key to answer at all. */
   requiresKey: boolean;
   /**
+   * Whether it prices an asset by chain + contract address rather than by an id
+   * of its own. Only DEX sources do. The pin self-check needs this: a pin holding
+   * only a chain and a contract is servable by these providers and by nobody
+   * else (CCB-S3-008 §2).
+   */
+  pricesByContract: boolean;
+  /**
    * Attribution text this provider's licence requires wherever its data is
    * shown. Empty when none is required. Appended to the reply verbatim.
    */

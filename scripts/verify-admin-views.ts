@@ -18,6 +18,7 @@ import argon2 from 'argon2';
 import { buildServer, registerNav } from '../src/web/server.js';
 import { registerAdminViews } from '../src/web/views/index.js';
 import { loadMigrationFiles } from '../src/db/migrate.js';
+import { decryptSecret } from '../src/plugins/secrets.js';
 import { upsertMessage, recordMediaError, updateMedia, markDeleted } from '../src/db/messages.js';
 import { recordOptIn } from '../src/db/consent.js';
 import { SettingsService } from '../src/settings/service.js';
@@ -887,16 +888,16 @@ async function main(): Promise<void> {
   check(
     'with the provider chain, keys, behaviour and mapping table',
     cpPage.body.includes('name="chain"') &&
-      cpPage.body.includes('name="providers.coinmarketcap.apiKey"') &&
+      cpPage.body.includes('name="providers.coinmarketcap.apiKeyInput"') &&
       cpPage.body.includes('name="cacheTtlSeconds"') &&
       cpPage.body.includes('Pinned assets'),
   );
   check(
     'the API key field is a password input with NO value rendered',
-    /name="providers\.coinmarketcap\.apiKey"[^>]*type="password"[^>]*value=""/.test(
+    /name="providers\.coinmarketcap\.apiKeyInput"[^>]*type="password"[^>]*value=""/.test(
       cpPage.body.replace(/\s+/g, ' '),
     ) ||
-      (cpPage.body.includes('name="providers.coinmarketcap.apiKey"') &&
+      (cpPage.body.includes('name="providers.coinmarketcap.apiKeyInput"') &&
         cpPage.body.includes('type="password"')),
   );
   // Collapse whitespace: the copy is line-wrapped in the source, and reflowing
@@ -924,7 +925,7 @@ async function main(): Promise<void> {
       section: 'chain',
       chain: 'dexscreener, coingecko, coinmarketcap',
       'providers.coingecko.enabled': 'on',
-      'providers.coingecko.apiKey': 'harness-demo-key',
+      'providers.coingecko.apiKeyInput': 'harness-demo-key',
       'providers.coingecko.timeoutMs': '9000',
       'providers.coingecko.rateLimitPerMinute': '20',
       'providers.dexscreener.enabled': 'on',
@@ -946,6 +947,9 @@ async function main(): Promise<void> {
   check(
     'the API key is stored ENCRYPTED, never in clear',
     (cpv?.providers['coingecko']?.apiKey ?? '').startsWith('v1.') &&
+      // ONE layer, not two: the stored envelope must decrypt straight back to
+      // the typed key. It used to decrypt to another envelope (CCB-S3-008 §2).
+      decryptSecret(cpv?.providers['coingecko']?.apiKey ?? '') === 'harness-demo-key' &&
       !JSON.stringify(cpv).includes('harness-demo-key'),
   );
   const cpAfter = await getPage('/plugins/crypto-prices');

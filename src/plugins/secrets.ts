@@ -117,5 +117,81 @@ export function applySecretUpdate(current: string, submitted: string, clear: boo
   if (clear) return '';
   const v = submitted.trim();
   if (!v) return current;
+  // Encrypt unconditionally, INCLUDING a submitted value that happens to look
+  // like an envelope. The double-encryption defect is prevented structurally now
+  // (a stored key never arrives here — it comes in under `apiKey`, a typed one
+  // under `apiKeyInput`), so the only thing that can reach this line is something
+  // an operator typed. Passing such a value through unencrypted to "avoid double
+  // encryption" would put a live credential in the settings table in clear, which
+  // is the failure this module exists to prevent — and a wrongly doubled key is
+  // recoverable by `repairSecret`, whereas a leaked one is not.
   return encryptSecret(v);
+}
+
+/**
+ * Does this look like something {@link encryptSecret} produced?
+ *
+ * This exists because of a live defect worth remembering (CCB-S3-008 §2).
+ * `PluginService.load()` passes the STORED settings back through the same
+ * normalizer the admin form uses, and the normalizer treated `apiKey` as a
+ * freshly typed key. So every boot wrapped the stored ciphertext in another
+ * layer, and the runtime — which decrypts exactly once — handed the provider an
+ * envelope instead of a key. The operator's keys had never once worked, and the
+ * only symptom was "the markets are out of earshot".
+ *
+ * The structural fix is that a submitted key now arrives under its own field
+ * name (`apiKeyInput`), so storage shape and form shape are no longer the same
+ * field. This check is the belt to that pair of braces, and it is what lets an
+ * instance that already has doubled keys heal itself.
+ */
+export function isEncrypted(value: string): boolean {
+  const parts = value.split('.');
+  return parts.length === 4 && parts[0] === VERSION;
+}
+
+/**
+ * Unwraps a value that was encrypted more than once, returning the real
+ * plaintext and how many layers had to come off.
+ *
+ * Used to repair instances written by the buggy path. Bounded, because a
+ * plaintext that merely LOOKS like an envelope must not send this spinning.
+ */
+export function unwrapSecret(stored: string): { value: string; layers: number } {
+  let value = stored;
+  let layers = 0;
+  while (layers < 8 && isEncrypted(value)) {
+    const inner = decryptSecret(value);
+    if (!inner) break;
+    value = inner;
+    layers++;
+  }
+  return { value, layers };
+}
+
+/**
+ * Re-encrypts a stored secret so it carries exactly ONE layer. Returns null when
+ * nothing needed repairing, so the caller can tell whether to write anything —
+ * and can say so in a log line without ever naming the value.
+ */
+export function repairSecret(stored: string): string | null {
+  if (!stored || !isEncrypted(stored)) return null;
+  const { value, layers } = unwrapSecret(stored);
+  if (layers <= 1 || !value) return null;
+  // If what came out is STILL an envelope, unwrapping did not finish — either it
+  // hit the bound, or an inner layer will not decrypt (a rotated SESSION_SECRET).
+  // Re-encrypting that would store an unusable credential while telling the
+  // operator it had been repaired, which is worse than leaving it alone.
+  if (isEncrypted(value)) return null;
+  return encryptSecret(value);
+}
+
+/**
+ * How many layers of encryption a stored value carries. 0 for something that was
+ * never encrypted, 1 for a healthy secret, more for one written by the doubled
+ * path. Callers use this to decide whether to REWRITE the setting — comparing
+ * ciphertext strings cannot, because every encryption uses a fresh IV and so
+ * every comparison would differ.
+ */
+export function secretLayers(stored: string): number {
+  return unwrapSecret(stored).layers;
 }

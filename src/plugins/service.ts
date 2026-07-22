@@ -11,7 +11,9 @@
  * resolver validates against.
  */
 
+import { log } from '../log.js';
 import { getSetting, setSetting } from '../db/settings.js';
+import { secretLayers } from './secrets.js';
 import type { Queryable } from '../db/pool.js';
 import { writeAudit } from '../db/audit.js';
 import { setActiveIntents } from '../interaction/intent.js';
@@ -34,6 +36,13 @@ import { CRYPTO_PRICES_ID } from './crypto-prices/plugin.js';
 const STATES_KEY = 'plugins';
 const settingsKey = (id: string): string => `plugin:${id}`;
 
+function rec(v: unknown): Record<string, unknown> {
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
 export class PluginService {
   private constructor(
     private readonly db: Queryable,
@@ -45,10 +54,45 @@ export class PluginService {
 
   static async load(db: Queryable): Promise<PluginService> {
     const states = normalizePluginStates((await getSetting(db, STATES_KEY)) ?? {});
-    const crypto = normalizeCryptoPrices(
-      (await getSetting(db, settingsKey(CRYPTO_PRICES_ID))) ?? {},
-      DEFAULT_CRYPTO_PRICES,
+    const stored = (await getSetting(db, settingsKey(CRYPTO_PRICES_ID))) ?? {};
+    const crypto = normalizeCryptoPrices(stored, DEFAULT_CRYPTO_PRICES);
+
+    // Self-repair for instances written by the doubled-encryption path
+    // (CCB-S3-008 §2). The normalizer has already unwrapped the extra layers in
+    // memory; persisting them here means it happens once rather than on every
+    // boot. The count is logged and the value never is.
+    // Detected by LAYER COUNT, not by comparing ciphertext: every encryption uses
+    // a fresh IV, so a string comparison differs even when nothing was wrong, and
+    // this would rewrite the settings on every single boot.
+    const before = rec(rec(stored)['providers']);
+    const repaired = Object.keys(crypto.providers).filter(
+      (name) => secretLayers(str(rec(before[name])['apiKey'])) > 1,
     );
+    if (repaired.length > 0) {
+      // NON-FATAL. `load()` used to be read-only and is awaited unguarded during
+      // boot; a settings table that will not take a write must not stop the bot
+      // from starting. The in-memory value is already correct either way, so the
+      // worst case is that the repair is redone on the next boot.
+      try {
+        await setSetting(db, settingsKey(CRYPTO_PRICES_ID), crypto);
+        // Audited like every other settings write. Provider names only — never a
+        // key, and never a layer's contents.
+        await writeAudit(db, 'system', 'plugin.secret.repair', `plugin:${CRYPTO_PRICES_ID}`, {
+          providers: repaired,
+        });
+        log.warn(
+          `Repaired ${repaired.length} provider key(s) that had been encrypted more than once ` +
+            `(${repaired.join(', ')}). Those providers were being sent an unusable credential ` +
+            `until now.`,
+        );
+      } catch (err) {
+        log.error(
+          `Could not persist the repaired provider key(s) (${
+            err instanceof Error ? err.message : String(err)
+          }). They are correct in memory; the repair will be retried on the next start.`,
+        );
+      }
+    }
     return new PluginService(db, states, crypto);
   }
 
