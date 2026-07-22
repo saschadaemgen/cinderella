@@ -26,10 +26,12 @@ import {
   type AssetMapping,
 } from '../../db/asset-mappings.js';
 import { decryptSecret } from '../secrets.js';
+import { formatCompact } from '../../price/format.js';
 import {
   CoinGeckoProvider,
   CoinMarketCapProvider,
   DexscreenerProvider,
+  type AdapterOptions,
 } from './providers/adapters.js';
 import { ProviderError, type AssetCandidate, type PriceProvider } from './providers/types.js';
 import type { CryptoPricesSettings } from './settings.js';
@@ -110,6 +112,29 @@ interface CacheEntry {
   storedAt: number;
 }
 
+/**
+ * The figure a candidate is ranked by (§4): market capitalisation where the
+ * provider offers it, pool liquidity for DEX results, and otherwise an inverse
+ * of the popularity rank. Market-cap rank is null for exactly the micro caps
+ * that need separating, so it is the last resort, not the first.
+ */
+function weightOf(c: AssetCandidate | undefined): number {
+  if (!c) return 0;
+  if (c.marketCap !== undefined && c.marketCap > 0) return c.marketCap;
+  if (c.liquidity !== undefined && c.liquidity > 0) return c.liquidity;
+  if (c.volume24h !== undefined && c.volume24h > 0) return c.volume24h;
+  if (c.rank !== undefined && c.rank > 0) return 1 / c.rank;
+  return 0;
+}
+
+/** Human figure shown beside a candidate, so the member can tell them apart. */
+export function candidateMetric(c: AssetCandidate): string {
+  if (c.marketCap !== undefined && c.marketCap > 0) return formatCompact(c.marketCap);
+  if (c.liquidity !== undefined && c.liquidity > 0) return `${formatCompact(c.liquidity)} liq`;
+  if (c.rank !== undefined && c.rank > 0) return `#${c.rank}`;
+  return '';
+}
+
 export class CryptoPriceService {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly now: () => number;
@@ -125,18 +150,12 @@ export class CryptoPriceService {
   }
 
   private buildAdapters(): PriceProvider[] {
-    const opts = (
-      name: string,
-    ): {
-      enabled: () => boolean;
-      apiKey: () => string;
-      timeoutMs: () => number;
-      fetchImpl?: typeof fetch;
-    } => ({
+    const opts = (name: string): AdapterOptions => ({
       enabled: () => this.deps.settings().providers[name]?.enabled ?? false,
       // Decrypted only here, at the moment a request is built. Never logged.
       apiKey: () => decryptSecret(this.deps.settings().providers[name]?.apiKey ?? ''),
       timeoutMs: () => this.deps.settings().providers[name]?.timeoutMs ?? 8000,
+      minLiquidityUsd: () => this.deps.settings().providers[name]?.minLiquidityUsd ?? 25_000,
       ...(this.deps.fetchImpl ? { fetchImpl: this.deps.fetchImpl } : {}),
     });
     return [
@@ -186,7 +205,7 @@ export class CryptoPriceService {
     symbol: string,
     scope = '*',
   ): Promise<
-    | { kind: 'mapping'; mapping: AssetMapping }
+    | { kind: 'mapping'; mapping: AssetMapping; autoResolved?: boolean }
     | { kind: 'ambiguous'; options: AssetCandidate[]; provider: string }
     | { kind: 'unknown' }
     | { kind: 'unavailable' }
@@ -214,10 +233,30 @@ export class CryptoPriceService {
           const mapping = await this.pin(symbol, only, provider.name, 'resolved', scope);
           return { kind: 'mapping', mapping };
         }
+
+        // §4 — rank by the figure that actually separates a real asset from a
+        // clone: market capitalisation, or pool liquidity for DEX results.
+        const ranked = [...candidates].sort((a, b) => weightOf(b) - weightOf(a));
+        const settings = this.deps.settings();
+
+        // Auto-resolve on dominance. Asking whether someone means Bitcoin or
+        // "Bitcoin AI" is not a real question, and putting it to a member who
+        // cannot be expected to know is worse than deciding.
+        const top = ranked[0] as AssetCandidate;
+        const runnerUp = ranked[1];
+        const factor = settings.dominanceFactor;
+        if (factor > 0 && weightOf(top) > 0 && weightOf(top) >= weightOf(runnerUp) * factor) {
+          const mapping = await this.pin(symbol, top, provider.name, 'resolved', scope);
+          log.info(`Price: "${symbol}" auto-resolved to ${top.name} (dominant by ${factor}x).`);
+          return { kind: 'mapping', mapping, autoResolved: true };
+        }
+
+        candidates.length = 0;
+        candidates.push(...ranked.slice(0, settings.maxCandidates));
         // More than one asset claims the ticker — ask, never choose.
         // The provider is carried along: ids belong to ONE provider's
         // namespace, so the member's pick must be pinned under the same one.
-        return { kind: 'ambiguous', options: candidates.slice(0, 5), provider: provider.name };
+        return { kind: 'ambiguous', options: candidates, provider: provider.name };
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         this.noteHealth(provider.name, false, detail);

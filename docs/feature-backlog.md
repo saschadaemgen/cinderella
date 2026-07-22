@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-004**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-006**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -236,6 +236,19 @@ The history below records the pre-CCB-S2-003 state.
       cached, price questions have their own rate limit, cross-asset conversions go through
       the base currency, and provider failure answers honestly instead of inventing a number.
       See [`src/price/`](../src/price/).
+- [x] **Crypto plugin polish (CCB-S3-006)** — bare `N X in Y` conversions resolve;
+      significant-figure precision so a sub-cent price never shows as `0`; filler words no
+      longer captured as asset names; majors pre-pinned by ticker AND name so they never
+      disambiguate; genuine ambiguity ranked by market cap, capped, shown with the figure, and
+      auto-resolved on dominance; state questions never become consent prompts; elliptical
+      follow-ups inherit read-only intents; short discourse fillers allowed before her name.
+- [ ] **Cinderella's own messages in the archive (CCB-S3-006 §9) — NOT BUILT.** Her replies are
+      still absent from the public stream, so published conversations read as one-sided. The
+      work needs a `publish_bot_messages` setting, capture of her own `groupSnd` items, a
+      publication path that derives from that setting rather than from consent, a consent-leak
+      guard that redacts or withholds replies naming a member who has not opted in, and
+      per-category noise exclusions. Deliberately deferred rather than rushed: it changes the
+      publication derivation, which is the consent gate.
 - [ ] **More assets and a second provider** — only HEX, BTC, ETH, USD and EUR ship. Adding an
       asset is a registry line in the admin, no code change; adding a second provider is an
       implementation of the `PriceProvider` interface. A fallback chain across providers is

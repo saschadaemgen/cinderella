@@ -18,6 +18,8 @@ export interface AdapterOptions {
   /** Decrypted key, or '' when none is set. Never logged. */
   apiKey: () => string;
   timeoutMs: () => number;
+  /** DEX sources only: the configured liquidity floor (§5). */
+  minLiquidityUsd?: () => number;
   fetchImpl?: typeof fetch;
   baseUrl?: string;
 }
@@ -207,24 +209,58 @@ export class CoinGeckoProvider implements PriceProvider {
     const coins = rec(body)['coins'];
     if (!Array.isArray(coins)) return [];
     const want = symbol.trim().toLowerCase();
-    return (
-      coins
-        .map((raw) => rec(raw))
-        // Their search matches names loosely, so filter to an exact ticker match
-        // ourselves or "hex" pulls in everything with "hex" in its name.
-        .filter((r) => s(r['symbol']).toLowerCase() === want)
-        .map((r) => {
-          const c: AssetCandidate = {
-            id: s(r['id']),
-            symbol: s(r['symbol'], symbol),
-            name: s(r['name']),
-          };
-          const rank = num(r['market_cap_rank']);
-          if (rank !== undefined) c.rank = rank;
-          return c;
-        })
-        .filter((c) => c.id !== '')
-    );
+    const candidates = coins
+      .map((raw) => rec(raw))
+      // Their search matches names loosely, so filter to an exact ticker match
+      // ourselves or "hex" pulls in everything with "hex" in its name.
+      .filter((r) => s(r['symbol']).toLowerCase() === want)
+      .map((r) => {
+        const c: AssetCandidate = {
+          id: s(r['id']),
+          symbol: s(r['symbol'], symbol),
+          name: s(r['name']),
+        };
+        const rank = num(r['market_cap_rank']);
+        if (rank !== undefined) c.rank = rank;
+        return c;
+      })
+      .filter((c) => c.id !== '');
+
+    // Search returns no market cap, and rank is null for exactly the micro caps
+    // that need distinguishing (§4). One extra call buys the real figure, which
+    // is both the ranking key and what the member is shown when asked to choose.
+    return this.withMarketCaps(candidates.slice(0, 10));
+  }
+
+  private async withMarketCaps(candidates: AssetCandidate[]): Promise<AssetCandidate[]> {
+    if (candidates.length < 2) return candidates;
+    try {
+      const ids = candidates.map((c) => c.id).join(',');
+      const body = await httpJson(
+        `${this.base()}/coins/markets?vs_currency=usd&ids=${encodeURIComponent(ids)}` +
+          `&per_page=${candidates.length}&sparkline=false`,
+        {
+          headers: this.headers(),
+          timeoutMs: this.opts.timeoutMs(),
+          ...(this.opts.fetchImpl ? { fetchImpl: this.opts.fetchImpl } : {}),
+        },
+      );
+      if (Array.isArray(body)) {
+        const caps = new Map<string, number>();
+        for (const raw of body) {
+          const r = rec(raw);
+          const cap = num(r['market_cap']);
+          if (cap !== undefined) caps.set(s(r['id']), cap);
+        }
+        for (const c of candidates) {
+          const cap = caps.get(c.id);
+          if (cap !== undefined) c.marketCap = cap;
+        }
+      }
+    } catch {
+      // Ranking degrades to rank order; never fail a lookup over a nicety.
+    }
+    return candidates;
   }
 
   async fetchQuote(ref: AssetRef, vs: string): Promise<ProviderQuote> {
@@ -260,8 +296,8 @@ export class CoinGeckoProvider implements PriceProvider {
 
 /* ── Dexscreener ─────────────────────────────────────────────────────────── */
 
-/** Pools thinner than this are ignored: a thin pool is trivially manipulated. */
-const MIN_LIQUIDITY_USD = 25_000;
+/** Fallback floor when the operator has not set one; a thin pool is trivially manipulated. */
+const DEFAULT_MIN_LIQUIDITY_USD = 25_000;
 
 /**
  * Dexscreener — on-chain pair data, for the thinly traded tokens the aggregators
@@ -339,9 +375,7 @@ export class DexscreenerProvider implements PriceProvider {
         liquidity,
       });
     }
-    return [...best.values()]
-      .sort((a, b) => b.liquidity - a.liquidity)
-      .map(({ liquidity: _liquidity, ...c }) => c);
+    return [...best.values()].sort((a, b) => (b.liquidity ?? 0) - (a.liquidity ?? 0));
   }
 
   async fetchQuote(ref: AssetRef, vs: string): Promise<ProviderQuote> {
@@ -381,7 +415,7 @@ export class DexscreenerProvider implements PriceProvider {
       const price = num(p['priceUsd']); // a STRING in their payload
       if (price === undefined) continue;
       const liquidity = num(rec(p['liquidity'])['usd']) ?? 0;
-      if (liquidity < MIN_LIQUIDITY_USD) continue;
+      if (liquidity < (this.opts.minLiquidityUsd?.() ?? DEFAULT_MIN_LIQUIDITY_USD)) continue;
       if (!chosen || liquidity > chosen.liquidity) {
         chosen = { price, liquidity, at: num(p['pairCreatedAt']) ?? Date.now() };
       }

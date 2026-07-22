@@ -34,6 +34,10 @@ export interface AssetCandidate {
   rank?: number;
   /** 24h volume in USD, where offered — the better tiebreaker for micro caps. */
   volume24h?: number;
+  /** Market capitalisation in USD, where the provider offers it (§4). */
+  marketCap?: number;
+  /** Pool liquidity in USD, for DEX results (§4). */
+  liquidity?: number;
 }
 
 /** A price, and the evidence for where it came from. */
@@ -65,6 +69,8 @@ export interface ProviderCapabilities {
   maxCacheSeconds: number;
   /** Notes shown next to the provider in the console. */
   note: string;
+  /** Ignore DEX pools thinner than this, in USD. Ignored by non-DEX sources. */
+  minLiquidityUsd?: number;
 }
 
 export interface PriceProvider {

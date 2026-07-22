@@ -74,11 +74,12 @@ export function matchesWakeWord(tokenNorm: string, wakeNorm: string): boolean {
  * a fuzzy greeting could swallow a real word standing where a greeting would be
  * — which would shift what counts as the "first" word and defeat the anchoring.
  */
-function consumeGreeting(tokens: Token[], greetings: string[][]): number {
+function consumePrefix(tokens: Token[], greetings: string[][], maxWords: number): number {
   let consumed = 0;
   for (const g of greetings) {
     if (g.length <= consumed) continue;
     if (g.length > tokens.length) continue;
+    if (g.length > maxWords) continue;
     let ok = true;
     for (let i = 0; i < g.length; i++) {
       if (tokens[i]?.norm !== g[i]) {
@@ -105,20 +106,35 @@ export function detectAddress(text: string, s: InteractionSettings): AddressResu
   const tokens = tokenize(text);
   if (tokens.length === 0) return NOT_ADDRESSED;
 
-  // Longest greeting first, so `good morning` wins over a bare `good`.
-  const greetings = s.greetings
+  // Greetings AND short discourse fillers may precede the name (CCB-S3-006 §7d):
+  // "so cinderella, what is BTC worth" is plainly addressed to her, and rejecting
+  // it taught members to re-type the whole sentence. Longest first, so
+  // `good morning` wins over a bare `good`.
+  const prefixes = [...s.greetings, ...s.fillerPrefixes]
     .map((g) => normTokens(g))
     .filter((g) => g.length > 0)
     .sort((a, b) => b.length - a.length);
 
-  const skip = consumeGreeting(tokens, greetings);
+  // The prefix stays SHORT and bounded, so a long sentence that merely contains
+  // her name still is not an address — the CCB-S3-005 anchoring is untouched.
+  let skip = consumePrefix(tokens, prefixes, s.maxPrefixWords);
+  const prefixChars = skip > 0 ? (tokens[skip - 1]?.end ?? 0) : 0;
+  if (prefixChars > s.maxPrefixChars) skip = 0;
   const head = tokens[skip];
   if (!head) return NOT_ADDRESSED; // a bare greeting, addressed to nobody
 
   const instructionFrom = (t: Token): string =>
     text.slice(t.end).replace(LEADING_SEPARATORS, '').trim();
 
-  const greeted = skip > 0;
+  // Only a real GREETING is a strong address signal (CCB-S3-005 §2). A discourse
+  // filler like "so" is not someone greeting her, so it must not unlock the
+  // not-understood reply.
+  const greetingSets = s.greetings.map((g) => normTokens(g).join(' ')).filter((g) => g);
+  const consumedText = tokens
+    .slice(0, skip)
+    .map((t) => t.norm)
+    .join(' ');
+  const greeted = skip > 0 && greetingSets.includes(consumedText);
 
   if (matchesWakeWord(head.norm, fold(s.wakeWord).trim())) {
     // Strict mode (CCB-S3-005 §4): the name alone is not an address, a greeting

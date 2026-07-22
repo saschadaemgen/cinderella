@@ -76,6 +76,14 @@ export interface IntentSlots {
   query?: string;
   /** PRICE: the asset being asked about, as the member wrote it. */
   base?: string;
+  /**
+   * PRICE: other words in the message that could be the asset, best first
+   * (CCB-S3-006 §3). The resolver cannot know which symbols exist — that is the
+   * registry's business — so it offers candidates and the price service prefers
+   * whichever is already pinned. "one real bitcoin" therefore resolves to
+   * Bitcoin rather than to an unknown token called "real".
+   */
+  baseAlternates?: string[];
   /** PRICE: the currency or asset to express it in. Defaults to the configured one. */
   quote?: string;
   /** PRICE: how much of the base asset. Defaults to 1. */

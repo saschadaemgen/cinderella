@@ -106,6 +106,8 @@ async function reply(
 export function makeConsentHandler(
   botHandle: BotHandle,
   interaction?: { get(): InteractionSettings },
+  /** Called after a confirmation is sent, so the follow-up window opens (§7c). */
+  onReplied?: (groupId: number, memberId: string) => void,
 ): (msg: CapturedMessage, command: ConsentCommand) => Promise<void> {
   return async (msg, command) => {
     const db = getPool();
@@ -135,6 +137,7 @@ export function makeConsentHandler(
         });
         log.info(`Consent: opt-in recorded for member ${msg.senderMemberId}.`);
         await reply(botHandle, msg, PUBLISH_REPLY, presentation);
+        onReplied?.(msg.groupId, msg.senderMemberId);
       } else {
         const { hadActive } = await applyConsentChange(db, {
           memberId: msg.senderMemberId,
@@ -146,6 +149,7 @@ export function makeConsentHandler(
           `Consent: opt-out recorded for member ${msg.senderMemberId} (had active consent: ${hadActive}).`,
         );
         await reply(botHandle, msg, UNPUBLISH_REPLY, presentation);
+        onReplied?.(msg.groupId, msg.senderMemberId);
       }
     } catch (err) {
       // Fail loudly toward the member and the operator — never silently drop a

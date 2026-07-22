@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-004**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-006**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -100,6 +100,26 @@ literally.
 | coloured | `!<digit> … !` | `!1 red!` | coloured text |
 | link | none | `https://example.org` | auto-detected |
 | mention | `@` | `@alice` | member mention |
+
+**Colour, verified against the running parser (CCB-S3-006 §6).** `!<n> text!` where `n` is
+a DIGIT, or the colour name spelled out. Only six indices exist:
+
+| Index | Name form | Colour |
+|---|---|---|
+| `!1 …!` | `!red …!` | red |
+| `!2 …!` | `!green …!` | green |
+| `!3 …!` | `!blue …!` | blue |
+| `!4 …!` | `!yellow …!` | yellow |
+| `!5 …!` | `!cyan …!` | cyan |
+| `!6 …!` | `!magenta …!` | magenta |
+
+`!0`, `!7`, `!8`, `!9`, `!black` and `!white` produce NO formatting at all — the text and
+the delimiters are shown literally. `!- text!` is the separate `small` format.
+
+Cinderella's shipped copy uses **no colour**. Six indices with no theme guarantee is a weak
+basis for meaning, and the briefing's own instruction was to use it sparingly and never
+decoratively; bold, italic and separators carry the whole layout instead. The mapping is
+recorded here so a future decision to use it starts from fact rather than a guess.
 
 **How this was established.** Two independent methods, in agreement (CCB-S3-003):
 

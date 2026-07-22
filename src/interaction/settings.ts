@@ -129,6 +129,12 @@ export interface InteractionSettings {
   /** Keep a member's detected language for the length of the follow-up window. */
   rememberMemberLanguage: boolean;
   /**
+   * Inside the follow-up window, let an incomplete message inherit the previous
+   * READ-ONLY intent (CCB-S3-006 §7c): "monero?" after a price answer is a price
+   * question. Never yields a consent action — see the guard in the engine.
+   */
+  intentCarryover: boolean;
+  /**
    * Whether her replies quote the triggering message, carry the member's name,
    * or are simply plain group messages (CCB-S3-003).
    */
@@ -143,6 +149,16 @@ export interface InteractionSettings {
   wakeWord: string;
   /** Optional greeting prefixes stripped before the wake word. */
   greetings: string[];
+  /**
+   * Short discourse fillers also allowed before the name (CCB-S3-006 §7d):
+   * `so cinderella …`, `ok cinderella …`. Kept separate from greetings because
+   * they are not greetings and an operator may want one list without the other.
+   */
+  fillerPrefixes: string[];
+  /** Longest prefix, in words, that may precede the name. */
+  maxPrefixWords: number;
+  /** Longest prefix, in characters, that may precede the name. */
+  maxPrefixChars: number;
   /** Seconds a member may keep talking to her without repeating the wake word. */
   followUpSeconds: number;
   /** Resolver confidence below which an instruction becomes UNKNOWN (0..1). */
@@ -198,11 +214,16 @@ const PERSONA_EN: PersonaStrings = {
     '🕯️ Say "{wake}, publish me" and your words join the public archive. Say ' +
     '"{wake}, unpublish me" and they leave it again. Ask "{wake}, what do you have on me" ' +
     'for your tally, or "{wake}, search ..." to look through the archive.',
-  price: '💰 {amount} {base} is worth about *{value} {quote}* right now.',
-  conversion: '🔮 {amount} {base} would fetch you about *{value} {quote}* at the moment.',
+  // CCB-S3-006 §6 — one fact per line, icons carrying meaning, the emphasised
+  // elements being the amount, the asset and the value. Verified against the
+  // real parser: single delimiters only, and no leading whitespace, because
+  // SimpleX clients do not preserve it.
+  price: '💰 *{amount} {base}* is about *{value} {quote}*\n📊 {detail}',
+  conversion: '🔮 *{amount} {base}* is about *{value} {quote}*\n📊 {detail}',
   priceUnknownAsset:
     '🕯️ I do not know *{symbol}*. Ask the keeper of this house to add it to my ledger.',
-  priceAmbiguous: '🕯️ There is more than one *{symbol}*. Did you mean {options}?',
+  priceAmbiguous:
+    '🕯️ More than one *{symbol}* is known to me. Which do you mean?\n\n{options}\n\nAnswer with a number.',
   priceUnavailable: '🌙 The markets are out of earshot just now. Try again in a moment.',
 };
 
@@ -238,11 +259,12 @@ const PERSONA_DE: PersonaStrings = {
     '🕯️ Sag "{wake}, veröffentliche mich", und deine Worte kommen ins öffentliche Archiv. Sag ' +
     '"{wake}, widerrufe das", und sie verschwinden wieder. Frag "{wake}, was hast du über mich" ' +
     'für deine Bilanz, oder "{wake}, suche ..." um das Archiv zu durchsuchen.',
-  price: '💰 {amount} {base} sind gerade etwa *{value} {quote}* wert.',
-  conversion: '🔮 {amount} {base} bringen dir im Moment etwa *{value} {quote}*.',
+  price: '💰 *{amount} {base}* sind etwa *{value} {quote}*\n📊 {detail}',
+  conversion: '🔮 *{amount} {base}* sind etwa *{value} {quote}*\n📊 {detail}',
   priceUnknownAsset:
     '🕯️ *{symbol}* kenne ich nicht. Bitte den Hausherrn, es in mein Verzeichnis aufzunehmen.',
-  priceAmbiguous: '🕯️ Es gibt mehr als ein *{symbol}*. Meinst du {options}?',
+  priceAmbiguous:
+    '🕯️ Ich kenne mehr als ein *{symbol}*. Welches meinst du?\n\n{options}\n\nAntworte mit einer Zahl.',
   priceUnavailable: '🌙 Die Märkte sind gerade außer Hörweite. Versuch es gleich noch einmal.',
 };
 
@@ -290,6 +312,7 @@ export const DEFAULT_INTERACTION: InteractionSettings = {
   },
   replyLanguageMode: 'auto',
   rememberMemberLanguage: true,
+  intentCarryover: true,
   // Non-quoting by default (CCB-S3-003). Switch to `mention` to have her address
   // the member by name, or back to `quote` for the original behaviour.
   replyMode: 'plain',
@@ -316,6 +339,23 @@ export const DEFAULT_INTERACTION: InteractionSettings = {
     'moin',
     'servus',
   ],
+  fillerPrefixes: [
+    'so',
+    'ok',
+    'okay',
+    'well',
+    'and',
+    'but',
+    'btw',
+    'also',
+    'und',
+    'naja',
+    'sag mal',
+    'hm',
+    'hmm',
+  ],
+  maxPrefixWords: 3,
+  maxPrefixChars: 20,
   followUpSeconds: 60,
   confidenceThreshold: 0.55,
   affirmations: [
@@ -563,6 +603,7 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
     },
     replyLanguageMode,
     rememberMemberLanguage: bool(o['rememberMemberLanguage'], d.rememberMemberLanguage),
+    intentCarryover: bool(o['intentCarryover'], d.intentCarryover),
     replyMode,
     namePrefix: {
       enabled: bool(prefix['enabled'], d.namePrefix.enabled),
@@ -573,6 +614,12 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
     wakeWord,
     greetings:
       'greetings' in o ? parseList(o['greetings'], { max: 60, maxLen: 40 }) : [...d.greetings],
+    fillerPrefixes:
+      'fillerPrefixes' in o
+        ? parseList(o['fillerPrefixes'], { max: 60, maxLen: 40 })
+        : [...d.fillerPrefixes],
+    maxPrefixWords: int(o['maxPrefixWords'], 0, 6, d.maxPrefixWords),
+    maxPrefixChars: int(o['maxPrefixChars'], 0, 80, d.maxPrefixChars),
     followUpSeconds: int(o['followUpSeconds'], 0, 3600, d.followUpSeconds),
     confidenceThreshold: num(o['confidenceThreshold'], 0, 1, d.confidenceThreshold),
     affirmations:

@@ -1218,6 +1218,107 @@ async function main(): Promise<void> {
       DEFAULT_INTERACTION.rememberMemberLanguage,
   );
 
+  /* ── 18. CCB-S3-006 — state questions, carry-over, filler prefixes ────── */
+
+  section('18. CCB-S3-006 — state questions, carry-over, leading fillers');
+
+  settings = normalizeInteraction({});
+  coolDown();
+  await clearConsent(ALICE);
+
+  // §7a — the reported defect: a question about state produced a consent prompt.
+  const statusQ = await say('Cinderella whats my publish status?');
+  check(
+    'a publish STATE question is answered, not turned into a consent prompt',
+    statusQ.replies[0]?.includes('I keep') === true,
+    statusQ.replies[0]?.slice(0, 45),
+  );
+  check('and no confirmation is pending afterwards', (await consentRow(ALICE)).optedIn === false);
+  const afterStatusQ = await say('yes');
+  check(
+    'so a following "yes" cannot opt anyone in',
+    (await consentRow(ALICE)).optedIn === false && !afterStatusQ.replies[0]?.includes('shine'),
+  );
+
+  coolDown();
+  const actionQ = await say('Cinderella can you publish me?');
+  check(
+    'but a genuine request still asks for confirmation',
+    actionQ.replies[0]?.includes('Say *yes*') === true,
+  );
+
+  coolDown();
+  const statsQ = await say('Cinderella statistics?');
+  check('"statistics?" is understood as STATUS', statsQ.replies[0]?.includes('I keep') === true);
+
+  // §7d — a short discourse filler before the name.
+  coolDown();
+  const fillerAddressed = await say('so Cinderella what can you do');
+  check('a leading "so" no longer breaks addressing', fillerAddressed.handled);
+  coolDown();
+  const stillNotAddressed = await say(
+    'I was thinking that Cinderella might be a good name for this whole thing honestly',
+  );
+  check(
+    'but a sentence merely containing her name is still not an address',
+    !stillNotAddressed.handled && stillNotAddressed.replies.length === 0,
+  );
+
+  // §7c — carry-over inside the follow-up window, and its consent guard.
+  coolDown();
+  await clearConsent(ALICE);
+  await say('Cinderella what can you do');
+  clock.advanceSeconds(5);
+  // Seed the remembered intent the way a real price answer would.
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  const elliptical = await say('monero?');
+  check(
+    'an elliptical follow-up inherits the previous read-only intent',
+    elliptical.handled,
+    elliptical.replies[0]?.slice(0, 40),
+  );
+
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  const elliptical2 = await say('and of monero?');
+  check('filler is stripped from the follow-up too', elliptical2.handled);
+
+  // The structural guard: carry-over must NEVER produce a consent action.
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  const bareMe = await say('me?');
+  check(
+    'a bare "me?" after a price answer performs no consent action',
+    (await consentRow(ALICE)).optedIn === false,
+  );
+  check('and does not produce a confirmation prompt', !bareMe.replies[0]?.includes('Say *yes*'));
+
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  const yesPlease = await say('yes please');
+  check(
+    'nor does "yes please"',
+    (await consentRow(ALICE)).optedIn === false &&
+      !yesPlease.replies[0]?.includes('shine in the public archive'),
+  );
+
+  // Carry-over is switchable.
+  settings = normalizeInteraction({ ...settings, intentCarryover: false });
+  coolDown();
+  await say('Cinderella what can you do');
+  clock.advanceSeconds(5);
+  engine.rememberIntentForTest(GROUP, ALICE, 'PRICE');
+  const noCarry = await say('monero?');
+  check('carry-over can be switched off', !noCarry.handled && noCarry.replies.length === 0);
+  settings = normalizeInteraction({});
+
+  check(
+    'settings: the CCB-S3-006 defaults',
+    DEFAULT_INTERACTION.intentCarryover === true &&
+      DEFAULT_INTERACTION.fillerPrefixes.includes('so') &&
+      DEFAULT_INTERACTION.maxPrefixWords === 3,
+  );
+
   /* ── 15. Capture pipeline integration ──────────────────────────────────── */
 
   section('15. Capture pipeline — instructions are not archived');

@@ -6,7 +6,13 @@
 
 import { applySecretUpdate, describeSecret } from '../secrets.js';
 
-export const PROVIDER_ORDER_DEFAULT = ['coinmarketcap', 'coingecko', 'dexscreener'] as const;
+/**
+ * Default chain order (CCB-S3-006 §8). CoinGecko leads: it answers reliably,
+ * explicitly permits caching, and needs no key. CoinMarketCap goes last because
+ * its free-tier personal-use question is unresolved, so it is rarely consulted
+ * without having to be switched off.
+ */
+export const PROVIDER_ORDER_DEFAULT = ['coingecko', 'dexscreener', 'coinmarketcap'] as const;
 
 export interface ProviderSettings {
   enabled: boolean;
@@ -15,6 +21,8 @@ export interface ProviderSettings {
   timeoutMs: number;
   /** Requests per minute this adapter may make. */
   rateLimitPerMinute: number;
+  /** DEX sources only: ignore pools thinner than this, in USD (§5). */
+  minLiquidityUsd?: number;
 }
 
 export interface CryptoPricesSettings {
@@ -28,6 +36,14 @@ export interface CryptoPricesSettings {
   rateLimitPerChat: number;
   /** Appended to every price reply when set. Off by default. */
   disclaimer: string;
+  /** Most candidates ever offered when a symbol is genuinely ambiguous (§4). */
+  maxCandidates: number;
+  /**
+   * Auto-resolve when the leading candidate dwarfs the runner-up by this factor
+   * (§4). Asking whether someone means Bitcoin or "Bitcoin AI" is not a real
+   * question; 0 disables and always asks.
+   */
+  dominanceFactor: number;
 }
 
 function providerDefaults(enabled: boolean): ProviderSettings {
@@ -41,7 +57,8 @@ export const DEFAULT_CRYPTO_PRICES: CryptoPricesSettings = {
   providers: {
     coinmarketcap: providerDefaults(true),
     coingecko: providerDefaults(true),
-    dexscreener: providerDefaults(true),
+    // Dexscreener documents 60 requests per minute and needs no key (§5).
+    dexscreener: { ...providerDefaults(true), rateLimitPerMinute: 60, minLiquidityUsd: 25_000 },
   },
   baseCurrency: 'USD',
   cacheTtlSeconds: 60,
@@ -50,6 +67,8 @@ export const DEFAULT_CRYPTO_PRICES: CryptoPricesSettings = {
   // Off by default: what a price message must say differs by country, so
   // enabling it is the operator's decision (same doctrine as D-025).
   disclaimer: '',
+  maxCandidates: 4,
+  dominanceFactor: 100,
 };
 
 function rec(v: unknown): Record<string, unknown> {
@@ -111,6 +130,7 @@ export function normalizeCryptoPrices(
       apiKey: applySecretUpdate(prev.apiKey, submittedKey, bool(p['clearApiKey'], false)),
       timeoutMs: int(p['timeoutMs'], 1000, 30000, prev.timeoutMs),
       rateLimitPerMinute: int(p['rateLimitPerMinute'], 1, 600, prev.rateLimitPerMinute),
+      minLiquidityUsd: int(p['minLiquidityUsd'], 0, 100_000_000, prev.minLiquidityUsd ?? 0),
     };
   }
 
@@ -123,6 +143,8 @@ export function normalizeCryptoPrices(
     rateLimitPerMember: int(o['rateLimitPerMember'], 1, 120, previous.rateLimitPerMember),
     rateLimitPerChat: int(o['rateLimitPerChat'], 1, 600, previous.rateLimitPerChat),
     disclaimer: str(o['disclaimer'], previous.disclaimer, 300).trim(),
+    maxCandidates: int(o['maxCandidates'], 2, 10, previous.maxCandidates),
+    dominanceFactor: int(o['dominanceFactor'], 0, 100_000, previous.dominanceFactor),
   };
 }
 

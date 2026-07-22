@@ -34,12 +34,8 @@ import { undoLastConsentAction } from '../db/consent-actions.js';
 import { applyConsentChange } from '../consent/apply.js';
 import type { CapturedMessage } from '../capture/message.js';
 import { detectAddress } from './addressing.js';
-import { resolveIntent } from './resolver.js';
-import {
-  ConversationState,
-  type PendingChoice,
-  type PendingConfirmation,
-} from './state.js';
+import { carryOverSlots, resolveIntent } from './resolver.js';
+import { ConversationState, type PendingChoice, type PendingConfirmation } from './state.js';
 import {
   NEAR_MISS_EXCERPT,
   recordNearMiss,
@@ -56,6 +52,7 @@ import {
 import { detectLanguage, fuzzyEquals, normTokens } from './text.js';
 import type { PriceOutcome } from '../plugins/crypto-prices/service.js';
 import { formatAmount, formatValue, describeAge } from '../price/format.js';
+import { candidateMetric } from '../plugins/crypto-prices/service.js';
 import { formatOutbound, type OutboundReply } from './reply.js';
 
 export interface InteractionDeps {
@@ -77,11 +74,26 @@ export interface InteractionDeps {
    * is belt and braces rather than the only guard.
    */
   prices?: {
-    price(base: string, quote: string | undefined, amount: number, scope?: string): Promise<PriceOutcome>;
-    pin(symbol: string, candidate: { id: string; symbol: string; name: string; chain?: string; contract?: string }, provider: string, source: 'member-choice'): Promise<unknown>;
+    price(
+      base: string,
+      quote: string | undefined,
+      amount: number,
+      scope?: string,
+      alternates?: string[],
+    ): Promise<PriceOutcome>;
+    pin(
+      symbol: string,
+      candidate: { id: string; symbol: string; name: string; chain?: string; contract?: string },
+      provider: string,
+      source: 'member-choice',
+    ): Promise<unknown>;
   };
   /** Live plugin settings for the price feature. */
-  priceSettings?: () => { rateLimitPerMember: number; rateLimitPerChat: number; disclaimer: string };
+  priceSettings?: () => {
+    rateLimitPerMember: number;
+    rateLimitPerChat: number;
+    disclaimer: string;
+  };
 }
 
 interface ReplyOptions {
@@ -140,6 +152,9 @@ function matchChoice(
  * that only a real, multi-word instruction carries inside the window.
  */
 const IMPLICIT_MIN_CONFIDENCE = 0.8;
+
+/** Longest fragment that still counts as an elliptical follow-up (§7c). */
+const CARRY_OVER_MAX_TOKENS = 4;
 
 export class InteractionEngine {
   private readonly state = new ConversationState();
@@ -299,15 +314,41 @@ export class InteractionEngine {
       return true;
     }
 
-    const result = await resolveIntent(instruction, {
+    let result = await resolveIntent(instruction, {
       threshold,
       defaultLanguage: lang,
     });
+
+    // §7c — an elliptical follow-up inside the window inherits the previous
+    // READ-ONLY intent: "monero?" after a price answer is a price question. The
+    // guard is structural: only PRICE and SEARCH can be inherited, so no
+    // fragment can ever become a consent action, however it is phrased.
+    let carried = false;
+    if (
+      result.intent === 'UNKNOWN' &&
+      s.intentCarryover &&
+      // An elliptical follow-up is SHORT — "monero?", "and of monero?". Without
+      // this bound, any ordinary sentence inside the window that happened to
+      // contain a noun became a price question, which is the same
+      // over-eagerness CCB-S3-005 spent a whole briefing removing.
+      normTokens(instruction).length <= CARRY_OVER_MAX_TOKENS &&
+      this.state.inFollowUp(msg.groupId, msg.senderMemberId, now)
+    ) {
+      const previous = this.state.rememberedIntent(msg.groupId, msg.senderMemberId, now);
+      if (previous === 'PRICE' || previous === 'SEARCH') {
+        const inherited = carryOverSlots(instruction, previous);
+        if (inherited) {
+          result = { ...inherited, lang };
+          carried = true;
+        }
+      }
+    }
 
     // The LENGTH GUARD (§3). A command is short. Long-form text that merely opens
     // with her name — an announcement, a pasted article — is only acted on when
     // the resolver is very sure, and is otherwise ignored rather than answered.
     if (
+      !carried &&
       instruction.length > s.addressing.maxInstructionLength &&
       result.confidence < s.addressing.lengthGuardConfidence
     ) {
@@ -320,6 +361,12 @@ export class InteractionEngine {
     // mid-confirmation should still be able to say "yes" afterwards.
     if (pending && result.intent !== 'UNKNOWN') {
       this.state.clearPending(msg.groupId, msg.senderMemberId);
+    }
+
+    // Only READ-ONLY intents are remembered (§7c). Storing a consent intent here
+    // is what would make a later bare "yes" dangerous, so it never happens.
+    if (result.intent === 'PRICE' || result.intent === 'SEARCH') {
+      this.state.rememberIntent(msg.groupId, msg.senderMemberId, result.intent);
     }
 
     switch (result.intent) {
@@ -479,6 +526,23 @@ export class InteractionEngine {
     recordNearMiss(entry);
   }
 
+  /**
+   * Records that SOMETHING replied to this member, refreshing their follow-up
+   * window (CCB-S3-006 §7c). The engine's own replies do this inside sendReply;
+   * this is for the slash-command path, which sends through the shared transport
+   * without going through the engine at all. Without it, a member who used
+   * `/publish` had no window and their next message was ignored.
+   */
+  noteExternalReply(groupId: number, memberId: string): void {
+    const s = this.deps.settings();
+    this.state.openFollowUp(groupId, memberId, this.now(), s.followUpSeconds * 1000);
+  }
+
+  /** Test hook: seed the remembered intent that drives carry-over (§7c). */
+  rememberIntentForTest(groupId: number, memberId: string, intent: 'PRICE' | 'SEARCH'): void {
+    this.state.rememberIntent(groupId, memberId, intent);
+  }
+
   /** Recent ignored candidates, for the admin console. */
   nearMisses(limit?: number): NearMiss[] {
     return recentNearMisses(limit);
@@ -493,7 +557,7 @@ export class InteractionEngine {
     msg: CapturedMessage,
     s: InteractionSettings,
     lang: string,
-    slots: { base?: string; quote?: string; amount?: number },
+    slots: { base?: string; quote?: string; amount?: number; baseAlternates?: string[] },
     now: number,
   ): Promise<boolean> {
     const prices = this.deps.prices;
@@ -525,7 +589,14 @@ export class InteractionEngine {
       return true;
     }
 
-    const outcome = await prices.price(base, slots.quote, slots.amount ?? 1);
+    // Alternates let the service prefer an already-pinned asset word (§3).
+    const outcome = await prices.price(
+      base,
+      slots.quote,
+      slots.amount ?? 1,
+      '*',
+      slots.baseAlternates,
+    );
 
     switch (outcome.kind) {
       case 'unknown-asset':
@@ -548,11 +619,19 @@ export class InteractionEngine {
           })),
           expiresAt: now + Math.max(s.followUpSeconds * 1000, 60_000),
         });
+        // One candidate per line, numbered, with the figure that actually tells
+        // a real asset from a clone (§6). A comma-separated run was unreadable.
         await this.reply(msg, s, lang, 'priceAmbiguous', {
           symbol: outcome.symbol,
           options: options
-            .map((o, i) => `${i + 1}) ${o.name}${o.chain ? ` on ${o.chain}` : ''}`)
-            .join(', '),
+            .map((o, i) => {
+              const parts = [`*${i + 1}*`, o.name];
+              if (o.chain) parts.push(`_${o.chain}_`);
+              const metric = candidateMetric(o);
+              if (metric) parts.push(metric);
+              return parts.join(' · ');
+            })
+            .join('\n'),
         });
         return true;
       }
@@ -564,7 +643,24 @@ export class InteractionEngine {
 
       default: {
         const quoteDecimals = 'decimals' in outcome.quote ? outcome.quote.decimals : 8;
-        const suffix = [cfg.disclaimer, outcome.attribution].filter((x) => x).join(' · ');
+        // Attribution and disclaimer each get their own line (§6); the credit
+        // names the provider that actually answered, never a fixed string.
+        const suffix = [
+          outcome.attribution ? `🔗 ${outcome.attribution}` : '',
+          cfg.disclaimer ? `⚠️ ${cfg.disclaimer}` : '',
+        ]
+          .filter((x) => x)
+          .join('\n');
+        // Secondary facts: where it trades, and how old the figure is.
+        const detail = [
+          outcome.kind === 'conversion'
+            ? `via _${s.defaultLanguage === 'de' ? 'USD' : 'USD'}_ cross rate`
+            : '',
+          'chain' in outcome.base && outcome.base.chain ? `_${outcome.base.chain}_` : '',
+          describeAge(outcome.at, now, lang),
+        ]
+          .filter((x) => x)
+          .join(' · ');
         await this.reply(
           msg,
           s,
@@ -575,7 +671,7 @@ export class InteractionEngine {
             base: outcome.base.symbol,
             quote: outcome.quote.symbol,
             value: formatValue(outcome.value, quoteDecimals),
-            age: describeAge(outcome.at, now, lang),
+            detail,
           },
           { suffix },
         );

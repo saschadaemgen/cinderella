@@ -163,9 +163,16 @@ const LEXICON: LexEntry[] = [
       'what is my status',
       'how many messages do you have',
       'do you have anything on me',
+      'do you have anything of mine',
       'show me my status',
+      'whats my publish status',
+      'what is my publish status',
+      'my publish status',
+      'publish status',
+      'publication status',
+      'my status',
     ],
-    keywords: ['status'],
+    keywords: ['status', 'statistics', 'stats', 'numbers'],
   },
   {
     intent: 'STATUS',
@@ -180,8 +187,11 @@ const LEXICON: LexEntry[] = [
       'bin ich öffentlich',
       'wie ist mein status',
       'wie viele nachrichten hast du',
+      'mein status',
+      'mein veroeffentlichungsstatus',
+      'veroeffentlichungsstatus',
     ],
-    keywords: ['status'],
+    keywords: ['status', 'statistik', 'statistiken', 'zahlen'],
   },
   {
     intent: 'SEARCH',
@@ -780,6 +790,79 @@ function extractQuery(text: string, tokens: Token[], m: Match): string | undefin
   return q || undefined;
 }
 
+/* ── State questions vs action requests (CCB-S3-006 §7a) ─────────────────── */
+
+/**
+ * Openings that mark a question ABOUT STATE. The distinction is not
+ * question-versus-command — "can you publish me?" is a question and a genuine
+ * request — it is whether the member is asking what IS, or asking for something
+ * to HAPPEN.
+ */
+const STATE_OPENERS = [
+  'what is my',
+  'whats my',
+  'what are my',
+  'what do you have',
+  'what have you got',
+  'am i',
+  'do i have',
+  'do you have',
+  'how many',
+  'how much do you have',
+  'was ist mein',
+  'was ist meine',
+  'bin ich',
+  'habe ich',
+  'hast du',
+  'wie viele',
+].map((p) => normTokens(p));
+
+/** Openings that mark a request for an ACTION. */
+const ACTION_OPENERS = [
+  'can you',
+  'could you',
+  'would you',
+  'will you',
+  'please',
+  'i want you to',
+  'kannst du',
+  'koenntest du',
+  'wuerdest du',
+  'bitte',
+  'ich moechte dass du',
+].map((p) => normTokens(p));
+
+/** Nouns that make a state question unmistakable. */
+const STATE_NOUNS = new Set(
+  ['status', 'state', 'zustand', 'statistik', 'statistiken', 'statistics', 'stats'].flatMap((w) =>
+    normTokens(w),
+  ),
+);
+
+/** Does this instruction OPEN with one of the given phrases? */
+function opensWith(instr: string[], phrases: string[][]): boolean {
+  return phrases.some((p) => {
+    if (p.length > instr.length) return false;
+    for (let i = 0; i < p.length; i++) if (instr[i] !== p[i]) return false;
+    return true;
+  });
+}
+
+/**
+ * True when the message is asking about state rather than requesting an action.
+ *
+ * A consent prompt must only ever appear because someone asked for the action.
+ * "whats my publish status?" contains the word `publish`, which used to outrank
+ * STATUS and put a consent confirmation in front of a member who had asked a
+ * question about their own record.
+ */
+function isStateQuestion(instr: string[]): boolean {
+  if (opensWith(instr, ACTION_OPENERS)) return false;
+  if (opensWith(instr, STATE_OPENERS)) return true;
+  // "publish status" with no opener at all is still a state question.
+  return instr.some((t) => STATE_NOUNS.has(t));
+}
+
 /* ── Price slots (CCB-S3-004 §1) ─────────────────────────────────────────── */
 
 /**
@@ -868,6 +951,23 @@ const PRICE_STOPWORDS = new Set([
   'wechselkurs',
   'us',
   'usd',
+  // CCB-S3-006 §3 — "one real bitcoin" resolved the asset as "real".
+  'one',
+  'real',
+  'actual',
+  'actually',
+  'currently',
+  'just',
+  'simply',
+  'exactly',
+  'ein',
+  'eine',
+  'echte',
+  'echter',
+  'echtes',
+  'aktuell',
+  'genau',
+  'einfach',
 ]);
 
 /** Tokens that introduce the QUOTE currency. */
@@ -881,6 +981,8 @@ const FOR_MARKERS = new Set(['for', 'fuer', 'per']);
 
 interface PriceSlots {
   base?: string;
+  /** Other words that could be the asset, best first (CCB-S3-006 §3). */
+  baseAlternates?: string[];
   quote?: string;
   amount?: number;
 }
@@ -899,6 +1001,35 @@ interface PriceSlots {
  *   `price of HEX in EUR`                     → base HEX, quote EUR
  *   `how much Ethereum do I get for 1m HEX`   → quote Ethereum, base HEX (reversed)
  */
+/**
+ * Recognises a bare conversion with no price keyword at all: `1 million hex in
+ * eth`, `100 hex in eur`, `hex in euro`. Members write these constantly and
+ * nothing in the lexicon matches them, so they resolved to UNKNOWN.
+ *
+ * Deliberately shape-based rather than lexical, and deliberately narrow: an
+ * amount and/or an asset word, a quote marker, another asset word, and few
+ * spare tokens. It only runs when nothing else matched, so it can never
+ * outrank a real instruction.
+ */
+function looksLikeConversion(tokens: Token[]): boolean {
+  const norms = tokens.map((t) => t.norm);
+  const marker = norms.findIndex((n) => QUOTE_MARKERS.has(n));
+  if (marker <= 0 || marker === norms.length - 1) return false;
+
+  const candidate = (i: number): boolean => {
+    const n = norms[i];
+    if (!n) return false;
+    if (PRICE_STOPWORDS.has(n)) return false;
+    if (unitMultiplier(n) !== undefined) return false;
+    if (parseAmountAt(norms, i)) return false;
+    return true;
+  };
+  const before = norms.slice(0, marker).some((_, i) => candidate(i));
+  const after = norms.slice(marker + 1).some((_, i) => candidate(marker + 1 + i));
+  // Bounded: a long sentence containing "in" is not a conversion request.
+  return before && after && norms.length <= 10;
+}
+
 function extractPriceSlots(tokens: Token[]): PriceSlots {
   const norms = tokens.map((t) => t.norm);
   const slots: PriceSlots = {};
@@ -997,6 +1128,20 @@ function extractPriceSlots(tokens: Token[]): PriceSlots {
       }
     }
   }
+  // Every other candidate word, in sentence order (CCB-S3-006 §3). The resolver
+  // cannot know which of them is a real asset, so it offers them and the price
+  // service prefers whichever is already pinned. That is what turns
+  // "one real bitcoin" into Bitcoin instead of an unknown token called "real".
+  const alternates: string[] = [];
+  for (let i = 0; i < norms.length; i++) {
+    if (!isCandidate(i)) continue;
+    const raw = tokens[i]?.raw;
+    if (!raw) continue;
+    if (raw === slots.base || raw === slots.quote) continue;
+    if (!alternates.includes(raw)) alternates.push(raw);
+  }
+  if (alternates.length > 0) slots.baseAlternates = alternates;
+
   return slots;
 }
 
@@ -1042,11 +1187,39 @@ function resolveRules(text: string, ctx: IntentContext): IntentResult {
     }
   }
 
+  // §1 — a bare "N X in Y" carries no price keyword, so nothing above matched.
+  // Checked only when nothing else won, so it can never outrank a real
+  // instruction, and only while the PRICE intent is actually active.
+  if (
+    (!best || best.score < ctx.threshold) &&
+    isActiveIntent('PRICE') &&
+    looksLikeConversion(tokens)
+  ) {
+    const slots: IntentSlots = {};
+    const price = extractPriceSlots(tokens);
+    if (price.base !== undefined) slots.base = price.base;
+    if (price.quote !== undefined) slots.quote = price.quote;
+    if (price.amount !== undefined) slots.amount = price.amount;
+    if (price.baseAlternates?.length) slots.baseAlternates = price.baseAlternates;
+    if (slots.base && slots.quote) {
+      return { intent: 'PRICE', confidence: 0.9, slots, lang: fallbackLang };
+    }
+  }
+
   if (!best || best.score < ctx.threshold) {
     return unknownResult(best?.pattern.lang ?? fallbackLang);
   }
 
-  const { pattern, match, score } = best;
+  let { pattern } = best;
+  const { match, score } = best;
+
+  // §7a — a question about state must never become a request for an action.
+  // Re-point it at STATUS rather than merely lowering its score, because the
+  // member did ask something answerable.
+  if ((pattern.intent === 'PUBLISH' || pattern.intent === 'UNPUBLISH') && isStateQuestion(instr)) {
+    pattern = { ...pattern, intent: 'STATUS' };
+  }
+
   const slots: IntentSlots = {};
 
   if (pattern.intent === 'SEARCH') {
@@ -1059,6 +1232,7 @@ function resolveRules(text: string, ctx: IntentContext): IntentResult {
     if (price.base !== undefined) slots.base = price.base;
     if (price.quote !== undefined) slots.quote = price.quote;
     if (price.amount !== undefined) slots.amount = price.amount;
+    if (price.baseAlternates?.length) slots.baseAlternates = price.baseAlternates;
   }
 
   // Third-party targeting only matters where consent is at stake.
@@ -1068,6 +1242,21 @@ function resolveRules(text: string, ctx: IntentContext): IntentResult {
   }
 
   return { intent: pattern.intent, confidence: score, slots, lang: pattern.lang };
+}
+
+/**
+ * Price slots for a bare fragment, used by the carry-over path (CCB-S3-006 §7c).
+ * Exported for `resolver.ts` only; callers still go through the seam.
+ */
+export function priceSlotsFor(text: string): IntentSlots {
+  const tokens = tokenize(text);
+  const price = extractPriceSlots(tokens);
+  const slots: IntentSlots = {};
+  if (price.base !== undefined) slots.base = price.base;
+  if (price.quote !== undefined) slots.quote = price.quote;
+  if (price.amount !== undefined) slots.amount = price.amount;
+  if (price.baseAlternates?.length) slots.baseAlternates = price.baseAlternates;
+  return slots;
 }
 
 /** The rule engine as an {@link IntentResolver}. Registered by default. */

@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-004**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-006**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -53,6 +53,72 @@ import — no change to the sidebar, the resolver, or the settings framework.
 `src/interaction/intent.ts` (`setActiveIntents`, `isActiveIntent`);
 `src/interaction/resolver.ts`; `src/interaction/rules.ts`; `src/web/views/plugins.ts`;
 `scripts/verify-price.ts` §1.
+
+---
+
+### D-039 — A question about state is never a request for an action
+
+**Status: IMPLEMENTED (CCB-S3-006 §7a).**
+**Decision.** The resolver now distinguishes a STATE QUESTION from an ACTION REQUEST and
+re-points the former at `STATUS`. The distinction is not question-versus-command — "can you
+publish me?" is a question and a genuine request — it is whether the member is asking what IS
+or asking for something to HAPPEN. Openers decide: `what is my`, `am I`, `do you have`,
+`how many`, `bin ich`, `wie viele` mark state; `can you`, `please`, `kannst du`
+and bare imperatives mark action. `publish status`, `publication status`, `my status`,
+`Veröffentlichungsstatus` are registered STATUS phrases, and `statistics`/`stats`/
+`Statistik`/`Zahlen` join the STATUS vocabulary.
+**Rationale.** Live, `whats my publish status?` produced the PUBLISH confirmation prompt: the
+word `publish` outranked STATUS, so a member asking about their own record was shown a
+consent prompt for an action they never requested. Consent prompts must appear only because
+someone asked for the action; anything else trains members to dismiss them, which is exactly
+the wrong reflex for the one prompt that matters.
+**Evidence.** `src/interaction/rules.ts` (`isStateQuestion`, STATE/ACTION openers);
+`scripts/verify-interaction.ts` §18.
+
+---
+
+### D-040 — Elliptical follow-ups inherit only READ-ONLY intents, and only when short
+
+**Status: IMPLEMENTED (CCB-S3-006 §7c).**
+**Decision.** Inside the follow-up window, a message that resolves to UNKNOWN may inherit the
+member's previous intent and re-resolve with the new slot: `monero?` after a price answer is
+a price question. Two guards make it safe. Only `PRICE` and `SEARCH` are ever remembered or
+inherited, so no fragment can become a consent action however it is phrased; and the fragment
+must be SHORT (four tokens or fewer), because an elliptical follow-up is short by definition.
+Admin-switchable as `intentCarryover`, default on. The follow-up window is also now refreshed
+by the slash-command path, which previously sent through the transport without touching it.
+**Rationale.** Members wrote `and of monero?` and were ignored entirely, then had to retype
+the whole sentence. The read-only restriction is stated as an explicit guard rather than left
+as an emergent property, because "no path currently reaches PUBLISH" is not a property anyone
+can rely on after the next change. The length bound was added after the harness caught the
+first version turning ordinary in-window chatter into price questions — the same
+over-eagerness CCB-S3-005 spent a briefing removing.
+**Evidence.** `src/interaction/engine.ts` (`CARRY_OVER_MAX_TOKENS`, carry-over block);
+`src/interaction/state.ts` (`rememberIntent`); `src/interaction/resolver.ts`
+(`carryOverSlots`); `scripts/verify-interaction.ts` §18.
+
+---
+
+### D-041 — Majors are pre-pinned; genuine ambiguity is ranked, capped and auto-resolved on dominance
+
+**Status: IMPLEMENTED (CCB-S3-006 §2, §3, §4, §7e).**
+**Decision.** The top assets by market capitalisation are seeded into `asset_mappings` as
+operator-locked rows, under BOTH ticker and common name (`btc`/`bitcoin`, `xmr`/`monero`),
+so they never disambiguate. When ambiguity is genuine, candidates are ranked by market
+capitalisation (pool liquidity for DEX results), capped at a configurable maximum (default 4),
+shown with that figure beside each, and AUTO-RESOLVED when the leader exceeds the runner-up by
+a configurable factor (default 100x). Filler and quantity words are stripped before symbol
+extraction, and a candidate that is already pinned beats an unknown word earlier in the
+sentence. Display precision follows magnitude with four significant digits below 1, so a
+non-zero price can never render as `0`.
+**Rationale.** Live, `btc` offered "Bitcoin AI" and "Bitcoin X" as alternatives to Bitcoin;
+`monero` never offered Monero at all; `one real bitcoin` resolved the asset as "real"; and
+`1 HEX` displayed as `0 USD` against a true value near $0.00048. A price of zero is not a
+rounding artefact to a reader, it is a claim that the thing is worthless.
+**Evidence.** `migrations/011_seed_major_assets.sql`; `src/price/format.ts`;
+`src/plugins/crypto-prices/service.ts` (`weightOf`, dominance, `preferPinned`);
+`src/interaction/rules.ts` (filler stopwords, `looksLikeConversion`);
+`scripts/verify-price.ts` §10b.
 
 ---
 

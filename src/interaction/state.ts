@@ -49,6 +49,8 @@ interface MemberEntry {
   followUpUntil: number;
   /** Language detected for this member, kept for the follow-up window (§6). */
   lang: string | undefined;
+  /** Last READ-ONLY intent this member used, for elliptical follow-ups (§7c). */
+  lastIntent: string | undefined;
   pending: PendingConfirmation | undefined;
   choice: PendingChoice | undefined;
   /** Consecutive nickname addresses; resets on a proper address or after a rest. */
@@ -97,6 +99,7 @@ export class ConversationState {
       entry = {
         followUpUntil: 0,
         lang: undefined,
+        lastIntent: undefined,
         pending: undefined,
         choice: undefined,
         nicknameStreak: 0,
@@ -147,6 +150,22 @@ export class ConversationState {
     const entry = this.members.get(ConversationState.key(groupId, memberId));
     if (!entry || entry.followUpUntil <= now) return undefined;
     return entry.lang;
+  }
+
+  /**
+   * Remembers the last READ-ONLY intent, so `monero?` after a price answer can
+   * inherit it. Consent intents are deliberately never stored: carry-over must
+   * not be able to produce one.
+   */
+  rememberIntent(groupId: number, memberId: string, intent: string): void {
+    this.member(groupId, memberId).lastIntent = intent;
+  }
+
+  /** The remembered intent, but only while the follow-up window is still open. */
+  rememberedIntent(groupId: number, memberId: string, now: number): string | undefined {
+    const entry = this.members.get(ConversationState.key(groupId, memberId));
+    if (!entry || entry.followUpUntil <= now) return undefined;
+    return entry.lastIntent;
   }
 
   closeFollowUp(groupId: number, memberId: string): void {

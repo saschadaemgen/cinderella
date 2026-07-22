@@ -24,7 +24,7 @@ import {
   type IntentResult,
   type IntentSlots,
 } from './intent.js';
-import { ruleResolver } from './rules.js';
+import { priceSlotsFor, ruleResolver } from './rules.js';
 
 let active: IntentResolver = ruleResolver;
 /** Fallback used when `active` fails. Always the deterministic engine. */
@@ -67,6 +67,13 @@ function sanitize(raw: unknown, lang: string): IntentResult {
   if (typeof rawSlots['targetName'] === 'string' && rawSlots['targetName'].trim()) {
     slots.targetName = rawSlots['targetName'].trim().slice(0, 80);
   }
+  if (Array.isArray(rawSlots['baseAlternates'])) {
+    const alts = (rawSlots['baseAlternates'] as unknown[])
+      .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+      .map((v) => v.trim().slice(0, 40))
+      .slice(0, 8);
+    if (alts.length > 0) slots.baseAlternates = alts;
+  }
   for (const key of ['base', 'quote'] as const) {
     const v = rawSlots[key];
     if (typeof v === 'string' && v.trim()) slots[key] = v.trim().slice(0, 40);
@@ -84,6 +91,22 @@ function sanitize(raw: unknown, lang: string): IntentResult {
     slots,
     lang: typeof r['lang'] === 'string' && r['lang'] ? r['lang'] : lang,
   };
+}
+
+/**
+ * Slots for an elliptical follow-up that inherits a previous intent
+ * (CCB-S3-006 §7c). Kept behind the seam so callers still never import the rule
+ * engine, and restricted to READ-ONLY intents by its own signature — there is no
+ * argument value that yields PUBLISH or UNPUBLISH.
+ */
+export function carryOverSlots(text: string, intent: 'PRICE' | 'SEARCH'): IntentResult | null {
+  if (intent === 'SEARCH') {
+    const q = text.trim();
+    return q ? { intent: 'SEARCH', confidence: 0.7, slots: { query: q }, lang: 'en' } : null;
+  }
+  const slots = priceSlotsFor(text);
+  if (!slots.base) return null;
+  return { intent: 'PRICE', confidence: 0.7, slots, lang: 'en' };
 }
 
 /**

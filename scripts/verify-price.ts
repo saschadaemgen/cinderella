@@ -20,8 +20,8 @@ import {
   type AssetMapping,
 } from '../src/db/asset-mappings.js';
 import { parseAmountAt, parseNumber } from '../src/price/amount.js';
-import { formatValue } from '../src/price/format.js';
-import { CryptoPriceService } from '../src/plugins/crypto-prices/service.js';
+import { formatCompact, formatValue } from '../src/price/format.js';
+import { candidateMetric, CryptoPriceService } from '../src/plugins/crypto-prices/service.js';
 import {
   DEFAULT_CRYPTO_PRICES,
   normalizeCryptoPrices,
@@ -190,15 +190,15 @@ async function main(): Promise<void> {
   check('three providers ship', Object.keys(DEFAULT_CRYPTO_PRICES.providers).length === 3);
   check(
     'the chain is ordered',
-    DEFAULT_CRYPTO_PRICES.chain.join(',') === 'coinmarketcap,coingecko,dexscreener',
+    DEFAULT_CRYPTO_PRICES.chain.join(',') === 'coingecko,dexscreener,coinmarketcap',
   );
   check('base currency defaults to USD', DEFAULT_CRYPTO_PRICES.baseCurrency === 'USD');
   check('cache TTL defaults to 60s', DEFAULT_CRYPTO_PRICES.cacheTtlSeconds === 60);
   check('the disclaimer is OFF by default', DEFAULT_CRYPTO_PRICES.disclaimer === '');
   check(
     'a provider left out of the order is still available, just last',
-    normalizeCryptoPrices({ chain: 'dexscreener' }).chain.join(',') ===
-      'dexscreener,coinmarketcap,coingecko',
+    normalizeCryptoPrices({ chain: 'dexscreener' }).chain[0] === 'dexscreener' &&
+      normalizeCryptoPrices({ chain: 'dexscreener' }).chain.length === 3,
   );
 
   /* ── 4. Amount parsing ─────────────────────────────────────────────── */
@@ -234,7 +234,9 @@ async function main(): Promise<void> {
   const secondary = new StubProvider('coingecko', 'CoinGecko', 'Powered by CoinGecko');
   const tertiary = new StubProvider('dexscreener', 'Dexscreener', '');
 
-  let settings = normalizeCryptoPrices({});
+  // The stubs are named after the real providers, so pin the order explicitly
+  // rather than depending on the shipped default (which §8 changed).
+  let settings = normalizeCryptoPrices({ chain: 'coinmarketcap, coingecko, dexscreener' });
   const svc = new CryptoPriceService({
     db,
     settings: () => settings,
@@ -243,19 +245,19 @@ async function main(): Promise<void> {
   });
   let nowMs = 1_000_000;
 
-  primary.knows = [{ id: '5015', symbol: 'BTC', name: 'Bitcoin' }];
+  primary.knows = [{ id: '5015', symbol: 'TESTCOIN', name: 'Testcoin' }];
   primary.price = 60000;
-  const first = await svc.resolve('BTC');
+  const first = await svc.resolve('TESTCOIN');
   check('an unambiguous symbol resolves', first.kind === 'mapping');
   check('the provider was asked once', primary.resolveCalls === 1);
-  const pinned = await findMapping(db, 'BTC');
+  const pinned = await findMapping(db, 'TESTCOIN');
   check(
     'and the mapping was PINNED to the database',
     pinned?.providerIds['coinmarketcap'] === '5015',
   );
   check('recording which provider resolved it', pinned?.resolvedBy === 'coinmarketcap');
 
-  const again = await svc.resolve('BTC');
+  const again = await svc.resolve('TESTCOIN');
   check('asking again uses the pin', again.kind === 'mapping');
   check(
     'and does NOT re-resolve at the provider',
@@ -267,16 +269,16 @@ async function main(): Promise<void> {
   section('6. Ambiguity — asked once, the answer pinned globally');
 
   primary.knows = [
-    { id: '5015', symbol: 'HEX', name: 'HEX', chain: 'ethereum', contract: '0x2b59' },
+    { id: '5015', symbol: 'CLASH', name: 'Clash', chain: 'ethereum', contract: '0x2b59' },
     {
       id: '28928',
-      symbol: 'HEX',
-      name: 'HEX (PulseChain)',
+      symbol: 'CLASH',
+      name: 'Clash (PulseChain)',
       chain: 'pulsechain',
       contract: '0x2b59',
     },
   ];
-  const ambiguous = await svc.resolve('HEX');
+  const ambiguous = await svc.resolve('CLASH');
   check('two candidates produce an ambiguity, not a guess', ambiguous.kind === 'ambiguous');
   if (ambiguous.kind === 'ambiguous') {
     check('  both options are offered', ambiguous.options.length === 2);
@@ -284,19 +286,19 @@ async function main(): Promise<void> {
       '  and the provider that produced them is carried along',
       ambiguous.provider === 'coinmarketcap',
     );
-    check('  nothing was pinned yet', (await findMapping(db, 'HEX')) === null);
+    check('  nothing was pinned yet', (await findMapping(db, 'CLASH')) === null);
 
     // The member picks the Ethereum one.
     const picked = ambiguous.options[0] as AssetCandidate;
-    await svc.pin('HEX', picked, ambiguous.provider, 'member-choice');
+    await svc.pin('CLASH', picked, ambiguous.provider, 'member-choice');
   }
-  const hexPin = await findMapping(db, 'HEX');
-  check('the answer is pinned', hexPin?.displayName === 'HEX');
+  const hexPin = await findMapping(db, 'CLASH');
+  check('the answer is pinned', hexPin?.displayName === 'Clash');
   check('with the chain that distinguishes it', hexPin?.chain === 'ethereum');
   check('and marked as a member choice', hexPin?.source === 'member-choice');
 
   const callsBefore = primary.resolveCalls;
-  const afterChoice = await svc.resolve('HEX');
+  const afterChoice = await svc.resolve('CLASH');
   check('the question is never asked again', afterChoice.kind === 'mapping');
   check('and no provider is consulted', primary.resolveCalls === callsBefore);
 
@@ -332,7 +334,7 @@ async function main(): Promise<void> {
   /* ── 8. Quotes, failover, attribution, cache ───────────────────────── */
   section('8. Quotes — failover, attribution, cache');
 
-  const btc = (await findMapping(db, 'BTC')) as AssetMapping;
+  const btc = (await findMapping(db, 'TESTCOIN')) as AssetMapping;
   primary.price = 60000;
   const q1 = await svc.quote(btc, 'usd');
   check('the first provider in the chain answers', q1?.provider === 'coinmarketcap');
@@ -352,12 +354,12 @@ async function main(): Promise<void> {
   // Failover: the first provider goes down.
   primary.down = true;
   await upsertMapping(db, {
-    symbol: 'BTC',
-    displayName: 'Bitcoin',
-    providerIds: { coingecko: 'bitcoin' },
+    symbol: 'TESTCOIN',
+    displayName: 'Testcoin',
+    providerIds: { coingecko: 'testcoin' },
     source: 'resolved',
   });
-  const btc2 = (await findMapping(db, 'BTC')) as AssetMapping;
+  const btc2 = (await findMapping(db, 'TESTCOIN')) as AssetMapping;
   secondary.price = 60100;
   svc.clearCache();
   const q2 = await svc.quote(btc2, 'usd');
@@ -373,12 +375,13 @@ async function main(): Promise<void> {
   svc.clearCache();
   const q3 = await svc.quote(btc2, 'usd');
   check('with every provider down there is no quote at all', q3 === null);
-  const outcome = await svc.price('BTC', 'USD', 1);
+  const outcome = await svc.price('TESTCOIN', 'USD', 1);
   check('which the caller sees as "unavailable", never a number', outcome.kind === 'unavailable');
   primary.down = secondary.down = tertiary.down = false;
 
   // Disabling all providers in settings.
   settings = normalizeCryptoPrices({
+    chain: 'coinmarketcap, coingecko, dexscreener',
     providers: {
       coinmarketcap: { enabled: false },
       coingecko: { enabled: false },
@@ -389,19 +392,19 @@ async function main(): Promise<void> {
   secondary.setEnabled(false);
   tertiary.setEnabled(false);
   svc.clearCache();
-  const allOff = await svc.price('BTC', 'USD', 1);
+  const allOff = await svc.price('TESTCOIN', 'USD', 1);
   check('disabling every provider gives the honest answer too', allOff.kind === 'unavailable');
   primary.setEnabled(true);
   secondary.setEnabled(true);
   tertiary.setEnabled(true);
-  settings = normalizeCryptoPrices({});
+  settings = normalizeCryptoPrices({ chain: 'coinmarketcap, coingecko, dexscreener' });
 
   /* ── 9. Conversion ─────────────────────────────────────────────────── */
   section('9. Conversion — cross rate through the base currency');
 
   svc.clearCache();
-  primary.knows = [{ id: 'eth', symbol: 'ETH', name: 'Ethereum' }];
-  await svc.resolve('ETH');
+  primary.knows = [{ id: 'conv2', symbol: 'CONVB', name: 'ConvB' }];
+  await svc.resolve('CONVB');
   await upsertMapping(db, {
     symbol: 'HEXX',
     displayName: 'HEX',
@@ -412,14 +415,18 @@ async function main(): Promise<void> {
 
   // One stub price for everything, so the cross rate is 1:1 and checkable.
   primary.price = 2000;
-  const conv = await svc.price('HEXX', 'ETH', 1_000_000);
+  const conv = await svc.price('HEXX', 'CONVB', 1_000_000);
   check('an asset-to-asset question is a conversion', conv.kind === 'conversion');
   if (conv.kind === 'conversion') {
     check('  crossed through the base currency', conv.value === 1_000_000);
     check('  and attributed', conv.attribution.includes('CoinMarketCap'));
   }
 
-  check('sub-cent values keep their digits', formatValue(0.00048006, 8) === '0.00048006');
+  check(
+    'sub-cent values keep four significant digits (CCB-S3-006 §2)',
+    formatValue(0.00048006, 8) === '0.0004801',
+    formatValue(0.00048006, 8),
+  );
   check('large values are grouped', formatValue(65727.1234, 8) === '65,727.12');
   check('never scientific notation', !formatValue(0.00000001234, 8).includes('e'));
 
@@ -430,6 +437,100 @@ async function main(): Promise<void> {
   check(
     'every row carries a canonical id or a chain+contract',
     all.every((m) => Object.keys(m.providerIds).length > 0 || (m.chain && m.contract)),
+  );
+
+  /* ── 10b. CCB-S3-006 fixes ─────────────────────────────────────────── */
+  section('10b. CCB-S3-006 — precision, seeded majors, ranking, dominance');
+
+  // §2 precision: a non-zero price must never render as zero, at any magnitude.
+  check('~65,000 renders with separators', formatValue(65583.26, 8) === '65,583.26');
+  check('~571 keeps its decimal', formatValue(571.4, 8) === '571.4');
+  check(
+    '~0.00047 keeps significant digits, not 0',
+    formatValue(0.00047884, 4) === '0.0004788',
+    formatValue(0.00047884, 4),
+  );
+  check(
+    '~0.000000012 survives too',
+    formatValue(0.000000012, 4) === '0.000000012',
+    formatValue(0.000000012, 4),
+  );
+  check('a non-zero value NEVER formats as "0"', formatValue(0.0000000000001, 2) !== '0');
+  check(
+    'compact figures for the candidate list',
+    formatCompact(1.3e12) === '$1.3T' && formatCompact(412000) === '$412K',
+  );
+
+  // §4/§7e — the majors are pre-pinned and never disambiguate.
+  for (const sym of ['BTC', 'BITCOIN', 'ETH', 'ETHEREUM', 'XMR', 'MONERO', 'HEX']) {
+    const m = await findMapping(db, sym);
+    check(`${sym} is pre-pinned and locked`, m !== null && m.locked, m?.displayName);
+  }
+  const hexSeed = await findMapping(db, 'HEX');
+  check(
+    'HEX is pinned to the Ethereum contract, not the PulseChain fork',
+    hexSeed?.chain === 'ethereum' &&
+      hexSeed?.contract === '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39',
+  );
+  const majorCalls = primary.resolveCalls;
+  const btcAgain = await svc.resolve('BTC');
+  check(
+    'a major never reaches a provider',
+    btcAgain.kind === 'mapping' && primary.resolveCalls === majorCalls,
+  );
+
+  // §4 dominance auto-resolve.
+  primary.knows = [
+    { id: 'big', symbol: 'DOM', name: 'Dominant', marketCap: 1_000_000_000_000 },
+    { id: 'small', symbol: 'DOM', name: 'Clone', marketCap: 100_000 },
+  ];
+  const dominant = await svc.resolve('DOM');
+  check('a dominant candidate auto-resolves instead of asking', dominant.kind === 'mapping');
+  if (dominant.kind === 'mapping') {
+    check('  and picks the dominant one', dominant.mapping.displayName === 'Dominant');
+    check('  flagged as auto-resolved', dominant.autoResolved === true);
+  }
+
+  // §4 genuine ambiguity: ranked, capped, with a visible figure.
+  primary.knows = [
+    { id: 'a', symbol: 'AMB', name: 'Small A', marketCap: 300_000 },
+    { id: 'b', symbol: 'AMB', name: 'Big B', marketCap: 900_000 },
+    { id: 'c', symbol: 'AMB', name: 'Mid C', marketCap: 600_000 },
+    { id: 'd', symbol: 'AMB', name: 'Tiny D', marketCap: 100_000 },
+    { id: 'e', symbol: 'AMB', name: 'Tiny E', marketCap: 90_000 },
+  ];
+  const amb2 = await svc.resolve('AMB');
+  check('genuine ambiguity still asks', amb2.kind === 'ambiguous');
+  if (amb2.kind === 'ambiguous') {
+    check('  ranked by market cap, biggest first', amb2.options[0]?.name === 'Big B');
+    check(
+      '  capped at the configured maximum',
+      amb2.options.length === DEFAULT_CRYPTO_PRICES.maxCandidates,
+    );
+    check(
+      '  each candidate carries a visible figure',
+      candidateMetric(amb2.options[0] as never) === '$900K',
+    );
+  }
+
+  // §4 dominance is configurable and can be switched off.
+  settings = normalizeCryptoPrices({
+    chain: 'coinmarketcap, coingecko, dexscreener',
+    dominanceFactor: 0,
+  });
+  primary.knows = [
+    { id: 'big2', symbol: 'DOM2', name: 'Dominant', marketCap: 1_000_000_000_000 },
+    { id: 'small2', symbol: 'DOM2', name: 'Clone', marketCap: 100 },
+  ];
+  const noAuto = await svc.resolve('DOM2');
+  check('dominance auto-resolve can be switched off', noAuto.kind === 'ambiguous');
+  settings = normalizeCryptoPrices({ chain: 'coinmarketcap, coingecko, dexscreener' });
+
+  // §5 the Dexscreener liquidity floor is configurable.
+  check(
+    'the Dexscreener liquidity floor and 60/min limit ship as defaults',
+    DEFAULT_CRYPTO_PRICES.providers['dexscreener']?.rateLimitPerMinute === 60 &&
+      DEFAULT_CRYPTO_PRICES.providers['dexscreener']?.minLiquidityUsd === 25_000,
   );
 
   /* ── 11. Live (keyless providers only) ─────────────────────────────── */

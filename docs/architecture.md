@@ -391,6 +391,15 @@ confirmation offer (so a handshake cannot change language midway) → confident 
 the language remembered for this member's follow-up window → the configured default. Only
 languages with real persona copy are offered.
 
+**A state question is never an action request (CCB-S3-006).** The resolver re-points
+`whats my publish status?` at STATUS instead of PUBLISH. Consent prompts appear only because
+someone asked for the action.
+
+**Elliptical follow-ups (CCB-S3-006).** Inside the window, a short UNKNOWN fragment inherits
+the member's previous READ-ONLY intent, so `monero?` after a price answer is a price
+question. Bounded twice: only PRICE and SEARCH are inheritable, and only fragments of four
+tokens or fewer qualify.
+
 **Acting is stricter than understanding.** Inside the follow-up window she is hearing messages
 that were never marked for her, so the confidence bar there is raised to 0.8 — above the score
 of a lone keyword. `I'll publish the photos later` is left alone; `publish me` is not.
