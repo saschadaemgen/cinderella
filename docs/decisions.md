@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-005**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,45 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-034 — Matching the wake word is not being spoken to: forwarded messages, weak signals, and per-message reply language
+
+**Status: IMPLEMENTED (CCB-S3-005).**
+**Decision.** Four guards now stand between "her name appeared first" and "she was
+addressed", each independently switchable in the console: **forwarded messages never reach
+the interaction layer**; an **UNKNOWN result is answered only on a strong address signal**
+(a greeting, a direct reply to her, or being mid-conversation) and is otherwise met with
+silence; an instruction **longer than 200 characters** is acted on only at high confidence;
+and an optional **strict mode** requires a greeting before the name. Every ignored candidate
+is recorded in a near-miss log shown on the same admin page. Separately, the reply language
+is now detected **from the member's message** by a scored contest between hint sets, is
+remembered for the follow-up window, and is pinned for the duration of a confirmation
+handshake. Default addressing mode is `relaxed` (operator decision).
+**Rationale.** A forwarded announcement beginning "Cinderella now understands plain
+language" was answered in the group. The addressing logic was correct as specified; the
+specification was wrong. Measuring the incident showed it was worse than it looked: the
+first 240 characters of that announcement resolve to **PUBLISH at 0.94 confidence**, and
+only a hypothetical marker roughly a thousand characters in turned it into the harmless
+not-understood reply. Four of five realistic forwarded announcement texts reach a consent
+prompt. So the forwarded guard is a consent-safety control, not a politeness fix. Silence is
+the right default in a group: a missed address costs one repeated wake word, an unwanted
+interjection costs everyone's attention.
+**Root cause of the language bug.** `guessLanguage` asked `tokens.some(isGermanHint)` — a
+single hint word anywhere decided the whole message. The English announcement contained
+exactly one, `hallo`, in its own example of `Hallo Cinderella` working in any language. One
+token in 357 made her answer in German. Replaced by a scored contest between German and
+English hint sets requiring both a minimum hit count and a margin, so a lone false friend
+cannot win, plus an explicit `confident` flag so callers can fall back deliberately.
+**Evidence.** `src/interaction/engine.ts` (guards + `replyLanguage`);
+`src/interaction/near-misses.ts`; `src/interaction/text.ts` (`detectLanguage`);
+`src/capture/message.ts` (`forwarded`); `src/interaction/settings.ts` (`addressing`,
+`replyLanguageMode`); `src/web/views/interaction.ts`; `scripts/verify-interaction.ts` §16–§17.
+**Wire-level note.** The forwarded marker is `meta.itemForwarded`, NOT
+`meta.forwardedByMember`. The latter is group routing and is set on ordinary messages —
+verified in the live SimpleX database, where real `/publish` commands carry it. Keying the
+guard off that field would have silently broken consent commands.
 
 ---
 

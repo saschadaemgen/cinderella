@@ -37,12 +37,19 @@ import { detectAddress } from './addressing.js';
 import { resolveIntent } from './resolver.js';
 import { ConversationState, type PendingConfirmation } from './state.js';
 import {
+  NEAR_MISS_EXCERPT,
+  recordNearMiss,
+  recentNearMisses,
+  type NearMiss,
+  type NearMissReason,
+} from './near-misses.js';
+import {
   DEFAULT_INTERACTION,
   fillPersona,
   type InteractionSettings,
   type PersonaKey,
 } from './settings.js';
-import { fuzzyEquals, guessLanguage, normTokens } from './text.js';
+import { detectLanguage, fuzzyEquals, normTokens } from './text.js';
 import { formatOutbound, type OutboundReply } from './reply.js';
 
 export interface InteractionDeps {
@@ -123,6 +130,17 @@ export class InteractionEngine {
     const now = this.now();
     this.state.prune(now);
 
+    // A FORWARDED message is content someone is sharing, not someone speaking to
+    // her (CCB-S3-005 §1). This guard is not cosmetic: a forwarded announcement
+    // whose first words are her name and which quotes the commands it documents
+    // resolves to PUBLISH at high confidence, which would post a consent
+    // confirmation prompt to the whole group. Checked BEFORE addressing, so no
+    // other guard has to be right for this one to hold.
+    if (msg.forwarded && s.addressing.ignoreForwarded) {
+      this.noteNearMiss(msg, s, now, 'forwarded', msg.text, undefined);
+      return false;
+    }
+
     const address = detectAddress(msg.text, s);
 
     // Nicknames (§6): a retort, and nothing else. Never resolved, never acted
@@ -131,26 +149,51 @@ export class InteractionEngine {
       return this.handleNickname(msg, s, now);
     }
 
+    const inWindow = this.state.inFollowUp(msg.groupId, msg.senderMemberId, now);
+
     let instruction: string;
     let explicit: boolean;
+    // A STRONG signal means she can be confident she was actually addressed, and
+    // is the difference between answering "I did not quite catch that" and
+    // staying out of it (§2). A bare name at the start of a message is the weak
+    // case — it is how announcements, quotes and third-person talk begin.
+    let strong: boolean;
 
     if (address.kind === 'wake') {
       this.state.resetNicknameStreak(msg.groupId, msg.senderMemberId);
       instruction = address.instruction;
       explicit = true;
+      strong = address.greeted && s.addressing.strongSignalGreeting;
     } else if (msg.quotedFromBot) {
       // A direct reply to one of her messages needs no wake word (§1.2).
       instruction = msg.text;
       explicit = true;
-    } else if (this.state.inFollowUp(msg.groupId, msg.senderMemberId, now)) {
+      strong = s.addressing.strongSignalReply;
+    } else if (inWindow) {
       // Mid-conversation (§2).
       instruction = msg.text;
       explicit = false;
+      strong = s.addressing.strongSignalWindow;
     } else {
+      // In strict mode a bare leading name is not an address. Log it, so the
+      // operator can see what strict mode is costing them rather than guessing.
+      if (s.addressing.mode === 'strict' && address.kind === 'none') {
+        const relaxed = detectAddress(msg.text, {
+          ...s,
+          addressing: { ...s.addressing, mode: 'relaxed' },
+        });
+        if (relaxed.kind === 'wake') {
+          this.noteNearMiss(msg, s, now, 'strict-mode-no-greeting', relaxed.instruction, undefined);
+        }
+      }
       return false;
     }
 
-    return this.dispatch(msg, s, instruction, explicit, now);
+    // Arriving inside the window is a strong signal in its own right, whichever
+    // way she was addressed.
+    if (inWindow && s.addressing.strongSignalWindow) strong = true;
+
+    return this.dispatch(msg, s, instruction, explicit, strong, now);
   }
 
   /**
@@ -172,9 +215,13 @@ export class InteractionEngine {
     s: InteractionSettings,
     instruction: string,
     explicit: boolean,
+    strong: boolean,
     now: number,
   ): Promise<boolean> {
     const pending = this.state.getPending(msg.groupId, msg.senderMemberId, now);
+    // The language of THIS message, decided before anything is resolved, so the
+    // not-understood reply is covered too (§6).
+    const lang = this.replyLanguage(msg, s, instruction, pending, now);
 
     // An outstanding offer is answered before anything else is considered.
     if (pending) {
@@ -201,9 +248,19 @@ export class InteractionEngine {
 
     const result = await resolveIntent(instruction, {
       threshold,
-      defaultLanguage: s.defaultLanguage,
+      defaultLanguage: lang,
     });
-    const lang = result.lang;
+
+    // The LENGTH GUARD (§3). A command is short. Long-form text that merely opens
+    // with her name — an announcement, a pasted article — is only acted on when
+    // the resolver is very sure, and is otherwise ignored rather than answered.
+    if (
+      instruction.length > s.addressing.maxInstructionLength &&
+      result.confidence < s.addressing.lengthGuardConfidence
+    ) {
+      this.noteNearMiss(msg, s, now, 'too-long', instruction, result);
+      return false;
+    }
 
     // A real new instruction supersedes an unanswered offer. Anything she did
     // NOT understand leaves the offer standing — a member who says "one moment"
@@ -279,9 +336,96 @@ export class InteractionEngine {
         // to be ordinary conversation than a failed instruction, so she says
         // nothing and lets it be archived like any other message.
         if (!explicit) return false;
+        // §2 — "I did not quite catch that" is only appropriate when she is
+        // confident she was being addressed at all. A bare leading name is not
+        // that: it is how a forwarded announcement, a quote, or a sentence about
+        // her begins. Weak signal means stay out of it, and leave a trace.
+        if (s.addressing.silenceOnUnknown && !strong) {
+          this.noteNearMiss(msg, s, now, 'weak-signal-unknown', instruction, result);
+          return false;
+        }
         await this.reply(msg, s, lang, 'notUnderstood', {});
         return true;
     }
+  }
+
+  /**
+   * Which language to answer in (§6), in order of authority:
+   *
+   *  1. `fixed` mode — always the configured default.
+   *  2. An OPEN confirmation offer — its language wins, so a prompt and its
+   *     result can never come back in different languages mid-handshake.
+   *  3. Confident detection from THIS message.
+   *  4. The language the exchange has been running in (a bare `yes` carries no
+   *     signal of its own).
+   *  5. The configured default.
+   *
+   * Only languages with real persona copy are offered: the map is the shipped
+   * and operator-edited set, never the machine-translated website locales.
+   */
+  private replyLanguage(
+    msg: CapturedMessage,
+    s: InteractionSettings,
+    instruction: string,
+    pending: PendingConfirmation | undefined,
+    now: number,
+  ): string {
+    const available = (code: string | undefined): string | undefined =>
+      code && s.persona[code] ? code : undefined;
+
+    const fallback = available(s.defaultLanguage) ?? 'en';
+    if (s.replyLanguageMode === 'fixed') return fallback;
+    if (pending) return available(pending.lang) ?? fallback;
+
+    // Detect from the member's own words, not from which keyword set matched —
+    // that is what left an English message answered in German.
+    const guess = detectLanguage(instruction || msg.text, fallback);
+    if (guess.confident) {
+      const lang = available(guess.lang) ?? fallback;
+      if (s.rememberMemberLanguage) {
+        this.state.rememberLanguage(msg.groupId, msg.senderMemberId, lang);
+      }
+      return lang;
+    }
+
+    if (s.rememberMemberLanguage) {
+      const remembered = available(
+        this.state.rememberedLanguage(msg.groupId, msg.senderMemberId, now),
+      );
+      if (remembered) return remembered;
+    }
+    return fallback;
+  }
+
+  /** Records an ignored candidate so the guards are visible, not invisible (§5). */
+  private noteNearMiss(
+    msg: CapturedMessage,
+    s: InteractionSettings,
+    now: number,
+    reason: NearMissReason,
+    text: string,
+    result: { intent: string; confidence: number } | undefined,
+  ): void {
+    log.debug(
+      `Interaction: ignored a message from ${msg.senderMemberId} (${reason})` +
+        `${result ? ` — ${result.intent} @ ${result.confidence.toFixed(2)}` : ''}.`,
+    );
+    if (!s.addressing.logNearMisses) return;
+    const entry: NearMiss = {
+      at: now,
+      groupId: msg.groupId,
+      who: msg.senderDisplayName,
+      reason,
+      excerpt: text.replace(/\s+/g, ' ').trim().slice(0, NEAR_MISS_EXCERPT),
+      intent: result?.intent,
+      confidence: result?.confidence,
+    };
+    recordNearMiss(entry);
+  }
+
+  /** Recent ignored candidates, for the admin console. */
+  nearMisses(limit?: number): NearMiss[] {
+    return recentNearMisses(limit);
   }
 
   /* ── Actions ───────────────────────────────────────────────────────────── */
@@ -384,7 +528,7 @@ export class InteractionEngine {
       return true;
     }
 
-    const lang = guessLanguage(msg.text, s.defaultLanguage);
+    const lang = this.replyLanguage(msg, s, msg.text, undefined, now);
     const list = this.retorts(s, lang);
     const index = this.state.pickRetort(msg.groupId, list.length, this.random);
     const retort = index >= 0 ? list[index] : undefined;

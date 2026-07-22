@@ -76,7 +76,53 @@ export interface NamePrefixSettings {
   templates: Record<string, string>;
 }
 
+/**
+ * How hard she insists on being addressed (CCB-S3-005 §4).
+ *
+ * `relaxed` — a bare leading name counts, plus the guards below.
+ * `strict`  — a greeting prefix is REQUIRED before the name; a bare leading
+ *             name is ignored. Direct replies, the follow-up window and slash
+ *             commands still work.
+ */
+export const ADDRESSING_MODES = ['relaxed', 'strict'] as const;
+export type AddressingMode = (typeof ADDRESSING_MODES)[number];
+
+/**
+ * Guards that decide whether matching the wake word actually means she was
+ * spoken to (CCB-S3-005). Every one is individually switchable on purpose: they
+ * change when she stays silent, and an operator tuning that should not have to
+ * read the code.
+ */
+export interface AddressingSettings {
+  mode: AddressingMode;
+  /** Forwarded messages never reach the interaction layer. */
+  ignoreForwarded: boolean;
+  /** Stay silent on UNKNOWN when the address signal was weak. */
+  silenceOnUnknown: boolean;
+  /** A greeting prefix counts as a strong signal. */
+  strongSignalGreeting: boolean;
+  /** A direct reply to one of her messages counts as a strong signal. */
+  strongSignalReply: boolean;
+  /** Arrival inside the follow-up window counts as a strong signal. */
+  strongSignalWindow: boolean;
+  /** Above this instruction length, only a high-confidence intent is accepted. */
+  maxInstructionLength: number;
+  /** The confidence an over-length message must reach to be acted on. */
+  lengthGuardConfidence: number;
+  /** Record ignored candidates so the operator can see what the guards caught. */
+  logNearMisses: boolean;
+}
+
+/** `auto` detects the language per message; `fixed` always uses the default. */
+export const REPLY_LANGUAGE_MODES = ['auto', 'fixed'] as const;
+export type ReplyLanguageMode = (typeof REPLY_LANGUAGE_MODES)[number];
+
 export interface InteractionSettings {
+  addressing: AddressingSettings;
+  /** How the reply language is chosen (CCB-S3-005 §6). */
+  replyLanguageMode: ReplyLanguageMode;
+  /** Keep a member's detected language for the length of the follow-up window. */
+  rememberMemberLanguage: boolean;
   /**
    * Whether her replies quote the triggering message, carry the member's name,
    * or are simply plain group messages (CCB-S3-003).
@@ -214,6 +260,21 @@ const RETORTS_DE = [
 ];
 
 export const DEFAULT_INTERACTION: InteractionSettings = {
+  // Operator decision (CCB-S3-005): ship `relaxed`. The guards below remove the
+  // observed false positives without costing the natural "Cinderella publish me".
+  addressing: {
+    mode: 'relaxed',
+    ignoreForwarded: true,
+    silenceOnUnknown: true,
+    strongSignalGreeting: true,
+    strongSignalReply: true,
+    strongSignalWindow: true,
+    maxInstructionLength: 200,
+    lengthGuardConfidence: 0.8,
+    logNearMisses: true,
+  },
+  replyLanguageMode: 'auto',
+  rememberMemberLanguage: true,
   // Non-quoting by default (CCB-S3-003). Switch to `mention` to have her address
   // the member by name, or back to `quote` for the original behaviour.
   replyMode: 'plain',
@@ -430,6 +491,21 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
   const o = rec(input);
   const nick = rec(o['nicknames']);
   const prefix = rec(o['namePrefix']);
+  const addr = rec(o['addressing']);
+
+  const rawAddressingMode = str(addr['mode'], d.addressing.mode, 16).trim().toLowerCase();
+  const addressingMode: AddressingMode = (ADDRESSING_MODES as readonly string[]).includes(
+    rawAddressingMode,
+  )
+    ? (rawAddressingMode as AddressingMode)
+    : d.addressing.mode;
+
+  const rawLangMode = str(o['replyLanguageMode'], d.replyLanguageMode, 16).trim().toLowerCase();
+  const replyLanguageMode: ReplyLanguageMode = (REPLY_LANGUAGE_MODES as readonly string[]).includes(
+    rawLangMode,
+  )
+    ? (rawLangMode as ReplyLanguageMode)
+    : d.replyLanguageMode;
 
   const persona = normalizePersona(o['persona']);
   const retorts = normalizeRetorts(o['retorts']);
@@ -449,6 +525,29 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
   const defaultLanguage = str(o['defaultLanguage'], d.defaultLanguage, 5).trim().toLowerCase();
 
   return {
+    addressing: {
+      mode: addressingMode,
+      ignoreForwarded: bool(addr['ignoreForwarded'], d.addressing.ignoreForwarded),
+      silenceOnUnknown: bool(addr['silenceOnUnknown'], d.addressing.silenceOnUnknown),
+      strongSignalGreeting: bool(addr['strongSignalGreeting'], d.addressing.strongSignalGreeting),
+      strongSignalReply: bool(addr['strongSignalReply'], d.addressing.strongSignalReply),
+      strongSignalWindow: bool(addr['strongSignalWindow'], d.addressing.strongSignalWindow),
+      maxInstructionLength: int(
+        addr['maxInstructionLength'],
+        20,
+        4000,
+        d.addressing.maxInstructionLength,
+      ),
+      lengthGuardConfidence: num(
+        addr['lengthGuardConfidence'],
+        0,
+        1,
+        d.addressing.lengthGuardConfidence,
+      ),
+      logNearMisses: bool(addr['logNearMisses'], d.addressing.logNearMisses),
+    },
+    replyLanguageMode,
+    rememberMemberLanguage: bool(o['rememberMemberLanguage'], d.rememberMemberLanguage),
     replyMode,
     namePrefix: {
       enabled: bool(prefix['enabled'], d.namePrefix.enabled),

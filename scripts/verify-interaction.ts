@@ -37,6 +37,8 @@ import {
   type InteractionSettings,
 } from '../src/interaction/settings.js';
 import { formatOutbound, sanitizeDisplayName } from '../src/interaction/reply.js';
+import { clearNearMisses, recentNearMisses } from '../src/interaction/near-misses.js';
+import { detectLanguage } from '../src/interaction/text.js';
 import { setLogLevel } from '../src/log.js';
 
 let failures = 0;
@@ -75,7 +77,12 @@ const fakeRandom = (): number => {
 let itemId = 1000;
 function makeMessage(
   text: string,
-  opts: { member?: string; group?: number; quotedFromBot?: boolean } = {},
+  opts: {
+    member?: string;
+    group?: number;
+    quotedFromBot?: boolean;
+    forwarded?: boolean;
+  } = {},
 ): CapturedMessage {
   return {
     groupId: opts.group ?? GROUP,
@@ -89,6 +96,7 @@ function makeMessage(
     text,
     linkPreview: undefined,
     file: undefined,
+    forwarded: opts.forwarded ?? false,
     quotedFromBot: opts.quotedFromBot ?? false,
     raw: {} as T.AChatItem,
   };
@@ -131,7 +139,12 @@ async function main(): Promise<void> {
   /** Sends one message through the engine and returns what she said back. */
   async function say(
     text: string,
-    opts: { member?: string; group?: number; quotedFromBot?: boolean } = {},
+    opts: {
+      member?: string;
+      group?: number;
+      quotedFromBot?: boolean;
+      forwarded?: boolean;
+    } = {},
   ): Promise<{ handled: boolean; replies: string[]; sent: { text: string; quote: boolean }[] }> {
     replies.length = 0;
     sent.length = 0;
@@ -508,9 +521,12 @@ async function main(): Promise<void> {
   check('help names the wake word', help.replies[0]?.includes('Cinderella, publish me') === true);
 
   coolDown();
-  const puzzled = await say('Cinderella flurble wibbet');
+  // CCB-S3-005: a GREETED message is a strong address signal, so an
+  // unrecognised one still gets the prompt. The bare-name form is now silent —
+  // asserted in section 16.
+  const puzzled = await say('Hey Cinderella flurble wibbet');
   check(
-    'an addressed but unrecognised message gets the "not understood" answer',
+    'a clearly-addressed but unrecognised message gets the "not understood" answer',
     puzzled.replies[0]?.includes('did not quite catch that') === true,
   );
   check('and is treated as a control message, not archived', puzzled.handled);
@@ -689,7 +705,9 @@ async function main(): Promise<void> {
 
   settings = normalizeInteraction({ ...settings, confidenceThreshold: 0.99 });
   coolDown();
-  const strict = await say('Cinderella publsh me');
+  // Greeted, so the weak-signal silence rule (CCB-S3-005) does not mask what
+  // this check is actually about: the confidence threshold.
+  const strict = await say('Hey Cinderella publsh me');
   check(
     'a high confidence threshold makes her ask instead of act',
     strict.replies[0]?.includes('did not quite catch that') === true,
@@ -919,6 +937,285 @@ async function main(): Promise<void> {
     'formatOutbound: a name that sanitises to nothing yields no stray prefix',
     formatOutbound('body', { mode: 'mention', prefixTemplate: '{name},', displayName: '###' })
       .text === 'body',
+  );
+
+  /* ── 16. Address guards + reply language (CCB-S3-005) ──────────────────── */
+
+  section('16. Address guards — forwarded, weak signals, length, strict mode');
+
+  settings = normalizeInteraction({});
+  clearNearMisses();
+  coolDown();
+  await clearConsent(ALICE);
+
+  // The message that caused this briefing: a long forwarded announcement whose
+  // first word is her name. Reproduced in shape, not verbatim — the live text is
+  // a member's message and does not belong in a public repository. What matters
+  // is reproduced exactly: forwarded, opens with the wake word, is long, and
+  // quotes the very commands it documents.
+  const ANNOUNCEMENT =
+    'Cinderella now understands plain language\n\n' +
+    'You can now talk to Cinderella instead of typing commands. Address her by name and ' +
+    'say what you want: Cinderella publish me, Cinderella, would you withdraw my ' +
+    'publication?, Hey Cinderella, what do you have on me?. Slash commands still work. ' +
+    'Hallo Cinderella works too, because the wake word is her name in every language. ' +
+    'Nothing is published without your explicit yes, and she will never act for anyone ' +
+    'but you.';
+
+  // Establish that this text really is dangerous without the guards, so the
+  // checks below are not proving something vacuous.
+  const dangerous = await resolveIntent(ANNOUNCEMENT.slice(0, 240), {
+    threshold: settings.confidenceThreshold,
+    defaultLanguage: 'en',
+  });
+  check(
+    'the announcement text really does resolve to a consent intent without the guards',
+    dangerous.intent === 'PUBLISH' && dangerous.confidence >= 0.8,
+    `${dangerous.intent} @ ${dangerous.confidence.toFixed(2)}`,
+  );
+
+  const forwarded = await say(ANNOUNCEMENT, { forwarded: true });
+  check(
+    'a FORWARDED announcement produces no reply at all',
+    !forwarded.handled && forwarded.replies.length === 0,
+  );
+  check('no consent was touched by it', (await consentRow(ALICE)).optedIn === false);
+  check(
+    'and it is recorded as a near miss with the reason',
+    recentNearMisses(1)[0]?.reason === 'forwarded',
+  );
+
+  clearNearMisses();
+  coolDown();
+  const forwardedShort = await say('Cinderella publish me', { forwarded: true });
+  check(
+    'ANY forwarded message is ignored, even a perfect instruction',
+    !forwardedShort.handled && forwardedShort.replies.length === 0,
+  );
+  check('a forwarded instruction changes no consent', (await consentRow(ALICE)).optedIn === false);
+
+  // Weak signal + UNKNOWN → silence.
+  clearNearMisses();
+  coolDown();
+  const weakUnknown = await say('Cinderella now understands plain language');
+  check(
+    'a bare-name message she cannot understand gets NO reply',
+    !weakUnknown.handled && weakUnknown.replies.length === 0,
+  );
+  check(
+    'and the near miss says why',
+    recentNearMisses(1)[0]?.reason === 'weak-signal-unknown',
+    recentNearMisses(1)[0]?.reason,
+  );
+
+  coolDown();
+  const strongUnknown = await say('Hey Cinderella blargh');
+  check(
+    'a GREETED message she cannot understand DOES get the not-understood prompt',
+    strongUnknown.replies[0]?.includes('did not quite catch that') === true,
+  );
+
+  coolDown();
+  await clearConsent(ALICE);
+  const bareInstruction = await say('Cinderella publish me');
+  check(
+    'a bare-name message she DOES understand still works',
+    bareInstruction.replies[0]?.includes('Say *yes*') === true,
+  );
+
+  // Length guard.
+  clearNearMisses();
+  coolDown();
+  const longWaffle =
+    'Cinderella ' +
+    'this is a long announcement about many things and none of them are a command '.repeat(4);
+  const longMsg = await say(longWaffle);
+  check(
+    'a long message beginning with her name is ignored',
+    !longMsg.handled && longMsg.replies.length === 0,
+  );
+  check('recorded as too-long', recentNearMisses(1)[0]?.reason === 'too-long');
+
+  coolDown();
+  await clearConsent(ALICE);
+  const longButClear = await say('Cinderella ' + 'please '.repeat(30) + 'publish me');
+  check(
+    'a long message WITH a high-confidence intent is still acted on',
+    longButClear.replies[0]?.includes('Say *yes*') === true,
+  );
+
+  // Strict mode.
+  settings = normalizeInteraction({
+    ...settings,
+    addressing: { ...settings.addressing, mode: 'strict' },
+  });
+  clearNearMisses();
+  coolDown();
+  await clearConsent(ALICE);
+  const strictBare = await say('Cinderella publish me');
+  check(
+    'strict mode ignores a bare leading name',
+    !strictBare.handled && strictBare.replies.length === 0,
+  );
+  check(
+    'and says so in the near-miss log',
+    recentNearMisses(1)[0]?.reason === 'strict-mode-no-greeting',
+  );
+  coolDown();
+  const strictGreeted = await say('Hey Cinderella publish me');
+  check(
+    'strict mode accepts a greeted instruction',
+    strictGreeted.replies[0]?.includes('Say *yes*') === true,
+  );
+  coolDown();
+  const strictReply = await say('publish me', { quotedFromBot: true });
+  check(
+    'strict mode still accepts a direct reply to her',
+    strictReply.replies[0]?.includes('Say *yes*') === true,
+  );
+  clock.advanceSeconds(10);
+  const strictWindow = await say('what can you do');
+  check('strict mode still honours the follow-up window', strictWindow.handled);
+
+  // Individually switchable.
+  settings = normalizeInteraction({
+    ...settings,
+    addressing: { ...settings.addressing, mode: 'relaxed', ignoreForwarded: false },
+  });
+  coolDown();
+  await clearConsent(ALICE);
+  const forwardedAllowed = await say('Cinderella publish me', { forwarded: true });
+  check(
+    'switching ignoreForwarded OFF restores the old (unsafe) behaviour',
+    forwardedAllowed.replies[0]?.includes('Say *yes*') === true,
+  );
+
+  settings = normalizeInteraction({
+    ...settings,
+    addressing: { ...settings.addressing, ignoreForwarded: true, silenceOnUnknown: false },
+  });
+  coolDown();
+  const noSilence = await say('Cinderella now understands plain language');
+  check(
+    'switching silenceOnUnknown OFF makes her answer weak-signal UNKNOWNs again',
+    noSilence.replies[0]?.includes('did not quite catch that') === true,
+  );
+
+  settings = normalizeInteraction({});
+
+  /* ── 17. Reply language (CCB-S3-005 §6) ────────────────────────────────── */
+
+  section('17. Reply language — answer in the language of the message');
+
+  check(
+    'ROOT CAUSE: one German word no longer flips a long English message',
+    detectLanguage(ANNOUNCEMENT, 'en').lang === 'en',
+    `detected ${detectLanguage(ANNOUNCEMENT, 'en').lang}`,
+  );
+  check(
+    'the single word that caused it ("hallo") is present in the fixture',
+    /hallo/i.test(ANNOUNCEMENT),
+  );
+  check(
+    'a genuinely German message is still detected as German',
+    detectLanguage(
+      'Kannst du bitte meine Nachrichten veröffentlichen und mir sagen was du hast',
+      'en',
+    ).lang === 'de',
+  );
+  check(
+    'an ambiguous fragment is NOT confidently detected',
+    detectLanguage('ok', 'en').confident === false,
+  );
+
+  settings = normalizeInteraction({
+    ...settings,
+    addressing: { ...settings.addressing, silenceOnUnknown: false },
+  });
+  coolDown();
+  const englishUnknown = await say('Cinderella blargh wibble frobnicate the thing');
+  check(
+    'an English message gets an ENGLISH not-understood reply',
+    englishUnknown.replies[0]?.includes('did not quite catch that') === true,
+    englishUnknown.replies[0]?.slice(0, 40),
+  );
+  coolDown();
+  const germanUnknown = await say('Cinderella kannst du mir bitte sagen was das hier ist');
+  check(
+    'a German message gets a GERMAN not-understood reply',
+    germanUnknown.replies[0]?.includes('nicht ganz erfasst') === true,
+    germanUnknown.replies[0]?.slice(0, 40),
+  );
+  settings = normalizeInteraction({});
+
+  // A whole confirmation exchange stays in one language.
+  coolDown();
+  await clearConsent(ALICE);
+  const dePrompt = await say('Cinderella veröffentliche bitte meine Nachrichten');
+  check(
+    'German instruction gets a German prompt',
+    dePrompt.replies[0]?.includes('Sag *ja*') === true,
+  );
+  const deConfirm = await say('yes');
+  check(
+    'and an English-looking "yes" does NOT switch the answer to English mid-handshake',
+    deConfirm.replies[0]?.includes('leuchten nun im öffentlichen Archiv') === true,
+    deConfirm.replies[0]?.slice(0, 40),
+  );
+
+  coolDown();
+  await clearConsent(ALICE);
+  await say('Cinderella please publish my messages for me');
+  const enConfirm = await say('ja');
+  check(
+    'and the mirror case: an English exchange stays English',
+    enConfirm.replies[0]?.includes('shine in the public archive') === true,
+    enConfirm.replies[0]?.slice(0, 40),
+  );
+
+  // fixed mode
+  settings = normalizeInteraction({
+    ...settings,
+    replyLanguageMode: 'fixed',
+    defaultLanguage: 'de',
+  });
+  coolDown();
+  await clearConsent(ALICE);
+  const fixedMode = await say('Cinderella please publish my messages for me');
+  check(
+    'fixed mode answers in the configured language regardless of the message',
+    fixedMode.replies[0]?.includes('Sag *ja*') === true,
+  );
+  settings = normalizeInteraction({
+    ...settings,
+    replyLanguageMode: 'auto',
+    defaultLanguage: 'de',
+  });
+  coolDown();
+  const autoAgain = await say('Cinderella please publish my messages for me');
+  check(
+    'auto mode overrides the default when the message is clearly English',
+    autoAgain.replies[0]?.includes('Say *yes*') === true,
+  );
+  settings = normalizeInteraction({});
+
+  check(
+    'settings: addressing guards and language mode normalise from an admin form',
+    normalizeInteraction({ addressing: { mode: 'strict', maxInstructionLength: '350' } }).addressing
+      .maxInstructionLength === 350 &&
+      normalizeInteraction({ addressing: { mode: 'bogus' } }).addressing.mode === 'relaxed' &&
+      normalizeInteraction({ replyLanguageMode: 'bogus' }).replyLanguageMode === 'auto',
+  );
+  check(
+    'settings: the shipped defaults match the briefing',
+    DEFAULT_INTERACTION.addressing.mode === 'relaxed' &&
+      DEFAULT_INTERACTION.addressing.ignoreForwarded &&
+      DEFAULT_INTERACTION.addressing.silenceOnUnknown &&
+      DEFAULT_INTERACTION.addressing.maxInstructionLength === 200 &&
+      DEFAULT_INTERACTION.addressing.lengthGuardConfidence === 0.8 &&
+      DEFAULT_INTERACTION.addressing.logNearMisses &&
+      DEFAULT_INTERACTION.replyLanguageMode === 'auto' &&
+      DEFAULT_INTERACTION.rememberMemberLanguage,
   );
 
   /* ── 15. Capture pipeline integration ──────────────────────────────────── */

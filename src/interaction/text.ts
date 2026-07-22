@@ -165,11 +165,23 @@ export function isQuoted(ranges: [number, number][], start: number, end: number)
 }
 
 /**
- * Very common German words. Enough to decide which language to ANSWER in, and
- * nothing more — this is a reply-language hint, not language identification, and
- * it deliberately lives outside the intent resolver so that the nickname path
- * (which must never reach the resolver) can still be sarcastic in the right
- * language.
+ * Reply-language detection (CCB-S3-005).
+ *
+ * THE BUG THIS REPLACES. The first version asked `tokens.some(t => GERMAN_HINTS.has(t))`
+ * — a single German-looking word anywhere flipped the whole message to German. It
+ * fired live on a 357-word ENGLISH announcement that happened to contain the word
+ * `hallo` once, in its own example of `Hallo Cinderella` working in any language.
+ * One token in 357 decided the reply language, and she answered in German.
+ *
+ * The replacement is a scored contest between two hint sets with a margin
+ * requirement, so a lone false friend cannot win. `was` (English past tense /
+ * German "what"), `hallo`, `man`, `die`, `war`, `also` and `in` are exactly the
+ * words that made the old check wrong, so the German set keeps them only where
+ * they carry real signal and the English set is stocked with the words that
+ * dominate ordinary English prose.
+ *
+ * This is a REPLY-LANGUAGE hint, not language identification. Getting it wrong
+ * costs a message in the wrong language; it never affects consent.
  */
 const GERMAN_HINTS = new Set(
   [
@@ -178,52 +190,179 @@ const GERMAN_HINTS = new Set(
     'mir',
     'mein',
     'meine',
+    'meinen',
+    'meinem',
     'du',
     'dich',
     'dir',
-    'was',
-    'wie',
+    'dein',
+    'deine',
     'nicht',
     'bitte',
     'hast',
     'kannst',
     'ist',
+    'sind',
     'bin',
     'und',
     'oder',
+    'aber',
     'das',
     'die',
     'der',
+    'den',
+    'dem',
     'ein',
     'eine',
+    'einen',
     'von',
     'für',
     'über',
     'nach',
-    'auf',
     'aus',
     'mit',
     'ja',
     'nein',
     'kann',
     'wer',
-    'wo',
     'wann',
     'warum',
-    'hallo',
     'danke',
     'jetzt',
     'noch',
     'schon',
     'auch',
+    'wie',
+    'was',
+    'wird',
+    'werden',
+    'haben',
+    'sich',
+    'nur',
+    'sehr',
+    'mehr',
+    'zurück',
+    'veröffentliche',
+    'veröffentlichen',
+    'widerrufen',
+    'nachricht',
+    'nachrichten',
+    'archiv',
   ].map((w) => fold(w)),
 );
 
-export function guessLanguageFromTokens(tokens: string[], fallback: string): string {
-  return tokens.some((t) => GERMAN_HINTS.has(t)) ? 'de' : fallback;
+/**
+ * English function words. Present so detection is a CONTEST rather than a hunt for
+ * German: ordinary English prose scores heavily here, which is what stops one
+ * stray `hallo` from carrying a whole announcement.
+ */
+const ENGLISH_HINTS = new Set(
+  [
+    'the',
+    'and',
+    'you',
+    'your',
+    'yours',
+    'i',
+    'me',
+    'my',
+    'is',
+    'are',
+    'was',
+    'were',
+    'be',
+    'been',
+    'have',
+    'has',
+    'had',
+    'do',
+    'does',
+    'did',
+    'not',
+    'what',
+    'when',
+    'where',
+    'who',
+    'why',
+    'how',
+    'this',
+    'that',
+    'these',
+    'those',
+    'with',
+    'from',
+    'for',
+    'of',
+    'to',
+    'in',
+    'on',
+    'at',
+    'it',
+    'its',
+    'can',
+    'will',
+    'would',
+    'please',
+    'thanks',
+    'thank',
+    'yes',
+    'no',
+    'now',
+    'again',
+    'more',
+    'about',
+    'publish',
+    'unpublish',
+    'message',
+    'messages',
+    'archive',
+    'want',
+    'like',
+    'know',
+  ].map((w) => fold(w)),
+);
+
+export interface LanguageGuess {
+  /** The detected language code. */
+  lang: string;
+  /**
+   * Whether the evidence was strong enough to act on. When false the caller
+   * should fall back to the member's remembered language or the configured
+   * default rather than using `lang`.
+   */
+  confident: boolean;
+}
+
+/** Minimum winning hits, and minimum lead over the loser, to call it confident. */
+const MIN_HITS = 2;
+const MIN_LEAD = 2;
+
+/**
+ * Scores a message's tokens against both hint sets. Returns the winner only when
+ * it clears both thresholds — otherwise `confident` is false and the caller
+ * decides.
+ */
+export function detectLanguageFromTokens(tokens: string[], fallback: string): LanguageGuess {
+  let de = 0;
+  let en = 0;
+  for (const t of tokens) {
+    if (GERMAN_HINTS.has(t)) de++;
+    if (ENGLISH_HINTS.has(t)) en++;
+  }
+  if (de >= MIN_HITS && de - en >= MIN_LEAD) return { lang: 'de', confident: true };
+  if (en >= MIN_HITS && en - de >= MIN_LEAD) return { lang: 'en', confident: true };
+  return { lang: fallback, confident: false };
 }
 
 /** Reply-language hint for a raw string. */
+export function detectLanguage(text: string, fallback: string): LanguageGuess {
+  return detectLanguageFromTokens(normTokens(text), fallback);
+}
+
+/**
+ * Back-compatible convenience used where only a code is needed. Prefer
+ * {@link detectLanguage} so the caller can see whether the guess was confident.
+ */
 export function guessLanguage(text: string, fallback: string): string {
-  return guessLanguageFromTokens(normTokens(text), fallback);
+  return detectLanguage(text, fallback).lang;
 }

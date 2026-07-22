@@ -30,7 +30,7 @@ import {
 } from './intent.js';
 import {
   fuzzyEquals,
-  guessLanguageFromTokens,
+  detectLanguageFromTokens,
   isQuoted,
   normTokens,
   quotedRanges,
@@ -735,7 +735,7 @@ function extractQuery(text: string, tokens: Token[], m: Match): string | undefin
 function resolveRules(text: string, ctx: IntentContext): IntentResult {
   const tokens = tokenize(text);
   const instr = tokens.map((t) => t.norm);
-  const fallbackLang = guessLanguageFromTokens(instr, ctx.defaultLanguage);
+  const fallbackLang = detectLanguageFromTokens(instr, ctx.defaultLanguage).lang;
 
   if (instr.length === 0) return unknownResult(fallbackLang);
 

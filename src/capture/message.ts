@@ -58,6 +58,17 @@ export interface CapturedMessage {
   /** Attached media/file, if any. */
   file: CapturedFile | undefined;
   /**
+   * True when the member FORWARDED this message rather than writing it.
+   *
+   * This is `meta.itemForwarded` (the field the clients use to draw the
+   * "forwarded" label), NOT `meta.forwardedByMember`. They are different things
+   * and confusing them breaks consent: `forwardedByMember` is a group ROUTING
+   * detail and is set on ordinary messages — verified in the live SimpleX DB,
+   * where real `/publish` commands carry it. Keying the guard off that field
+   * would silently stop `/publish` from working.
+   */
+  forwarded: boolean;
+  /**
    * True when this message is a direct reply to one of the BOT's own messages.
    * That is an address in itself (CCB-S3-002 §1.2) — replying to her needs no
    * wake word. `groupSnd` on the quoted item means "sent by us in this group".
@@ -147,6 +158,7 @@ export function parseGroupMessage(aChatItem: T.AChatItem): CapturedMessage | nul
     text: msgContent.text ?? '',
     linkPreview: buildLinkPreview(msgContent),
     file,
+    forwarded: chatItem.meta.itemForwarded !== undefined,
     quotedFromBot: chatItem.quotedItem?.chatDir?.type === 'groupSnd',
     raw: aChatItem,
   };

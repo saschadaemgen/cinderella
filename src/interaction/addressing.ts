@@ -37,9 +37,22 @@ export interface AddressResult {
   instruction: string;
   /** Which nickname was used, when `kind === 'nickname'`. */
   nickname: string | undefined;
+  /**
+   * Whether a greeting preceded the name (CCB-S3-005). This is the difference
+   * between someone SAYING her name and someone GREETING her: `Hey Cinderella
+   * blargh` is unmistakably aimed at her, while a message merely beginning with
+   * her name very often is not. It is the primary strong-signal input, and in
+   * `strict` mode it is required.
+   */
+  greeted: boolean;
 }
 
-const NOT_ADDRESSED: AddressResult = { kind: 'none', instruction: '', nickname: undefined };
+const NOT_ADDRESSED: AddressResult = {
+  kind: 'none',
+  instruction: '',
+  nickname: undefined,
+  greeted: false,
+};
 
 /**
  * Does this token address her by name? Exact match always wins; a small typo is
@@ -105,8 +118,14 @@ export function detectAddress(text: string, s: InteractionSettings): AddressResu
   const instructionFrom = (t: Token): string =>
     text.slice(t.end).replace(LEADING_SEPARATORS, '').trim();
 
+  const greeted = skip > 0;
+
   if (matchesWakeWord(head.norm, fold(s.wakeWord).trim())) {
-    return { kind: 'wake', instruction: instructionFrom(head), nickname: undefined };
+    // Strict mode (CCB-S3-005 §4): the name alone is not an address, a greeting
+    // must precede it. Direct replies, the follow-up window and slash commands
+    // bypass this entirely — they are handled by the caller, not here.
+    if (s.addressing.mode === 'strict' && !greeted) return NOT_ADDRESSED;
+    return { kind: 'wake', instruction: instructionFrom(head), nickname: undefined, greeted };
   }
 
   // Nicknames match EXACTLY (§6). They are short — `cin`, `ella` — and a fuzzy
@@ -115,7 +134,9 @@ export function detectAddress(text: string, s: InteractionSettings): AddressResu
   if (s.nicknames.enabled) {
     for (const nick of s.nicknames.words) {
       if (head.norm === fold(nick).trim()) {
-        return { kind: 'nickname', instruction: instructionFrom(head), nickname: nick };
+        // A nickname is answered in both modes: refusing to answer to "Cindy" is
+        // the point, and staying silent would read as her accepting it.
+        return { kind: 'nickname', instruction: instructionFrom(head), nickname: nick, greeted };
       }
     }
   }

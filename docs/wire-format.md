@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-005**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -64,6 +64,13 @@ Three wire-level facts are worth recording:
   sent by *us* in that group — surfaced as `CapturedMessage.quotedFromBot`
   (`src/capture/message.ts`). There is no other reliable "this is a reply to the bot" marker
   in the envelope.
+- **The forwarded marker is `meta.itemForwarded`, not `meta.forwardedByMember`.** They look
+  interchangeable and are not. `itemForwarded` (`CIForwardedFrom`) is what the clients use to
+  draw the "forwarded" label and is surfaced as `CapturedMessage.forwarded`;
+  `forwardedByMember` is a group ROUTING detail that is set on perfectly ordinary messages.
+  Verified in the live SimpleX database: real `/publish` commands carry
+  `forwarded_by_group_member_id` while carrying no `fwd_from_tag`. A guard keyed off the
+  wrong field would have silently stopped consent commands from working.
 - **Command-shaped text never enters the conversational path.** A message whose text begins
   with `/` is handled by the slash path or not at all (`src/interaction/engine.ts`). Without
   this, a disabled `/publish` could still be triggered through the follow-up window.

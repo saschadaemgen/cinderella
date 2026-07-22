@@ -353,6 +353,7 @@ Responsibilities are split so that the later AI swap changes one registration an
 | `state.ts` | In-process, forgetful conversation state: follow-up windows, pending confirmations, retort rotation, reply rate limits |
 | `engine.ts` | Decides what to do: confirmations, refusals, read-only answers, undo, nickname retorts |
 | `reply.ts` | Pure presentation (CCB-S3-003): whether a reply quotes, and whether it opens with the member's name |
+| `near-misses.ts` | Diagnostics (CCB-S3-005): why a message that looked like an address was ignored |
 | `settings.ts` | The admin-editable model + the shipped defaults (persona copy, retorts) |
 
 **Addressing.** A message is addressed to her when it starts with the wake word (a greeting
@@ -366,6 +367,29 @@ would otherwise forgive exactly the case that must be ignored. Nicknames are mat
 **Resolution never executes.** The resolver returns `{intent, confidence, slots, lang}` and
 nothing more. The engine performs actions, and every consent change goes through the same
 `applyConsentChange` the `/publish` command uses (D-032), so the two paths cannot drift.
+
+**Being named is not being addressed (CCB-S3-005).** Four guards sit between the wake word
+matching and the dialogue running, each switchable in the console:
+
+1. **Forwarded messages are skipped entirely** — checked before addressing, so no other guard
+   has to be right for this one to hold. This is a consent-safety control: a forwarded
+   announcement that opens with her name and quotes the commands it documents resolves to
+   PUBLISH at high confidence, which would put a consent prompt in front of the whole group.
+2. **UNKNOWN is answered only on a strong signal** — a greeting, a direct reply to her, or
+   being mid-conversation. A bare leading name is the weak case, because that is how
+   announcements, quotes and third-person sentences begin. Weak plus UNKNOWN means silence.
+3. **A length guard** — over 200 characters, only a high-confidence intent is acted on.
+4. **Optional strict mode** — a greeting is required before the name; replies, the follow-up
+   window and slash commands are unaffected.
+
+Everything the guards drop is recorded in an in-memory near-miss log and shown on the
+Interaction page, because a guard nobody can see is indistinguishable from a broken bot.
+
+**Reply language (CCB-S3-005).** Detected from the member's own message by a scored contest
+between hint sets, not from which keyword set matched. Precedence: `fixed` mode → an open
+confirmation offer (so a handshake cannot change language midway) → confident detection →
+the language remembered for this member's follow-up window → the configured default. Only
+languages with real persona copy are offered.
 
 **Acting is stricter than understanding.** Inside the follow-up window she is hearing messages
 that were never marked for her, so the confidence bar there is raised to 0.8 — above the score

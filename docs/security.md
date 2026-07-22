@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-005**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -405,6 +405,9 @@ reason and are verified in [`scripts/verify-interaction.ts`](../scripts/verify-i
 | A future AI resolver inventing authority | The catalog is **closed and re-validated at the seam**: an out-of-catalog intent, an out-of-range confidence, or a throw becomes UNKNOWN / falls back to the rules | `src/interaction/resolver.ts` (`sanitize`) |
 | Discussion of the bot triggering the bot | Strict first-standalone-word anchoring; suffixed forms rejected before fuzzy matching; hypothetical and quotation guards | `src/interaction/addressing.ts`, `rules.ts` |
 | Negated instructions acted on literally | A negation beside the matched keyword collapses confidence — she asks rather than acts | `rules.ts` (`negatedNear`) |
+| A forwarded message opening a consent prompt | Forwarded items never reach the interaction layer, checked before addressing (CCB-S3-005). Measured: the first 240 characters of the live announcement resolve to PUBLISH at 0.94 | `src/interaction/engine.ts`, `src/capture/message.ts` |
+| Her interjecting on text that merely starts with her name | UNKNOWN is answered only on a strong address signal; a length guard ignores long text without a high-confidence intent | `engine.ts` |
+| Guards failing silently and unnoticed | Every ignored candidate is recorded and shown in the console | `src/interaction/near-misses.ts` |
 | Ordinary conversation being acted on | Inside the follow-up window the confidence bar rises to 0.8, above a lone keyword's score | `engine.ts` (`IMPLICIT_MIN_CONFIDENCE`) |
 | Flooding a group through the bot | Reply rate limits per member and per chat; nickname anti-spam silence | `src/interaction/state.ts` |
 | A disabled toggle half-applying | Command-shaped text (`/…`) never enters the conversational path | `engine.ts` |

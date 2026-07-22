@@ -33,6 +33,8 @@ export interface PendingConfirmation {
 
 interface MemberEntry {
   followUpUntil: number;
+  /** Language detected for this member, kept for the follow-up window (§6). */
+  lang: string | undefined;
   pending: PendingConfirmation | undefined;
   /** Consecutive nickname addresses; resets on a proper address or after a rest. */
   nicknameStreak: number;
@@ -76,6 +78,7 @@ export class ConversationState {
     if (!entry) {
       entry = {
         followUpUntil: 0,
+        lang: undefined,
         pending: undefined,
         nicknameStreak: 0,
         lastNicknameAt: 0,
@@ -108,6 +111,22 @@ export class ConversationState {
   openFollowUp(groupId: number, memberId: string, now: number, windowMs: number): void {
     if (windowMs <= 0) return;
     this.member(groupId, memberId).followUpUntil = now + windowMs;
+  }
+
+  /**
+   * Remembers the language an exchange is being held in (§6), so a bare `yes`
+   * that carries no linguistic signal of its own is answered in the language of
+   * the conversation it belongs to rather than the instance default.
+   */
+  rememberLanguage(groupId: number, memberId: string, lang: string): void {
+    this.member(groupId, memberId).lang = lang;
+  }
+
+  /** The remembered language, but only while the follow-up window is still open. */
+  rememberedLanguage(groupId: number, memberId: string, now: number): string | undefined {
+    const entry = this.members.get(ConversationState.key(groupId, memberId));
+    if (!entry || entry.followUpUntil <= now) return undefined;
+    return entry.lang;
   }
 
   closeFollowUp(groupId: number, memberId: string): void {

@@ -704,6 +704,107 @@ async function main(): Promise<void> {
     iaPrefixOff.rows[0]?.value.namePrefix.enabled === false,
   );
 
+  // Addressing guards + reply language (CCB-S3-005).
+  const iaGuards = await getPage('/interaction');
+  check(
+    'every addressing guard is present as its own control',
+    [
+      'name="addressingMode"',
+      'name="ignoreForwarded"',
+      'name="silenceOnUnknown"',
+      'name="strongSignalGreeting"',
+      'name="strongSignalReply"',
+      'name="strongSignalWindow"',
+      'name="maxInstructionLength"',
+      'name="lengthGuardConfidence"',
+      'name="logNearMisses"',
+      'name="replyLanguageMode"',
+      'name="rememberMemberLanguage"',
+    ].every((n) => iaGuards.body.includes(n)),
+  );
+  check(
+    'each guard carries an explanatory description, not just a label',
+    iaGuards.body.includes('content someone is sharing') &&
+      iaGuards.body.includes('only sent when she is confident') &&
+      iaGuards.body.includes('Commands are short') &&
+      iaGuards.body.includes('makes the guards invisible'),
+  );
+  check(
+    'the near-miss log is shown on the same page',
+    iaGuards.body.includes('Recently ignored') &&
+      iaGuards.body.includes('Nothing ignored since the last restart'),
+  );
+  check(
+    'both addressing modes are offered, relaxed selected by default',
+    iaGuards.body.includes('value="relaxed"') &&
+      iaGuards.body.includes('value="strict"') &&
+      /<option value="relaxed"[^>]*selected/.test(iaGuards.body),
+  );
+
+  const guardsRes = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: {
+      _csrf: iaCsrf,
+      section: 'addressing-guards',
+      addressingMode: 'strict',
+      // ignoreForwarded / silenceOnUnknown deliberately OMITTED = unticked
+      strongSignalGreeting: 'on',
+      strongSignalReply: 'on',
+      strongSignalWindow: 'on',
+      maxInstructionLength: '350',
+      lengthGuardConfidence: '0.9',
+      logNearMisses: 'on',
+    },
+    headers: authed,
+  });
+  check('addressing-guards edit redirects', guardsRes.statusCode === 302);
+  const iaGuardRow = await pg.query<{
+    value: {
+      addressing: {
+        mode: string;
+        ignoreForwarded: boolean;
+        silenceOnUnknown: boolean;
+        maxInstructionLength: number;
+        lengthGuardConfidence: number;
+      };
+    };
+  }>(`SELECT value FROM settings WHERE key = 'interaction'`);
+  const g = iaGuardRow.rows[0]?.value.addressing;
+  check(
+    'each guard persists independently, including the unticked ones',
+    g?.mode === 'strict' &&
+      g?.ignoreForwarded === false &&
+      g?.silenceOnUnknown === false &&
+      g?.maxInstructionLength === 350 &&
+      g?.lengthGuardConfidence === 0.9,
+    JSON.stringify(g),
+  );
+
+  const langRes = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: { _csrf: iaCsrf, section: 'language', replyLanguageMode: 'fixed' },
+    headers: authed,
+  });
+  check('language edit redirects', langRes.statusCode === 302);
+  const iaLangRow = await pg.query<{
+    value: { replyLanguageMode: string; rememberMemberLanguage: boolean };
+  }>(`SELECT value FROM settings WHERE key = 'interaction'`);
+  check(
+    'reply-language settings persist, unticked checkbox included',
+    iaLangRow.rows[0]?.value.replyLanguageMode === 'fixed' &&
+      iaLangRow.rows[0]?.value.rememberMemberLanguage === false,
+  );
+
+  // Put it back so later checks see the shipped defaults.
+  await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: { _csrf: iaCsrf, section: 'reset' },
+    headers: authed,
+  });
+
   const iaNoAuth = await app.inject({ method: 'GET', url: '/interaction' });
   check(
     'interaction console is unreachable unauthenticated',

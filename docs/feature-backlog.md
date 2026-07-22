@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-005**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -208,6 +208,15 @@ The history below records the pre-CCB-S2-003 state.
       SimpleX actually renders (`*bold*`, not `**bold**`), with a harness guard against
       regression. See [`src/interaction/reply.ts`](../src/interaction/reply.ts) and
       [`src/bot/send.ts`](../src/bot/send.ts).
+- [x] **Address guards + reply language (CCB-S3-005)** — forwarded messages never reach the
+      interaction layer; UNKNOWN is answered only on a strong address signal (greeting, direct
+      reply, or mid-conversation) and otherwise met with silence; a length guard ignores
+      long-form text without a high-confidence intent; an optional `strict` mode requires a
+      greeting. Every guard is individually switchable with an explanatory description, and
+      ignored candidates appear in a near-miss log on the same page. Reply language is now
+      detected from the member's message (scored, not single-hint), remembered for the
+      follow-up window, and pinned across a confirmation handshake.
+      See [`src/interaction/near-misses.ts`](../src/interaction/near-misses.ts).
 - [ ] **Placeholder markup injection** — `{name}`-style substitutions put member-controlled
       text into a message SimpleX will parse. The mention prefix strips the pairing delimiters
       (`sanitizeDisplayName`), but other placeholders (`{query}` in the search answer, `{name}`

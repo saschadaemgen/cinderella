@@ -15,7 +15,9 @@
 
 import type { FastifyInstance } from 'fastify';
 import {
+  ADDRESSING_MODES,
   DEFAULT_INTERACTION,
+  REPLY_LANGUAGE_MODES,
   REPLY_MODES,
   PERSONA_KEYS,
   SHIPPED_LANGS,
@@ -23,6 +25,7 @@ import {
   type PersonaKey,
   type ReplyMode,
 } from '../../interaction/settings.js';
+import { NEAR_MISS_REASONS, recentNearMisses } from '../../interaction/near-misses.js';
 import { activeResolverName } from '../../interaction/resolver.js';
 import { html, page, raw, type SafeHtml } from '../html.js';
 import type { ViewContext } from '../server.js';
@@ -110,6 +113,16 @@ const REPLY_MODE_LABELS: Record<ReplyMode, string> = {
   plain: 'Plain — a normal group message (recommended)',
   mention: "Mention — a normal message, opened with the member's name",
   quote: "Quote — repeats the member's message above the answer",
+};
+
+const ADDRESSING_MODE_LABELS: Record<string, string> = {
+  relaxed: 'Relaxed — a message starting with her name counts as an address',
+  strict: 'Strict — a greeting must come first (Hey Cinderella ...)',
+};
+
+const REPLY_LANGUAGE_MODE_LABELS: Record<string, string> = {
+  auto: 'Auto — answer in the language of the message',
+  fixed: 'Fixed — always answer in the default language',
 };
 
 const LANG_LABELS: Record<string, string> = { en: 'English', de: 'Deutsch' };
@@ -212,6 +225,163 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
             ${saveButton()}
           `,
         ),
+      );
+
+      const guards = card(
+        'Addressing guards',
+        html`<p class="mb-3 text-sm text-slate-500">
+            Matching her name is not the same as being spoken to. These guards decide when she stays
+            out of it. Each one can be switched off independently — turning them all off restores
+            the behaviour that made her answer a forwarded announcement.
+          </p>
+          ${form(
+            'addressing-guards',
+            html`
+              ${labelled(
+                'Addressing mode',
+                selectField(
+                  'addressingMode',
+                  s.addressing.mode,
+                  ADDRESSING_MODES.map(
+                    (m) => [m, ADDRESSING_MODE_LABELS[m] ?? m] as [string, string],
+                  ),
+                ),
+                'Strict mode still allows direct replies to her, the follow-up window and slash commands.',
+              )}
+              ${checkbox('ignoreForwarded', 'Ignore forwarded messages', s.addressing.ignoreForwarded)}
+              <p class="-mt-1 text-xs text-slate-500">
+                A forwarded message is content someone is sharing, not someone talking to her.
+                Switching this off lets a forwarded announcement that happens to begin with her name
+                reach the resolver, which is how she came to answer one.
+              </p>
+              ${checkbox(
+                'silenceOnUnknown',
+                'Stay silent when she does not understand and the signal was weak',
+                s.addressing.silenceOnUnknown,
+              )}
+              <p class="-mt-1 text-xs text-slate-500">
+                The not-understood prompt is only sent when she is confident she was addressed.
+                Switching this off makes her answer every unrecognised message that starts with her
+                name.
+              </p>
+              ${checkbox(
+                'strongSignalGreeting',
+                'A greeting counts as a strong signal (Hey Cinderella ...)',
+                s.addressing.strongSignalGreeting,
+              )}
+              ${checkbox(
+                'strongSignalReply',
+                'A direct reply to one of her messages counts as a strong signal',
+                s.addressing.strongSignalReply,
+              )}
+              ${checkbox(
+                'strongSignalWindow',
+                'Being mid-conversation counts as a strong signal',
+                s.addressing.strongSignalWindow,
+              )}
+              <p class="-mt-1 text-xs text-slate-500">
+                With all three off nothing is ever a strong signal, and she will never send the
+                not-understood prompt.
+              </p>
+              ${labelled(
+                'Maximum instruction length (characters)',
+                numberField('maxInstructionLength', s.addressing.maxInstructionLength, 20, 4000),
+                'Longer than this and she only acts on a high-confidence intent. Commands are short; announcements are not.',
+              )}
+              ${labelled(
+                'Confidence required above that length',
+                numberField(
+                  'lengthGuardConfidence',
+                  s.addressing.lengthGuardConfidence,
+                  0,
+                  1,
+                  '0.05',
+                ),
+                'Raise it to ignore more long text; lower it to let long messages act as instructions.',
+              )}
+              ${checkbox('logNearMisses', 'Record ignored messages below', s.addressing.logNearMisses)}
+              <p class="-mt-1 text-xs text-slate-500">
+                Kept in memory only, capped and truncated, and cleared on restart. Switching this
+                off makes the guards invisible.
+              </p>
+              ${saveButton()}
+            `,
+          )}`,
+      );
+
+      const nearMisses = recentNearMisses(25);
+      const nearMissCard = card(
+        'Recently ignored (near misses)',
+        nearMisses.length === 0
+          ? html`<p class="text-sm text-slate-500">
+              Nothing ignored since the last restart. Messages the guards catch appear here with the
+              reason, so you can see what she is staying out of.
+            </p>`
+          : html`<div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr
+                    class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500"
+                  >
+                    <th class="py-2 pr-3">When</th>
+                    <th class="py-2 pr-3">Who</th>
+                    <th class="py-2 pr-3">Why ignored</th>
+                    <th class="py-2 pr-3">Message</th>
+                    <th class="py-2">Resolver</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${nearMisses.map(
+                    (n) =>
+                      html`<tr class="border-b border-slate-100 align-top">
+                        <td class="whitespace-nowrap py-2 pr-3 text-slate-500">
+                          ${new Date(n.at).toISOString().replace('T', ' ').slice(0, 16)}
+                        </td>
+                        <td class="py-2 pr-3">${n.who}</td>
+                        <td class="py-2 pr-3 text-slate-600">${NEAR_MISS_REASONS[n.reason]}</td>
+                        <td class="py-2 pr-3 text-slate-500">${n.excerpt}</td>
+                        <td class="whitespace-nowrap py-2 text-slate-500">
+                          ${n.intent ? `${n.intent} ${(n.confidence ?? 0).toFixed(2)}` : '—'}
+                        </td>
+                      </tr>`,
+                  )}
+                </tbody>
+              </table>
+            </div>`,
+      );
+
+      const language = card(
+        'Reply language',
+        html`<p class="mb-3 text-sm text-slate-500">
+            She answers in the language of the message she is answering. Only languages that have
+            real persona copy here are offered, never a machine-translated website locale.
+          </p>
+          ${form(
+            'language',
+            html`
+              ${labelled(
+                'Reply language mode',
+                selectField(
+                  'replyLanguageMode',
+                  s.replyLanguageMode,
+                  REPLY_LANGUAGE_MODES.map(
+                    (m) => [m, REPLY_LANGUAGE_MODE_LABELS[m] ?? m] as [string, string],
+                  ),
+                ),
+                'Auto detects per message and falls back to the default when the text gives no clear signal.',
+              )}
+              ${checkbox(
+                'rememberMemberLanguage',
+                "Remember a member's language for the follow-up window",
+                s.rememberMemberLanguage,
+              )}
+              <p class="-mt-1 text-xs text-slate-500">
+                Keeps a short follow-up like "yes" in the language of the exchange it belongs to.
+                The default reply language is set under Addressing above.
+              </p>
+              ${saveButton()}
+            `,
+          )}`,
       );
 
       const answering = card(
@@ -381,7 +551,8 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         ${pageHeader('Interaction', 'How she is addressed, what she understands, and how she speaks')}
         ${notice} ${intro}
         <div class="flex flex-col gap-6">
-          ${addressing} ${answering} ${safety} ${nicknames} ${personaCards} ${retortCards} ${reset}
+          ${addressing} ${guards} ${nearMissCard} ${language} ${answering} ${safety} ${nicknames}
+          ${personaCards} ${retortCards} ${reset}
         </div>
       `;
 
@@ -419,6 +590,21 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
           words: bodyString(body, 'words'),
           spamLimit: bodyString(body, 'spamLimit'),
         };
+      } else if (section === 'addressing-guards') {
+        next['addressing'] = {
+          mode: bodyString(body, 'addressingMode'),
+          ignoreForwarded: 'ignoreForwarded' in body,
+          silenceOnUnknown: 'silenceOnUnknown' in body,
+          strongSignalGreeting: 'strongSignalGreeting' in body,
+          strongSignalReply: 'strongSignalReply' in body,
+          strongSignalWindow: 'strongSignalWindow' in body,
+          maxInstructionLength: bodyString(body, 'maxInstructionLength'),
+          lengthGuardConfidence: bodyString(body, 'lengthGuardConfidence'),
+          logNearMisses: 'logNearMisses' in body,
+        };
+      } else if (section === 'language') {
+        next['replyLanguageMode'] = bodyString(body, 'replyLanguageMode');
+        next['rememberMemberLanguage'] = 'rememberMemberLanguage' in body;
       } else if (section === 'reply') {
         next['replyMode'] = bodyString(body, 'replyMode');
         const templates: Record<string, string> = {};
