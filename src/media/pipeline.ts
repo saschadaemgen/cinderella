@@ -10,7 +10,85 @@
 import { log } from '../log.js';
 import type { Queryable } from '../db/pool.js';
 import { isStrippable, stripToDerivative } from './strip.js';
+import { recordMediaFailure } from './failures.js';
 import type { ExifSummary } from './exif.js';
+
+/**
+ * Ensures a servable derivative exists for one message, generating it on demand.
+ *
+ * Called from the public media route when the derivative is missing
+ * (CCB-S3-011 Addendum A). Without this, ANY transient fault in generation — a
+ * permission, a full disk, a crash mid-write — became permanent invisibility for
+ * that image, because nothing ever tried again.
+ *
+ * It stays FAIL-CLOSED: it returns null when stripping cannot be performed, and
+ * the caller serves nothing. Self-healing means retrying the strip, never
+ * falling back to the unstripped original.
+ */
+export async function ensureDerivative(
+  db: Queryable,
+  mediaRoot: string,
+  messageId: number,
+  relPath: string,
+  mime: string | null,
+): Promise<string | null> {
+  if (!isStrippable(mime)) return null;
+  try {
+    const out = await stripAndRecord(db, mediaRoot, messageId, relPath, mime);
+    if (out.stripped) {
+      log.info(`Media: generated a missing derivative for message ${messageId} on demand.`);
+      const { rows } = await db.query<{ media_derived_path: string | null }>(
+        'SELECT media_derived_path FROM messages WHERE id = $1',
+        [messageId],
+      );
+      return rows[0]?.media_derived_path ?? null;
+    }
+    recordMediaFailure({
+      messageId,
+      reason: 'no-derivative',
+      detail: 'stripping produced no derivative; the image is withheld',
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    recordMediaFailure({ messageId, reason: 'strip-failed', detail: detail.slice(0, 160) });
+    log.warn(`Media: on-demand strip failed for message ${messageId} (${detail}).`);
+  }
+  return null;
+}
+
+/**
+ * Boot check (CCB-S3-011 Addendum A): is every PUBLISHED, strippable item
+ * actually servable?
+ *
+ * The fail-closed gate turns any generation fault into an invisible image, so
+ * the operator has to be told at startup rather than finding out from an empty
+ * stream. It tries to heal what it finds, because the commonest cause is
+ * transient, and reports whatever it could not.
+ */
+export async function checkPublishedMedia(
+  db: Queryable,
+  mediaRoot: string,
+): Promise<{ checked: number; healed: number; broken: number }> {
+  const { rows } = await db.query<{
+    id: string;
+    media_path: string;
+    media_mime: string | null;
+  }>(
+    `SELECT id::text, media_path, media_mime
+       FROM published_messages
+      WHERE media_path IS NOT NULL
+        AND media_derived_path IS NULL
+        AND media_strip_skipped IS NULL`,
+  );
+  let healed = 0;
+  let broken = 0;
+  for (const r of rows) {
+    const made = await ensureDerivative(db, mediaRoot, Number(r.id), r.media_path, r.media_mime);
+    if (made) healed++;
+    else broken++;
+  }
+  return { checked: rows.length, healed, broken };
+}
 
 /** Resolves a captured (group, item) to its archive row id. */
 export async function messageIdFor(
@@ -87,6 +165,16 @@ export async function stripAndRecord(
       WHERE id = $1`,
     [messageId, result.derivedPath ?? null, JSON.stringify(foundFlags(result.found)), skipped],
   );
+
+  if (!result.stripped && isStrippable(mime)) {
+    // A strippable format that would not strip is a FAULT, not a policy, and the
+    // gate will withhold it. Say so where the operator can see it.
+    recordMediaFailure({
+      messageId,
+      reason: 'strip-failed',
+      detail: result.reason ?? 'unknown',
+    });
+  }
 
   if (result.found.hasGps) {
     // Worth a line of its own: this is the disclosure the feature exists to

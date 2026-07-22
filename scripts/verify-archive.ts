@@ -658,6 +658,58 @@ async function main(): Promise<void> {
     check(`SQL default for "${c}" agrees with TypeScript`, mcats[c] === DEFAULT_ARCHIVE.memberCategories[c]);
   }
 
+  /* ── 10. CCB-S3-011 Addendum A — a missing derivative heals, and is seen ── */
+
+  section('10. Addendum A — a withheld image self-heals and is never silent');
+
+  const { ensureDerivative, checkPublishedMedia } = await import('../src/media/pipeline.js');
+  const { recentMediaFailures, clearMediaFailures } = await import('../src/media/failures.js');
+
+  await db.query('UPDATE messages SET media_derived_path = NULL WHERE id = $1', [mediaId]);
+  check(
+    'an image whose derivative went missing is withheld, not served unstripped',
+    (await getPublishedMedia(db, mediaId)) === null,
+  );
+
+  const healedPath = await ensureDerivative(
+    db,
+    root,
+    mediaId,
+    '2026/07/9-sample-photo.jpg',
+    'image/jpeg',
+  );
+  check('it is regenerated on demand', healedPath !== null, String(healedPath));
+  const afterHeal = await getPublishedMedia(db, mediaId);
+  check('and then serves — from the DERIVATIVE, still never the original',
+    afterHeal !== null && afterHeal.stripped);
+  check(
+    'the healed file really has no metadata',
+    !readExifSummary(await readFile(joinPath(root, afterHeal?.mediaPath ?? ''))).hasGps,
+  );
+
+  // The boot check finds and heals the same class of fault.
+  await db.query('UPDATE messages SET media_derived_path = NULL WHERE id = $1', [mediaId]);
+  const swept = await checkPublishedMedia(db, root);
+  check(
+    'the boot check finds a published image with no derivative',
+    swept.checked === 1 && swept.healed === 1,
+    `checked ${String(swept.checked)}, healed ${String(swept.healed)}`,
+  );
+
+  // And a fault that CANNOT be healed is recorded where an operator will see it.
+  clearMediaFailures();
+  await db.query('UPDATE messages SET media_derived_path = NULL WHERE id = $1', [mediaId]);
+  await ensureDerivative(db, root, mediaId, '2026/07/does-not-exist.jpg', 'image/jpeg');
+  check(
+    'an unhealable image appears in the failure log, not in silence',
+    recentMediaFailures().some((f) => f.messageId === mediaId),
+    recentMediaFailures()[0]?.reason,
+  );
+  check(
+    'and it is STILL withheld — fail-closed survives the self-heal',
+    (await getPublishedMedia(db, mediaId)) === null,
+  );
+
   console.log(
     failures === 0
       ? '\nAll CCB-S3-007 archive checks passed.'

@@ -21,6 +21,7 @@ import { sendToChat } from './bot/send.js';
 import { registerCapture } from './capture/handler.js';
 import { makePersistenceHooks } from './capture/persist.js';
 import { withBotCapture, type BotReplyMeta } from './capture/bot-message.js';
+import { checkPublishedMedia } from './media/pipeline.js';
 import { makeConsentHandler } from './consent/commands.js';
 import { assertDbReachable, closePool, getPool } from './db/pool.js';
 import { markInterruptedMediaReceipts, setMemberCategory } from './db/messages.js';
@@ -204,6 +205,31 @@ async function startCaptureWorker(
         `reply mode "${ia.replyMode}"${ia.replyMode === 'mention' && !ia.namePrefix.enabled ? ' (name prefix off)' : ''}, ` +
         `resolver "${activeResolverName()}".`,
     );
+
+    // A published image whose derivative is missing is INVISIBLE, not broken-
+    // looking (CCB-S3-011 Addendum A). Checked and healed at boot so an empty
+    // stream is never the first sign of a fault.
+    try {
+      const media = await checkPublishedMedia(getPool(), cfg.mediaRoot);
+      if (media.checked > 0) {
+        log.warn(
+          `Media: ${media.checked} published item(s) had no stripped derivative — ` +
+            `${media.healed} regenerated, ${media.broken} still unservable.`,
+        );
+        if (media.broken > 0) {
+          status.error(
+            `${media.broken} published image(s) cannot be served: no stripped derivative could ` +
+              `be produced. Check that the service user can write to MEDIA_ROOT/derived.`,
+          );
+        }
+      }
+    } catch (err) {
+      log.warn(
+        `Media: could not check published derivatives (${
+          err instanceof Error ? err.message : String(err)
+        }).`,
+      );
+    }
 
     // A pin that no enabled provider can serve fails SILENTLY and forever
     // (CCB-S3-008 §2), which is strictly worse than having no pin, so it is

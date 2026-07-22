@@ -170,6 +170,21 @@ systemctl restart cinderella   # sessions survive this now
 > seconds on an archive of this size, but check the row count before running it on
 > a large one: `psql "$DATABASE_URL" -tAc 'SELECT count(*) FROM messages'`.
 
+## Media remediation — run it AS THE SERVICE USER
+
+`scripts/remediate-media.ts` writes into `MEDIA_ROOT/derived`. Running it as root creates that
+tree owned by root, and the service (which runs as `cinderella`) then cannot write new
+derivatives — every new image is withheld by the metadata gate and the public stream silently
+loses its photographs.
+
+```bash
+sudo -u cinderella env MEDIA_ROOT=... DATABASE_URL=... npx tsx scripts/remediate-media.ts
+```
+
+If it has already happened: `chown -R cinderella:cinderella /var/lib/cinderella/media/derived`.
+The boot check reports how many published items are unservable, and the service regenerates
+missing derivatives on demand once it can write.
+
 ## Backup
 
 `deploy/backup.sh` dumps the archive DB and snapshots `media/` + the env file.

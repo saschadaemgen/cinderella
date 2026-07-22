@@ -500,6 +500,13 @@ JSON rather than casting, because `('maybe')::boolean` raises and a raise inside
 `published_messages` would take the entire public archive offline. An absent
 setting takes the shipped default; a present but malformed one reads as "off".
 
+**Fail-closed, but never silent (Addendum A).** A missing derivative is regenerated on demand
+at serve time and swept at boot; anything still unservable goes to a failure log rather than
+disappearing quietly. Self-healing retries the STRIP — it never falls back to the original, so
+the guarantee is unchanged. The live fault that prompted this was a permission: the `derived/`
+tree had been created by a one-off script running as root, and the service user could not write
+into it. Run remediation as the service user.
+
 **Limits, stated plainly.** Under `redact` the row stays published, so a copy
 already fetched by a feed reader or a crawler keeps the pre-redaction text, and a
 browser tab already showing the card keeps it until reloaded (the live reconcile

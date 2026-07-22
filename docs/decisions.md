@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-009**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -53,6 +53,29 @@ import — no change to the sidebar, the resolver, or the settings framework.
 `src/interaction/intent.ts` (`setActiveIntents`, `isActiveIntent`);
 `src/interaction/resolver.ts`; `src/interaction/rules.ts`; `src/web/views/plugins.ts`;
 `scripts/verify-price.ts` §1.
+
+---
+
+### D-052 — Fail-closed is right; failing SILENTLY is not
+
+**Status: IMPLEMENTED (CCB-S3-011 Addendum A).**
+**Decision.** The metadata gate stays fail-closed — an image whose derivative is missing is
+never served unstripped. Three things change around it: a missing derivative is regenerated ON
+DEMAND at serve time, a boot check sweeps published media and heals what it can, and anything
+still unservable is recorded in a failure log the operator can see.
+**Rationale.** The gate turned every generation fault into total invisibility. The live cause
+was mundane — the `derived/` tree was created by a one-off remediation script running as root,
+the service runs as a non-root user, and every new photograph hit `EACCES` and 404'd — but the
+SHAPE of the failure is what matters: the archive looked empty, and nothing anywhere said why.
+A safety control that cannot be distinguished from a broken system will be switched off by
+somebody trying to make the system work.
+**What self-heal does NOT mean.** It retries the strip. It never falls back to serving the
+original, so the guarantee is unchanged; an image that genuinely cannot be stripped stays
+withheld and is reported.
+**Evidence.** `src/media/failures.ts`; `src/media/pipeline.ts` (`ensureDerivative`,
+`checkPublishedMedia`); `src/web/front/embed.ts` (`healMissingDerivative`);
+`scripts/verify-archive.ts` §10 — which asserts the healed file is still metadata-free and that
+an unhealable one stays withheld.
 
 ---
 

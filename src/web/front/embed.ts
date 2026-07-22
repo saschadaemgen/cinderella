@@ -23,6 +23,7 @@ import { randomBytes } from 'node:crypto';
 import sharp from 'sharp';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getEmbedInstance, listEmbedInstances, type EmbedSettings } from '../../db/embeds.js';
+import { ensureDerivative } from '../../media/pipeline.js';
 import {
   ARCHIVE_TYPES,
   decodeCursor,
@@ -381,8 +382,18 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       if (!Number.isInteger(messageId) || messageId < 1) {
         return reply.code(404).type('text/plain').send('Not found');
       }
-      const media = await getPublishedMedia(ctx.db, messageId);
-      if (!media) return reply.code(404).type('text/plain').send('Not found');
+      let media = await getPublishedMedia(ctx.db, messageId);
+      if (!media) {
+        // SELF-HEAL (CCB-S3-011 Addendum A). A missing derivative used to be a
+        // permanent 404: the gate withheld the image and nothing ever tried
+        // again, so one transient fault — a permission, a full disk — made a
+        // photograph invisible forever while the stream just looked empty.
+        // Retrying the STRIP is the fix; falling back to the original is not,
+        // so this stays fail-closed when stripping genuinely cannot be done.
+        const healed = await healMissingDerivative(ctx, messageId);
+        if (!healed) return reply.code(404).type('text/plain').send('Not found');
+        media = healed;
+      }
       if (!instance.settings.media[media.type]) {
         return reply.code(404).type('text/plain').send('Not found');
       }
@@ -562,6 +573,37 @@ function resolveView(
 }
 
 /** Images render inline; everything else downloads. */
+/**
+ * Tries to make the derivative a published image is missing, and returns the
+ * media record once it exists. Null when it still cannot be served.
+ */
+async function healMissingDerivative(
+  ctx: ViewContext,
+  messageId: number,
+): Promise<Awaited<ReturnType<typeof getPublishedMedia>>> {
+  const { rows } = await ctx.db.query<{
+    media_path: string | null;
+    media_mime: string | null;
+    media_derived_path: string | null;
+  }>(
+    `SELECT media_path, media_mime, media_derived_path
+       FROM published_messages WHERE id = $1`,
+    [messageId],
+  );
+  const r = rows[0];
+  // Not published, or nothing to strip — the gate said no for a real reason.
+  if (!r?.media_path || r.media_derived_path) return null;
+  const made = await ensureDerivative(
+    ctx.db,
+    ctx.cfg.mediaRoot,
+    messageId,
+    r.media_path,
+    r.media_mime,
+  );
+  if (!made) return null;
+  return getPublishedMedia(ctx.db, messageId);
+}
+
 function dispositionFor(type: ArchiveType): string {
   return type === 'image' || type === 'video' || type === 'voice' ? 'inline' : 'attachment';
 }
