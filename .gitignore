@@ -9,8 +9,11 @@ dist/
 .env.local
 .env.*.local
 
-# Cinderella runtime data (never commit member data or media)
-media/
+# Cinderella runtime data (never commit member data or media).
+# ANCHORED. An unanchored `media/` also matched `src/media/`, so the metadata
+# stripping source was silently skipped by `git add -A` and the deploy started a
+# build with four modules missing. Keep the leading slash.
+/media/
 state/
 
 # Operator-supplied avatar image at the repo root (applied via `npm run avatar`).
