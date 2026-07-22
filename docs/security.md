@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-008**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -525,6 +525,42 @@ The fix is structural: a submitted key arrives as `apiKeyInput` and a stored one
 so the two can no longer be confused. `applySecretUpdate` also refuses to encrypt a value that
 already looks like an envelope, and existing doubled values are unwrapped and rewritten once at
 load, with a count logged and the value never named.
+
+## 9d. Media metadata, and what the public path actually serves (CCB-S3-011 §1)
+
+A member consenting to publish their words is not consenting to publish the coordinates of the
+room they were standing in. Consent covers the content; EXIF is a hidden payload nobody agreed
+to.
+
+**Published media is served from a stripped DERIVATIVE, never the original.** `sharp` re-encodes
+without metadata, which drops EXIF, IPTC and XMP together. Orientation is baked into the pixels
+first (`.rotate()`), because a privacy control that visibly rotates every photo gets switched
+off, and then nothing is stripped at all. The original stays byte-for-byte on disk for the
+operator, for moderation, and for any preserve-and-report obligation.
+
+**The gate fails closed.** `getPublishedMedia` serves a strippable format ONLY from its
+derivative. A missing derivative means stripping has not happened, and the safe reading of that
+is "not publishable" — never "serve the original". Turning the admin switch off therefore
+withholds new media rather than publishing it unstripped.
+
+**What this instance cannot strip.** Video and documents need ffmpeg, which is not installed.
+Those formats are recorded as unstrippable rather than assumed clean, and the admin help text
+says so. They are still served, because the audit below found no metadata in them — but that is
+a measured fact, not a guarantee.
+
+**The filename leak was checked and did not exist.** Public media URLs have always been
+`/embed/<instance>/media/<message-id>` — opaque, no filename, no path — and the sitemap, feed and
+JSON-LD all build the same form; `content-disposition` carries no filename and the download
+attribute is synthesised. Verified before changing anything. Derived files are named by message
+id for the same reason, so nothing of the member's own filename exists in the derived tree
+either. A harness check asserts both directions: an opaque URL passes, a URL carrying a filename
+fails.
+
+**The audit.** All 57 captured files (47 images, 8 videos, 2 documents) were scanned with a
+purpose-built detector, validated in both directions against a hand-built GPS fixture. None
+carried EXIF, IPTC, XMP or MP4 metadata atoms — the SimpleX client re-encodes images before
+sending. That is an accidental property of a third-party client, not a guarantee Cinderella
+makes, which is exactly why the stripping exists.
 
 ## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
 

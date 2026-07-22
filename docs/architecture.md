@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-008**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -525,6 +525,21 @@ and forever, whereas an unpinned symbol would simply be resolved and answered.
 `apiKeyInput`; `apiKey` is storage only. When they were one field, `PluginService.load()`
 looked exactly like a form submission and re-encrypted the stored key on every boot, so
 providers were handed ciphertext as their credential — see D-046.
+
+## 16. Media stripping and derivatives (CCB-S3-011)
+
+`src/media/` holds three pieces: `exif.ts` detects what a file carries (presence only, never
+values), `strip.ts` writes a metadata-free derivative with `sharp`, and `pipeline.ts` is the one
+place that records the outcome — used by both the capture path and the remediation script, so
+the two cannot disagree.
+
+Migration 014 adds `media_derived_path` (the copy to serve), `media_meta_found` (flags only, for
+aggregate reporting) and `media_strip_skipped` (formats with no stripper here). It also had to
+re-declare `published_messages`: migration 013 replaced `SELECT m.*` with an explicit column
+list, so a new column is invisible to every public reader until it is named there.
+
+Stripping runs at capture, not lazily at first request — a photograph should never be one
+cache-miss away from being served with its GPS intact.
 
 ## Appendix: divergences (code wins)
 

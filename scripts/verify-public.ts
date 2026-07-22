@@ -13,6 +13,7 @@ import { join, dirname } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { buildServer } from '../src/web/server.js';
 import { loadMigrationFiles } from '../src/db/migrate.js';
+import { readFileSync } from 'node:fs';
 import { upsertMessage, updateMedia } from '../src/db/messages.js';
 import { recordOptIn } from '../src/db/consent.js';
 import {
@@ -115,6 +116,26 @@ async function main(): Promise<void> {
     mediaMime: 'video/mp4',
     mediaSize: 4,
   });
+
+  // CCB-S3-011: the public media route now serves the STRIPPED derivative, and
+  // refuses a strippable format that has none — so the fixtures have to be in the
+  // state real media reaches after capture. Images get a derivative; MP4 has no
+  // stripper on this instance and is recorded as such, which is what allows it
+  // through. Without this the whole media section 404s, which is the gate working.
+  await db.query(
+    `UPDATE messages
+        SET media_derived_path = 'derived/' || media_path
+      WHERE media_path IS NOT NULL AND media_mime LIKE 'image/%'`,
+  );
+  await db.query(
+    `UPDATE messages
+        SET media_strip_skipped = 'no stripper for this format on this instance'
+      WHERE media_path IS NOT NULL AND media_mime NOT LIKE 'image/%'`,
+  );
+  // The derivative has to exist on disk too, since that is what gets streamed.
+  for (const rel of ['2026/07/2-pub.png', '2026/07/4-unpub.png']) {
+    writeMedia(`derived/${rel}`, readFileSync(join(mediaRoot, rel)));
+  }
 
   // Bulk published items (CCB-S2-007) — 35 messages OLDER than the named ones above
   // (so page-1 assertions still hold) but after opt-in, giving a real 2-page dataset

@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-008**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -265,6 +265,23 @@ The history below records the pre-CCB-S2-003 state.
 - [ ] **The provider-attempt log does not survive a restart.** It is deliberately in memory, like
       the near-miss log — but it means a failure that happened before the last restart cannot be
       investigated. Persisting it would make provider behaviour reviewable over time.
+- [x] **Media metadata stripping (CCB-S3-011 Part 1)** — published media is served from a
+      stripped derivative; originals untouched; orientation baked in; formats with no stripper
+      recorded rather than assumed clean; existing media remediated.
+- [ ] **No video or document stripper on this instance (CCB-S3-011 Part 1).** Needs ffmpeg for
+      container/stream tags and a PDF library for document metadata. Today those formats are
+      served unstripped and flagged as such. The audit found no metadata in them, so this is a
+      gap in the guarantee rather than a live leak.
+- [ ] **CCB-S3-011 Part 2 — revocation: hide or delete. NOT BUILT.** Needs: a hide/delete choice
+      with no default and a safe interim (hidden) state; both states derived; restore after hide
+      only, by that member only; the choice recorded in the consent journal; row and media
+      deletion including every derivative; cache and search purge; an audit entry that records
+      the event without retaining the content. Blocked in part on CCB-S3-010, which never
+      reached this repository — see the report.
+- [ ] **Backups are not scheduled.** `deploy/backup.sh` keeps the last 14 copies but no cron or
+      timer invokes it, and no dump exists on the host. Until it runs there is no recovery from
+      a disk loss; once it runs, deleted content persists for 14 backup cycles, which is what
+      any deletion promise has to be written against.
 - [ ] **More assets and a second provider** — only HEX, BTC, ETH, USD and EUR ship. Adding an
       asset is a registry line in the admin, no code change; adding a second provider is an
       implementation of the `PriceProvider` interface. A fallback chain across providers is

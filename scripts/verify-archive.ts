@@ -448,6 +448,115 @@ async function main(): Promise<void> {
   );
   check('a re-send of the same item does not duplicate them', afterRetry[0]?.n === 1);
 
+  /* ── 8. CCB-S3-011 §1 — media metadata and opaque public URLs ─────────── */
+
+  section('8. CCB-S3-011 — published media carries no metadata');
+
+  const sharp = (await import('sharp')).default;
+  const { readExifSummary } = await import('../src/media/exif.js');
+  const { buildExifWithGps, injectExifIntoJpeg } = await import('../src/media/fixtures.js');
+  const { stripToDerivative, derivedPathFor, isStrippable } = await import('../src/media/strip.js');
+  const { mkdtemp, mkdir, writeFile, readFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join: joinPath } = await import('node:path');
+
+  const root = await mkdtemp(joinPath(tmpdir(), 'cinderella-media-'));
+  await mkdir(joinPath(root, '2026/07'), { recursive: true });
+
+  // A JPEG that genuinely carries GPS. Built by hand, because sharp cannot write
+  // a GPS IFD — a fixture made with it would let this whole section pass by
+  // detecting nothing.
+  const plain = await sharp({
+    create: { width: 32, height: 32, channels: 3, background: '#336699' },
+  })
+    .jpeg()
+    .toBuffer();
+  const withGps = injectExifIntoJpeg(plain, buildExifWithGps());
+  await writeFile(joinPath(root, '2026/07/9-sample-photo.jpg'), withGps);
+
+  // The POSITIVE control. Without it, "no GPS in the derivative" would also pass
+  // for a detector that never finds anything.
+  check('the detector finds GPS when it is really there', readExifSummary(withGps).hasGps);
+
+  const res = await stripToDerivative(root, '2026/07/9-sample-photo.jpg', 9, 'image/jpeg');
+  check('a strippable image produces a derivative', res.stripped && res.derivedPath !== undefined);
+  const derived = await readFile(joinPath(root, res.derivedPath ?? ''));
+  const after = readExifSummary(derived);
+  check('and the derivative has NO GPS', !after.hasGps);
+  check('nor any other EXIF, IPTC or XMP', !after.hasExif && !after.hasIptc && !after.hasXmp);
+  check('the original is untouched, GPS and all', readExifSummary(
+    await readFile(joinPath(root, '2026/07/9-sample-photo.jpg')),
+  ).hasGps);
+
+  // Orientation must be applied to the pixels before the tag is discarded.
+  const tall = await sharp({
+    create: { width: 40, height: 10, channels: 3, background: '#aa3344' },
+  })
+    .withMetadata({ orientation: 6 })
+    .jpeg()
+    .toBuffer();
+  await writeFile(joinPath(root, '2026/07/10-rot.jpg'), tall);
+  const rotRes = await stripToDerivative(root, '2026/07/10-rot.jpg', 10, 'image/jpeg');
+  const rotMeta = await sharp(joinPath(root, rotRes.derivedPath ?? '')).metadata();
+  check(
+    'an orientation tag is baked into the pixels, not dropped',
+    rotMeta.width === 10 && rotMeta.height === 40,
+    `${String(rotMeta.width)}x${String(rotMeta.height)}`,
+  );
+  check(
+    'and the orientation tag itself is gone',
+    readExifSummary(await readFile(joinPath(root, rotRes.derivedPath ?? ''))).orientation ===
+      undefined,
+  );
+
+  // The derived name must carry nothing of the member's own filename.
+  const derivedName = derivedPathFor(9, '2026/07/9-sample-photo.jpg');
+  check(
+    'a derivative path contains no part of the original filename',
+    !derivedName.includes('sample-photo') && derivedName.endsWith('/9.jpg'),
+    derivedName,
+  );
+
+  // The public URL shape: opaque id + nothing else.
+  const PUBLIC_MEDIA_URL = /^\/embed\/[A-Za-z0-9]+\/media\/\d+$/;
+  check(
+    'a public media URL is an opaque id only',
+    PUBLIC_MEDIA_URL.test('/embed/abc123/media/42'),
+  );
+  check(
+    'and a URL carrying a filename would FAIL that check',
+    !PUBLIC_MEDIA_URL.test('/embed/abc123/media/sample-photo.jpg'),
+  );
+
+  // The serving gate: a strippable format with no derivative is NOT served.
+  await db.query(
+    `INSERT INTO messages (group_id, group_msg_id, sender_member_id, sender_display_name,
+       sent_at, type, text_body, raw_json, media_path, media_mime)
+     VALUES ($1, 9001, $2, 'Alice', $3, 'image', NULL, '{}'::jsonb,
+             '2026/07/9-sample-photo.jpg', 'image/jpeg')`,
+    [GROUP, ALICE, at(30)],
+  );
+  const { rows: mediaRow } = await db.query<{ id: string }>(
+    'SELECT id FROM messages WHERE group_msg_id = 9001',
+  );
+  const mediaId = Number(mediaRow[0]?.id);
+  const { getPublishedMedia } = await import('../src/db/public-archive.js');
+  check(
+    'an image with no derivative is NOT served publicly',
+    (await getPublishedMedia(db, mediaId)) === null,
+  );
+  await db.query('UPDATE messages SET media_derived_path = $2 WHERE id = $1', [
+    mediaId,
+    'derived/2026/07/9.jpg',
+  ]);
+  const servedNow = await getPublishedMedia(db, mediaId);
+  check(
+    'once stripped, the DERIVATIVE is what gets served',
+    servedNow?.mediaPath === 'derived/2026/07/9.jpg' && servedNow.stripped,
+  );
+
+  check('a format with no stripper is recognised as such', !isStrippable('video/mp4'));
+
   console.log(
     failures === 0
       ? '\nAll CCB-S3-007 archive checks passed.'

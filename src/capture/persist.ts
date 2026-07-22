@@ -19,6 +19,7 @@ import { status } from '../web/status.js';
 import type { CaptureHooks } from './handler.js';
 import { extractLinks, linksToSearchText } from './links.js';
 import { storeMedia } from './media.js';
+import { messageIdFor, stripAndRecord } from '../media/pipeline.js';
 
 /** Message types that carry a downloadable file. */
 const MEDIA_TYPES = new Set(['image', 'video', 'voice', 'file']);
@@ -100,6 +101,22 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
         `Stored media for (group ${msg.groupId}, item ${msg.itemId}): ` +
           `${media.mediaPath} (${media.mediaSize} bytes, ${media.mediaMime}) ✓`,
       );
+
+      // Strip immediately (CCB-S3-011 §1). Nothing is publishable until this has
+      // run, so doing it here rather than lazily at first request means a photo
+      // is never one cache-miss away from being served with its GPS intact.
+      try {
+        const id = await messageIdFor(getPool(), msg.groupId, msg.itemId);
+        if (id !== null) {
+          await stripAndRecord(getPool(), cfg.mediaRoot, id, media.mediaPath, media.mediaMime);
+        }
+      } catch (err) {
+        log.error(
+          `Could not strip metadata from ${media.mediaPath} (${
+            err instanceof Error ? err.message : String(err)
+          }); it will NOT be published until stripping succeeds.`,
+        );
+      }
     },
 
     onFileFailed: async (msg, error) => {

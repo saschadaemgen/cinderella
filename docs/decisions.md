@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-008**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -53,6 +53,46 @@ import — no change to the sidebar, the resolver, or the settings framework.
 `src/interaction/intent.ts` (`setActiveIntents`, `isActiveIntent`);
 `src/interaction/resolver.ts`; `src/interaction/rules.ts`; `src/web/views/plugins.ts`;
 `scripts/verify-price.ts` §1.
+
+---
+
+### D-048 — Published media is a stripped derivative; the original is never touched
+
+**Status: IMPLEMENTED (CCB-S3-011 §1).**
+**Decision.** Metadata is removed on a COPY, and only the copy is ever served publicly. The
+serving gate refuses a strippable format that has no derivative, so the failure mode is
+"withheld", never "published unstripped". Orientation is applied to the pixels before the tag
+is discarded. Formats with no stripper on this instance are recorded as such rather than
+assumed clean.
+**Rationale.** Consent covers the content, not the hidden payload — publishing an unmodified
+phone photo to an indexed page can disclose where a member lives. Stripping the original
+instead would trade a privacy problem for an evidence problem: the operator needs the file as
+sent for moderation and for any preserve-and-report obligation.
+**What the audit actually found.** Nothing. All 57 captured files were clean, because the
+SimpleX client re-encodes images before sending. That is a property of somebody else's client
+that could change in any release, and it is not a promise Cinderella was in a position to make.
+The control exists so the guarantee is ours.
+**Evidence.** `src/media/strip.ts`, `src/media/exif.ts`, `src/media/pipeline.ts`;
+`migrations/014_media_derivatives.sql`; `scripts/verify-archive.ts` §8 — which asserts in both
+directions, using a hand-built GPS fixture, because `sharp` cannot write a GPS IFD and a fixture
+made with it would let the whole section pass by detecting nothing.
+
+---
+
+### D-049 — The filename leak was verified before it was fixed
+
+**Status: NO CHANGE REQUIRED (CCB-S3-011 §1.2).**
+**Decision.** No change to public URLs. They have always been
+`/embed/<instance>/media/<message-id>`.
+**Rationale.** The briefing described member filenames as public and indexable. They are not:
+the route is keyed by message id, `content-disposition` carries no filename, the download
+attribute is synthesised, and the sitemap, feed and JSON-LD all build the same opaque form. The
+original filename exists only on disk and in the operator console, which is precisely the state
+the briefing asks for. Rebuilding a working URL scheme to fix a leak that was not there would
+have risked every existing link for nothing. A harness check now pins the property so it cannot
+regress.
+**Evidence.** `src/web/front/embed.ts`, `src/web/front/seo.ts`, `src/web/front/render.ts`;
+`scripts/verify-archive.ts` §8 (opaque URL passes, filename URL fails).
 
 ---
 

@@ -55,6 +55,16 @@ export interface ArchiveSettings {
   mentionGuard: MentionGuard;
   /** Per-category publication. A category missing here is treated as excluded. */
   categories: Record<ReplyCategory, boolean>;
+  /**
+   * Strip metadata from published media (CCB-S3-011 §1). On by default.
+   *
+   * Switching it OFF does not publish the originals — the serving path only ever
+   * serves a derivative for a strippable format — it stops new derivatives being
+   * made, which withholds new media instead. That asymmetry is deliberate: the
+   * failure mode of this switch must be "nothing published", never "published
+   * with the GPS still in it".
+   */
+  stripMediaMetadata: boolean;
 }
 
 /**
@@ -86,6 +96,7 @@ export interface ArchiveSettings {
 export const DEFAULT_ARCHIVE: ArchiveSettings = {
   publishBotMessages: true,
   mentionGuard: 'redact',
+  stripMediaMetadata: true,
   categories: {
     consent: true,
     price: true,
@@ -161,6 +172,7 @@ export function normalizeArchive(input: unknown): ArchiveSettings {
   const guard = typeof rawGuard === 'string' ? rawGuard.trim() : '';
   return {
     publishBotMessages: bool(o['publishBotMessages'], d.publishBotMessages),
+    stripMediaMetadata: bool(o['stripMediaMetadata'], d.stripMediaMetadata),
     mentionGuard: (MENTION_GUARDS as readonly string[]).includes(guard)
       ? (guard as MentionGuard)
       : d.mentionGuard,

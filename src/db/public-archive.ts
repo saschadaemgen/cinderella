@@ -456,9 +456,15 @@ export async function isPublished(db: Queryable, messageId: number): Promise<boo
 }
 
 export interface PublishedMedia {
+  /**
+   * The path to SERVE. Always the stripped derivative for a format that has a
+   * stripper; the original only for formats this instance cannot strip.
+   */
   mediaPath: string;
   mediaMime: string | null;
   type: ArchiveType;
+  /** True when what is being served is the stripped copy, not the original. */
+  stripped: boolean;
 }
 
 /**
@@ -473,17 +479,40 @@ export async function getPublishedMedia(
 ): Promise<PublishedMedia | null> {
   const { rows } = await db.query<{
     media_path: string | null;
+    media_derived_path: string | null;
+    media_strip_skipped: string | null;
     media_mime: string | null;
     type: string;
   }>(
-    `SELECT media_path, media_mime, type::text AS type
+    `SELECT media_path, media_derived_path, media_strip_skipped, media_mime, type::text AS type
      FROM published_messages
      WHERE id = $1`,
     [messageId],
   );
   const r = rows[0];
   if (!r || !r.media_path) return null;
-  return { mediaPath: r.media_path, mediaMime: r.media_mime, type: r.type as ArchiveType };
+
+  // THE METADATA GATE (CCB-S3-011 §1). A format that CAN be stripped is served
+  // only from its derivative. A missing derivative means stripping has not
+  // happened yet, and the safe reading of that is "not publishable" — never
+  // "publish the original", which is precisely the leak being closed.
+  if (r.media_derived_path) {
+    return {
+      mediaPath: r.media_derived_path,
+      mediaMime: r.media_mime,
+      type: r.type as ArchiveType,
+      stripped: true,
+    };
+  }
+  // No derivative. Only formats with no stripper on this instance may fall
+  // through, and only because they were recorded as such at capture time.
+  if (!r.media_strip_skipped) return null;
+  return {
+    mediaPath: r.media_path,
+    mediaMime: r.media_mime,
+    type: r.type as ArchiveType,
+    stripped: false,
+  };
 }
 
 /** Newest published item's `sent_at` (ISO), for sitemap/feed `lastmod`. Null when

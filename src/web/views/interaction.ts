@@ -144,6 +144,20 @@ function archiveCard(a: ArchiveSettings, csrf: string): SafeHtml {
         <em>“Stands in for a member who has not opted in”</em>, further down this page.
       </span>
 
+      ${checkbox(
+        'stripMediaMetadata',
+        'Strip metadata from published media',
+        a.stripMediaMetadata,
+      )}
+      <span class="text-xs text-slate-500">
+        Removes EXIF, IPTC and XMP from published images — GPS coordinates, camera make, model
+        and serial number, capture time, and any owner or copyright name. Photographs from
+        phones routinely carry the coordinates of where they were taken. The stored original is
+        never modified; the public archive serves a stripped copy, and image orientation is
+        applied to the pixels first so nothing appears rotated. Video and document formats have
+        no stripper on this instance, and are listed as such rather than assumed clean.
+      </span>
+
       <div class="flex flex-col gap-2">
         <span class="text-sm font-medium text-slate-700">Which of her replies are archived</span>
         ${REPLY_CATEGORIES.map(
@@ -714,6 +728,7 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         await ctx.archive.save(
           {
             publishBotMessages: 'publishBotMessages' in body,
+            stripMediaMetadata: 'stripMediaMetadata' in body,
             mentionGuard: bodyString(body, 'mentionGuard'),
             categories,
           },
