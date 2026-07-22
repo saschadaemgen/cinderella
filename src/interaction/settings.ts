@@ -22,6 +22,7 @@
 import { getSetting, setSetting } from '../db/settings.js';
 import type { Queryable } from '../db/pool.js';
 import { writeAudit } from '../db/audit.js';
+import type { ReplyCategory } from '../archive/settings.js';
 
 /** Languages shipped with preconfigured copy. More can be added as keys. */
 export const SHIPPED_LANGS = ['en', 'de'] as const;
@@ -51,9 +52,46 @@ export const PERSONA_KEYS = [
   'priceUnknownAsset', // PRICE — {symbol}
   'priceAmbiguous', // PRICE — {symbol} {options}
   'priceUnavailable', // PRICE — provider unreachable
+  'redactedMember', // CCB-S3-007 §2 — stands in for a member who has not opted in
 ] as const;
 export type PersonaKey = (typeof PERSONA_KEYS)[number];
 export type PersonaStrings = Record<PersonaKey, string>;
+
+/**
+ * Which archive category each thing she can say belongs to (CCB-S3-007 §3).
+ *
+ * This map IS the "declared by the handler" rule the briefing asks for, expressed
+ * where it cannot be forgotten: the type is a total Record over PersonaKey, so
+ * adding a new thing for her to say without deciding whether it belongs in the
+ * public archive does not compile. The database still refuses to publish an
+ * unclassified row, which covers reply paths that do not go through a persona key
+ * at all — a future plugin talking directly to the transport.
+ */
+export const PERSONA_CATEGORY: Record<PersonaKey, ReplyCategory> = {
+  publishConfirm: 'consent',
+  published: 'consent',
+  unpublishConfirm: 'consent',
+  unpublished: 'consent',
+  refuseThirdParty: 'consent',
+  cancelled: 'consent',
+  undo: 'consent',
+  undoNothing: 'consent',
+  status: 'status',
+  searchResult: 'search',
+  notUnderstood: 'notUnderstood',
+  help: 'help',
+  price: 'price',
+  conversion: 'price',
+  priceUnavailable: 'price',
+  // Both of these echo a member's own typing back — the ticker they asked about,
+  // and the candidate list built from it — so they sit with the disambiguation
+  // questions, which are excluded by default.
+  priceUnknownAsset: 'disambiguation',
+  priceAmbiguous: 'disambiguation',
+  // Never sent through the persona reply path (it is not a reply to anything),
+  // but the map is total, and 'consent' is the category it would belong to.
+  redactedMember: 'consent',
+};
 
 export interface NicknameSettings {
   /** Master switch for the whole nickname behaviour (§6). */
@@ -225,6 +263,9 @@ const PERSONA_EN: PersonaStrings = {
   priceAmbiguous:
     '🕯️ More than one *{symbol}* is known to me. Which do you mean?\n\n{options}\n\nAnswer with a number.',
   priceUnavailable: '🌙 The markets are out of earshot just now. Try again in a moment.',
+  // Not a reply — the name she puts in place of a member who has not opted in,
+  // so a published sentence of hers still reads as a sentence (CCB-S3-007 §2).
+  redactedMember: 'that member',
 };
 
 const PERSONA_DE: PersonaStrings = {
@@ -266,6 +307,7 @@ const PERSONA_DE: PersonaStrings = {
   priceAmbiguous:
     '🕯️ Ich kenne mehr als ein *{symbol}*. Welches meinst du?\n\n{options}\n\nAntworte mit einer Zahl.',
   priceUnavailable: '🌙 Die Märkte sind gerade außer Hörweite. Versuch es gleich noch einmal.',
+  redactedMember: 'dieses Mitglied',
 };
 
 const RETORTS_EN = [

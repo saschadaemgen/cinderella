@@ -18,6 +18,7 @@ import type { Queryable } from '../db/pool.js';
 import type { SettingsService } from '../settings/service.js';
 import type { SecurityService } from '../security/settings.js';
 import { SiteService } from '../site/settings.js';
+import { ArchiveService } from '../archive/settings.js';
 import { InteractionService } from '../interaction/settings.js';
 import { PluginService } from '../plugins/service.js';
 import { listPlugins } from '../plugins/registry.js';
@@ -60,6 +61,7 @@ export interface AdminContext {
   settings: SettingsService;
   security: SecurityService;
   site: SiteService;
+  archive: ArchiveService;
   interaction: InteractionService;
   plugins: PluginService;
   sessions: SessionStore;
@@ -74,6 +76,7 @@ export interface ViewContext {
   settings: SettingsService;
   security: SecurityService;
   site: SiteService;
+  archive: ArchiveService;
   interaction: InteractionService;
   plugins: PluginService;
   sessions: SessionStore;
@@ -88,6 +91,9 @@ export interface ServerDeps {
   /** Website settings (CCB-S2-012). Optional — buildServer falls back to all-OFF
    * defaults so harnesses need not seed a `site` row. */
   site?: SiteService;
+  /** Archive publication settings (CCB-S3-007). Optional — buildServer falls back
+   * to the shipped defaults, which match the SQL view's own defaults. */
+  archive?: ArchiveService;
   /** Interaction settings (CCB-S3-002). Optional — buildServer falls back to the
    * briefing defaults so harnesses need not seed an `interaction` row. */
   interaction?: InteractionService;
@@ -112,6 +118,7 @@ function isSensitive(method: string, path: string): boolean {
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const { db, adminCfg, cfg, settings, security } = deps;
   const site = deps.site ?? SiteService.withDefaults(db);
+  const archive = deps.archive ?? ArchiveService.withDefaults(db);
   const interaction = deps.interaction ?? InteractionService.withDefaults(db);
   const plugins = deps.plugins ?? PluginService.withDefaults(db);
   const app = Fastify({ trustProxy: 'loopback', logger: false });
@@ -145,6 +152,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     settings,
     security,
     site,
+    archive,
     interaction,
     plugins,
     sessions,
@@ -288,6 +296,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     settings,
     security,
     site,
+    archive,
     interaction,
     plugins,
     sessions,

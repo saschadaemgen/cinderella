@@ -20,12 +20,14 @@ import { flushAvatarToGroups } from './bot/avatar.js';
 import { sendToChat } from './bot/send.js';
 import { registerCapture } from './capture/handler.js';
 import { makePersistenceHooks } from './capture/persist.js';
+import { withBotCapture, type BotReplyMeta } from './capture/bot-message.js';
 import { makeConsentHandler } from './consent/commands.js';
 import { assertDbReachable, closePool, getPool } from './db/pool.js';
 import { markInterruptedMediaReceipts } from './db/messages.js';
 import { SettingsService } from './settings/service.js';
 import { SecurityService } from './security/settings.js';
 import { SiteService } from './site/settings.js';
+import { ArchiveService } from './archive/settings.js';
 import { InteractionService } from './interaction/settings.js';
 import { InteractionEngine } from './interaction/engine.js';
 import { activeResolverName } from './interaction/resolver.js';
@@ -95,10 +97,40 @@ async function startCaptureWorker(
   try {
     const botHandle = await startBot(cfg, { getFileTimeoutMs: () => settings.fileTimeoutMs });
     const hooks = makePersistenceHooks(cfg);
+
+    /**
+     * The one place her own messages become archive rows (CCB-S3-007). Both reply
+     * paths — the dialogue engine and the slash commands — go through this, for
+     * the same reason they already share one transport: two capture sites would
+     * be two chances for her side of a conversation to go missing.
+     *
+     * The placeholder is read live from the persona settings, so an operator who
+     * rewrites "that member" sees it take effect on the next reply.
+     */
+    const placeholderFor = (lang: string): string => {
+      const p = interaction.get().persona;
+      return (
+        p[lang]?.redactedMember ??
+        p[interaction.get().defaultLanguage]?.redactedMember ??
+        p['en']?.redactedMember ??
+        'that member'
+      );
+    };
+    const sendAndArchive = (
+      msg: Parameters<typeof sendToChat>[1],
+      text: string,
+      opts: { quote: boolean } & BotReplyMeta,
+    ): Promise<void> =>
+      withBotCapture(placeholderFor, (t, o: { quote: boolean }) =>
+        sendToChat(botHandle.chat, msg, t, o),
+      )(text, opts);
+
     // The engine is created below; the callback is late-bound so the slash path
     // can refresh the same follow-up window the engine owns.
     let noteReply: (g: number, m: string) => void = () => undefined;
-    hooks.onCommand = makeConsentHandler(botHandle, interaction, (g, m) => noteReply(g, m));
+    hooks.onCommand = makeConsentHandler(botHandle, interaction, (g, m) => noteReply(g, m), {
+      send: sendAndArchive,
+    });
 
     // Natural addressing (CCB-S3-002). The engine only ever decides and replies;
     // consent changes go through the same write path as the slash commands.
@@ -121,8 +153,9 @@ async function startCaptureWorker(
       priceSettings: () => plugins.getCryptoPrices(),
       // Presentation is the engine's decision (CCB-S3-003); this is only the
       // transport. Both this and the slash-command path go through sendToChat,
-      // so the two can never disagree about quoting again.
-      send: (msg, text, opts) => sendToChat(botHandle.chat, msg, text, opts),
+      // so the two can never disagree about quoting again — and both now archive
+      // what they send (CCB-S3-007).
+      send: sendAndArchive,
     });
     noteReply = (g, m) => engine.noteExternalReply(g, m);
     hooks.onInteraction = (msg) => engine.handle(msg);
@@ -193,6 +226,7 @@ async function runApp(cfg: Config): Promise<void> {
 
   const security = await SecurityService.load(getPool());
   const site = await SiteService.load(getPool());
+  const archive = await ArchiveService.load(getPool());
   const interaction = await InteractionService.load(getPool());
   const plugins = await PluginService.load(getPool());
 
@@ -205,6 +239,7 @@ async function runApp(cfg: Config): Promise<void> {
     settings,
     security,
     site,
+    archive,
     interaction,
     plugins,
     cfg,

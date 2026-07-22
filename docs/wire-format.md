@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-006**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -201,6 +201,26 @@ whichever of three providers is configured.
   another chain's price with no error.
 - **Keys are stored encrypted** in the plugin's settings row and never rendered back, logged,
   or written to an audit entry.
+
+## 3e. Her own sends come back as chat items, and that is how they are archived (CCB-S3-007)
+
+`apiSendTextMessage` and `apiSendTextReply` both return `T.AChatItem[]` — the items the
+core created for the send, not an acknowledgement. The fields capture relies on:
+
+| Field | Meaning |
+|---|---|
+| `chatItem.chatDir.type === 'groupSnd'` | sent by us in this group (received items are `groupRcv`) |
+| `chatItem.content.type` | `sndMsgContent` for a send; `rcvMsgContent` for a receipt |
+| `chatItem.meta.itemId` | the id in-group deletion events refer to — persisted as `group_msg_id` |
+| `chatItem.meta.itemTs` | the send timestamp |
+| `chatInfo.groupInfo.membership.memberId` | **the bot's own stable member id in that group** |
+
+That last one matters: her archived rows carry a real group member id, not a sentinel
+string. Nothing keys off it — `is_bot` is what the derivation tests — but it means her rows
+are traceable the same way everyone else's are, and an in-group deletion of one of her
+messages reaches it through the ordinary deletion events, which are not direction-filtered.
+
+A send returns an ARRAY, and capture iterates it: each item is its own `group_msg_id`.
 
 ## 4. There is no private per-member channel — consent is group-only, and confirmations are public
 

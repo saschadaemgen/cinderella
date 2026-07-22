@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-006**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -53,6 +53,64 @@ import — no change to the sidebar, the resolver, or the settings framework.
 `src/interaction/intent.ts` (`setActiveIntents`, `isActiveIntent`);
 `src/interaction/resolver.ts`; `src/interaction/rules.ts`; `src/web/views/plugins.ts`;
 `scripts/verify-price.ts` §1.
+
+---
+
+### D-042 — Cinderella publishes on the operator's decision, never on a consent row
+
+**Status: IMPLEMENTED (CCB-S3-007 §1).**
+**Decision.** Her own messages are captured and published through a SECOND BRANCH of
+`message_publish_state`, gated by the `archive` settings. No consent row is ever written
+for her. The obvious shortcut — give the bot a member id and an operator-written consent
+row, and change no SQL at all — was considered and rejected.
+**Rationale.** `consent` is a first-person record: a member's own decision about their own
+words. A row in it that nobody chose would make every reading of that table false, and the
+admin console would then offer to "revoke consent" for someone who never gave any. The
+saving was one CASE expression; the cost was the meaning of the one table this product
+rests on.
+**Evidence.** `migrations/013_bot_messages.sql`; `src/archive/settings.ts`;
+`scripts/verify-archive.ts` §1 — which asserts no consent row exists for her, and that the
+consent table still holds exactly the real members.
+
+---
+
+### D-043 — The name guard lives in the derivation, not at composition time
+
+**Status: IMPLEMENTED (CCB-S3-007 §2).**
+**Decision.** Before any message of hers is published, every member name it contains is
+resolved and checked against that member's CURRENT consent. The check is a read-time
+expression in `published_messages`, not a decision taken when the reply was composed.
+Unresolvable and ambiguous names count as non-consenting. Full-text search is closed
+separately, through a stored `search_body` with every name replaced unconditionally,
+because a generated column cannot consult the `consent` table.
+**Rationale.** Composition-time redaction would be a stored flag by another name: it could
+not be corrected when a member changes their mind, and a reply type added later would
+bypass it silently. Read-time evaluation makes a member's `/unpublish` retroactive over
+messages of HERS — the property that actually matters, because her words are the one route
+by which a non-consenting member's identity could reach the archive.
+**Rejected along the way.** Escaping display names inside SQL. Verified against real
+Postgres to produce an invalid backreference for a name like `Ro[b]in.*`, which makes the
+pattern throw — redaction failing open. Escaping now happens once in TypeScript
+(`escapeRegex`) and is stored pre-escaped.
+**Evidence.** `migrations/013_bot_messages.sql` (the LATERAL and its comment block);
+`src/archive/redact.ts`; `scripts/verify-archive.ts` §3 and §6.
+
+---
+
+### D-044 — Two of the briefing's publish defaults ship excluded
+
+**Status: IMPLEMENTED (CCB-S3-007 §3, departing from the briefing's table).**
+**Decision.** `status` and `search` answers ship EXCLUDED rather than published. Both stay
+switchable, and the admin help text states what enabling them publishes.
+**Rationale.** The briefing's table classifies replies by kind; it could not see what the
+strings contain. Her status answer states how many of a member's messages are NOT public —
+private information about a member who may never have opted in, and redacting a name does
+not remove a count. Her search answer repeats the member's own query verbatim, which
+republishes their words under her byline with no consent anywhere in the path, and makes
+her own answer a hit in the next search. The leak guard covers NAMES; neither of these is a
+name.
+**Evidence.** `src/archive/settings.ts` (`DEFAULT_ARCHIVE` and its header);
+`src/interaction/settings.ts` (the two persona strings); `scripts/verify-archive.ts` §4.
 
 ---
 

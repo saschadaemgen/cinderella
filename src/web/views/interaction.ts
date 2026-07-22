@@ -25,6 +25,11 @@ import {
   type PersonaKey,
   type ReplyMode,
 } from '../../interaction/settings.js';
+import {
+  CATEGORY_LABELS,
+  REPLY_CATEGORIES,
+  type ArchiveSettings,
+} from '../../archive/settings.js';
 import { NEAR_MISS_REASONS, recentNearMisses } from '../../interaction/near-misses.js';
 import { activeResolverName } from '../../interaction/resolver.js';
 import { html, page, raw, type SafeHtml } from '../html.js';
@@ -93,6 +98,70 @@ function saveButton(): SafeHtml {
   </button>`;
 }
 
+/**
+ * Her own messages in the archive (CCB-S3-007).
+ *
+ * It lives on this page rather than getting its own, because it is inseparable
+ * from the copy directly below it: the placeholder that replaces a name is one of
+ * the persona strings, and an operator deciding whether her replies are public
+ * wants to see what those replies actually say.
+ */
+function archiveCard(a: ArchiveSettings, csrf: string): SafeHtml {
+  return card(
+    'Her own messages in the archive',
+    html`<form method="post" action="/interaction" class="flex flex-col gap-4">
+      <input type="hidden" name="_csrf" value="${csrf}" />
+      <input type="hidden" name="section" value="archive" />
+      <p class="text-sm text-slate-600">
+        Publication here is decided by these switches alone — she is not a member and has no
+        consent record, and nothing on this page writes to one. Members' own messages are
+        unaffected by everything below.
+      </p>
+      ${checkbox(
+        'publishBotMessages',
+        'Publish her replies on the public archive',
+        a.publishBotMessages,
+      )}
+      <span class="text-xs text-slate-500">
+        Turning this off removes her messages from the public stream immediately. Nothing is
+        deleted — turning it back on restores them, because publication is worked out on every
+        read rather than stored.
+      </span>
+
+      ${labelled(
+        'When one of her replies names a member who has not opted in',
+        selectField('mentionGuard', a.mentionGuard, [
+          ['redact', 'Replace the name (keeps the sentence readable)'],
+          ['withhold', 'Withhold the whole message'],
+        ]),
+        'Checked on every read, so a member who opts out later also disappears from replies of ' +
+          'hers that were already public. Note that "replace the name" leaves the message in ' +
+          'place, so a copy already fetched by a feed reader or a crawler keeps the old text; ' +
+          '"withhold" takes the message out of the feed entirely.',
+      )}
+      <span class="text-xs text-slate-500">
+        The stand-in text is the persona string
+        <em>“Stands in for a member who has not opted in”</em>, further down this page.
+      </span>
+
+      <div class="flex flex-col gap-2">
+        <span class="text-sm font-medium text-slate-700">Which of her replies are archived</span>
+        ${REPLY_CATEGORIES.map(
+          (c) => html`<div class="flex flex-col">
+            ${checkbox(`cat:${c}`, CATEGORY_LABELS[c].label, a.categories[c])}
+            <span class="ml-6 text-xs text-slate-500">${CATEGORY_LABELS[c].help}</span>
+          </div>`,
+        )}
+        <span class="text-xs text-slate-500">
+          A reply from a handler that declares no category at all is never published, so a new
+          plugin cannot land in the archive unclassified.
+        </span>
+      </div>
+      ${saveButton()}
+    </form>`,
+  );
+}
+
 /** Human labels and the placeholders each persona string may use. */
 const PERSONA_META: Record<PersonaKey, { label: string; vars: string }> = {
   publishConfirm: { label: 'Publish — asking for confirmation', vars: '' },
@@ -112,6 +181,10 @@ const PERSONA_META: Record<PersonaKey, { label: string; vars: string }> = {
   priceUnknownAsset: { label: 'Price — asset not in the registry', vars: '{symbol}' },
   priceAmbiguous: { label: 'Price — symbol is ambiguous', vars: '{symbol} {options}' },
   priceUnavailable: { label: 'Price — market data unreachable', vars: '' },
+  redactedMember: {
+    label: 'Stands in for a member who has not opted in',
+    vars: 'Not a reply. When one of her published messages names a member who has not opted in, this replaces the name.',
+  },
 };
 
 const REPLY_MODE_LABELS: Record<ReplyMode, string> = {
@@ -429,6 +502,8 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
           )}`,
       );
 
+      const herMessages = archiveCard(ctx.archive.get(), csrf);
+
       const safety = card(
         'Confirmation, undo and rate limits',
         html`<p class="mb-3 text-sm text-slate-500">
@@ -556,8 +631,8 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         ${pageHeader('Interaction', 'How she is addressed, what she understands, and how she speaks')}
         ${notice} ${intro}
         <div class="flex flex-col gap-6">
-          ${addressing} ${guards} ${nearMissCard} ${language} ${answering} ${safety}
-          ${nicknames} ${personaCards} ${retortCards} ${reset}
+          ${addressing} ${guards} ${nearMissCard} ${language} ${answering} ${herMessages}
+          ${safety} ${nicknames} ${personaCards} ${retortCards} ${reset}
         </div>
       `;
 
@@ -630,6 +705,20 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         const retorts = (next['retorts'] ?? {}) as Record<string, unknown>;
         retorts[lang] = bodyString(body, 'retorts');
         next['retorts'] = retorts;
+      } else if (section === 'archive') {
+        // A different service and a different settings key, so this branch saves
+        // and returns rather than falling through to the interaction save.
+        const categories: Record<string, boolean> = {};
+        for (const c of REPLY_CATEGORIES) categories[c] = `cat:${c}` in body;
+        await ctx.archive.save(
+          {
+            publishBotMessages: 'publishBotMessages' in body,
+            mentionGuard: bodyString(body, 'mentionGuard'),
+            categories,
+          },
+          actor,
+        );
+        return reply.redirect('/interaction?saved=1');
       } else if (section === 'reset') {
         await interaction.save(DEFAULT_INTERACTION, actor);
         return reply.redirect('/interaction?saved=1');

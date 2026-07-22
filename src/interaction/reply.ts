@@ -29,6 +29,15 @@ export interface OutboundReply {
   text: string;
   /** Whether to send it as a quoting reply. */
   quote: boolean;
+  /**
+   * The member name this reply put into the text via the prefix, exactly as it
+   * was embedded — absent when nothing was prefixed (CCB-S3-007 §2).
+   *
+   * The leak guard needs the literal string, not the raw display name: what the
+   * prefix inserts is the SANITIZED name, and redaction has to match the text
+   * that is actually there.
+   */
+  prefixName?: string;
 }
 
 export interface FormatOptions {
@@ -89,5 +98,5 @@ export function formatOutbound(body: string, opts: FormatOptions): OutboundReply
   const prefix = fillPersona(opts.prefixTemplate, { name }).trim();
   if (!prefix) return { text: body, quote };
 
-  return { text: `${prefix} ${body}`, quote };
+  return { text: `${prefix} ${body}`, quote, prefixName: name };
 }

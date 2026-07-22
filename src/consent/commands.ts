@@ -15,8 +15,19 @@ import { formatOutbound } from '../interaction/reply.js';
 import { DEFAULT_INTERACTION, type InteractionSettings } from '../interaction/settings.js';
 import type { BotHandle } from '../bot/client.js';
 import type { CapturedMessage } from '../capture/message.js';
+import type { BotReplyMeta } from '../capture/bot-message.js';
 
 export type ConsentCommand = 'publish' | 'unpublish';
+
+/**
+ * The transport a consent confirmation is sent through. Matches the interaction
+ * engine's `send`, so both reply paths archive her side the same way.
+ */
+export type ConsentSender = (
+  msg: CapturedMessage,
+  text: string,
+  opts: { quote: boolean } & BotReplyMeta,
+) => Promise<void>;
 
 /** Recognizes an exact `/publish` or `/unpublish` command (ASCII, trimmed). */
 export function parseConsentCommand(text: string): ConsentCommand | null {
@@ -80,6 +91,7 @@ async function reply(
   msg: CapturedMessage,
   text: string,
   s: InteractionSettings,
+  send: ConsentSender | undefined,
 ): Promise<void> {
   try {
     const out = formatOutbound(text, {
@@ -90,7 +102,24 @@ async function reply(
       displayName: msg.senderDisplayName,
       allowQuote: false,
     });
-    await sendToChat(botHandle.chat, msg, out.text, { quote: out.quote });
+    // A consent confirmation is archive content of the "consent" category
+    // (CCB-S3-007 §3). It names the member only when the prefix put their name
+    // there — and note that an /unpublish confirmation therefore names somebody
+    // who has, one line earlier, just opted OUT: the guard redacts it, which is
+    // the correct answer and worth keeping in mind before "simplifying" it.
+    const meta = {
+      quote: out.quote,
+      category: 'consent' as const,
+      lang: s.defaultLanguage,
+      mentions: out.prefixName
+        ? [{ displayName: out.prefixName, memberId: msg.senderMemberId }]
+        : [],
+    };
+    if (send) {
+      await send(msg, out.text, meta);
+    } else {
+      await sendToChat(botHandle.chat, msg, out.text, { quote: out.quote });
+    }
   } catch (err) {
     log.warn(
       `Failed to send consent confirmation to member ${msg.senderMemberId}: ` +
@@ -108,6 +137,12 @@ export function makeConsentHandler(
   interaction?: { get(): InteractionSettings },
   /** Called after a confirmation is sent, so the follow-up window opens (§7c). */
   onReplied?: (groupId: number, memberId: string) => void,
+  /**
+   * The archiving transport (CCB-S3-007). Optional so the harnesses and the
+   * connect script can still build a handler with nothing behind it; when it is
+   * absent the confirmation is sent exactly as before and simply not archived.
+   */
+  opts?: { send?: ConsentSender },
 ): (msg: CapturedMessage, command: ConsentCommand) => Promise<void> {
   return async (msg, command) => {
     const db = getPool();
@@ -136,7 +171,7 @@ export function makeConsentHandler(
           source: 'slash',
         });
         log.info(`Consent: opt-in recorded for member ${msg.senderMemberId}.`);
-        await reply(botHandle, msg, PUBLISH_REPLY, presentation);
+        await reply(botHandle, msg, PUBLISH_REPLY, presentation, opts?.send);
         onReplied?.(msg.groupId, msg.senderMemberId);
       } else {
         const { hadActive } = await applyConsentChange(db, {
@@ -148,7 +183,7 @@ export function makeConsentHandler(
         log.info(
           `Consent: opt-out recorded for member ${msg.senderMemberId} (had active consent: ${hadActive}).`,
         );
-        await reply(botHandle, msg, UNPUBLISH_REPLY, presentation);
+        await reply(botHandle, msg, UNPUBLISH_REPLY, presentation, opts?.send);
         onReplied?.(msg.groupId, msg.senderMemberId);
       }
     } catch (err) {
@@ -159,7 +194,7 @@ export function makeConsentHandler(
       status.error(
         `Consent command /${command} failed for member ${msg.senderMemberId}: ${message}`,
       );
-      await reply(botHandle, msg, FAILURE_REPLY, presentation);
+      await reply(botHandle, msg, FAILURE_REPLY, presentation, opts?.send);
     }
   };
 }

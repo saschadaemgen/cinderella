@@ -137,6 +137,12 @@ export function parseGroupMessage(aChatItem: T.AChatItem): CapturedMessage | nul
   const groupInfo = chatInfo.groupInfo;
 
   const dir = chatItem.chatDir;
+  // Her OWN sends (`groupSnd`) are archived by the send site instead
+  // (capture/bot-message.ts), and must never come back through here: this
+  // function feeds the consent-command parser and the dialogue engine, so a
+  // reply of hers arriving as input would let her answer herself. The
+  // `groupRcv` test below already excludes them — this note is here so a future
+  // widening of it is a decision rather than an accident.
   if (dir.type !== 'groupRcv') return null;
   const member = dir.groupMember;
 

@@ -579,6 +579,63 @@ async function main(): Promise<void> {
   );
   const iaCsrf = csrfFrom(iaPage.body);
 
+  /* ── Her own messages in the archive (CCB-S3-007) ──────────────────────── */
+
+  check(
+    'interaction page offers the archive switches for her own messages',
+    iaPage.body.includes('Her own messages in the archive') &&
+      iaPage.body.includes('Nickname retorts') &&
+      iaPage.body.includes('cat:consent'),
+  );
+  check(
+    'and says plainly that no consent record is involved',
+    iaPage.body.includes('has no') && iaPage.body.includes('consent record'),
+  );
+
+  const archiveSave = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: {
+      _csrf: iaCsrf,
+      section: 'archive',
+      // publishBotMessages deliberately OMITTED — an unticked checkbox is absent.
+      mentionGuard: 'withhold',
+      'cat:price': 'on',
+    },
+    headers: authed,
+  });
+  // Both success and failure redirect, so assert on WHERE it redirected to —
+  // a plain 302 check would have passed for a save that silently threw.
+  check(
+    'archive settings save',
+    archiveSave.statusCode === 302 &&
+      String(archiveSave.headers['location'] ?? '').includes('saved=1'),
+    String(archiveSave.headers['location'] ?? ''),
+  );
+
+  const archiveRow = await db.query<{ value: { publishBotMessages: boolean; mentionGuard: string; categories: Record<string, boolean> } }>(
+    `SELECT value FROM settings WHERE key = 'archive'`,
+  );
+  const av = archiveRow.rows[0]?.value;
+  check('the master switch really went off', av?.publishBotMessages === false);
+  check('the mention guard really changed', av?.mentionGuard === 'withhold');
+  check('an unticked category is stored as false', av?.categories?.['consent'] === false);
+  check('a ticked one as true', av?.categories?.['price'] === true);
+
+  const archiveAudit = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM audit_log WHERE action = 'archive.update'`,
+  );
+  check('the change is audited', (archiveAudit.rows[0]?.n ?? 0) >= 1);
+
+  // Put it back so the checks below see the shipped behaviour.
+  await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: { _csrf: iaCsrf, section: 'archive', publishBotMessages: 'on',
+               mentionGuard: 'redact', 'cat:consent': 'on', 'cat:price': 'on' },
+    headers: authed,
+  });
+
   const renameRes = await app.inject({
     method: 'POST',
     url: '/interaction',

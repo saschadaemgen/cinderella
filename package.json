@@ -29,7 +29,8 @@
     "verify:public": "tsx scripts/verify-public.ts",
     "verify:site": "tsx scripts/verify-site.ts",
     "verify:interaction": "tsx scripts/verify-interaction.ts",
-    "verify:price": "tsx scripts/verify-price.ts"
+    "verify:price": "tsx scripts/verify-price.ts",
+    "verify:archive": "tsx scripts/verify-archive.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

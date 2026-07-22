@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-003**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -417,6 +417,42 @@ slash commands off cannot be defeated by talking to her mid-conversation.
 Verified by [`scripts/verify-interaction.ts`](../scripts/verify-interaction.ts) (105 checks,
 real PGlite + the real capture pipeline) and §11 of
 [`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
+
+## 13a. Her own messages in the archive (CCB-S3-007)
+
+Publication derives from member consent, and Cinderella has none — so her side of
+every exchange was missing and published conversations read as one-sided. She is
+**not** a member giving consent, and no consent row is fabricated for her: her
+publication is a **second branch of the same derivation**, decided by the
+operator's `archive` settings.
+
+**Capture is at the SEND SITE**, not from the event stream. `sendToChat` now
+returns the chat items the core created, and `withBotCapture`
+(`src/capture/bot-message.ts`) records them. The reason is that only the send site
+knows what KIND of reply it was; recovering that from the text afterwards would be
+guesswork. Both reply paths — the dialogue engine and the slash commands — go
+through the one wrapper, as they already do for the transport.
+
+The event path cannot pick them up as a duplicate: `parseGroupMessage` accepts
+only `groupRcv` items, and hers are `groupSnd`. That was previously true by
+accident; it is now stated in the code, because the same function feeds the
+consent-command parser and the dialogue engine, and a reply of hers arriving as
+input would let her answer herself.
+
+**Categories** are declared by the handler, expressed as a total
+`Record<PersonaKey, ReplyCategory>` (`PERSONA_CATEGORY`), so adding something new
+for her to say without deciding whether it belongs in the archive does not
+compile. A row with no category never publishes, which covers reply paths that do
+not go through a persona key at all.
+
+**The leak guard** lives in the derivation, not at composition time, so a member's
+later `/unpublish` retroactively removes their name from messages of hers that
+were published while their consent stood. See `docs/security.md` §9b.
+
+**Known gaps.** The welcome message is sent by the one-shot `npm run connect`
+process, whose capture pipeline is not running, so it is never archived. The
+avatar-flush message (`🕯️✨`) bypasses `sendToChat` entirely and is likewise not
+archived — correct, but by omission rather than by rule.
 
 ## 14. Plugins (CCB-S3-004)
 

@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-004**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -442,6 +442,70 @@ who spoke to the bot and when. Consent itself is in PostgreSQL, journalled with 
 as every other admin page, and every save writes an `interaction.update` audit entry.
 
 ---
+
+## 9b. Her own messages — the consent leak guard (CCB-S3-007)
+
+Publishing Cinderella's replies opens a route around the consent gate that member
+messages do not have: **her words can contain a member's name.** The mention
+prefix names the sender; a third-party refusal names whoever the instruction
+pointed at. Publishing either would put a non-consenting member's name into the
+public archive through her message.
+
+**The guard is in the publication derivation** (`published_messages`, migration
+013), deliberately not at composition time. Two consequences follow, and both are
+the point:
+
+- a reply type added later cannot bypass it, because nothing is baked in at send
+  time;
+- it is **re-evaluated on every read**, so when a named member unpublishes, their
+  name disappears from messages of hers that were already public.
+
+`redact` (default) replaces the name with a localised persona string; `withhold`
+suppresses the whole message. A name that resolves to **no** member, or to **more
+than one**, is treated as non-consenting — there is no consent to point at, so it
+is redacted rather than gambled on.
+
+**Full-text search is closed separately.** A generated column cannot consult the
+`consent` table, so her rows are indexed from `search_body`, which has every named
+member replaced unconditionally. Slightly more is hidden from search than from the
+page, which is the right way round: otherwise a visitor could search a redacted
+name, get the card back, and learn that it names them. Her rows index
+`search_body` **and nothing else** — a bot row without one is unsearchable rather
+than silently indexed in the clear, and a CHECK constraint rejects it outright.
+
+**`raw_json` was removed from `published_messages`.** For a quoting reply the raw
+chat item contains the quoted member's full text and profile. Nothing read it
+publicly, and now nothing can.
+
+**Two defaults depart from the briefing, both toward publishing less.** Her
+`status` answer states how many of a member's messages are *not* public, and her
+`search` answer repeats the member's own query text verbatim. Neither is covered
+by any consent, and redacting a name does not remove either. Both ship excluded
+and stay switchable, with the admin help text saying what enabling them means.
+
+**Hostile input.** Display names are member-controlled and end up in a regular
+expression. They are escaped by `escapeRegex` in TypeScript and stored
+pre-escaped, after it was verified against real Postgres that escaping inside SQL
+does *not* survive the trip through the replacement grammar — a name like
+`Ro[b]in.*` produced an invalid backreference, which is redaction failing open.
+The replacement string is operator-editable persona copy, so its backslashes are
+doubled: `\&` in a Postgres replacement re-emits the match, i.e. the very name
+being redacted. Empty names are excluded (an empty alternative matches everywhere)
+and matching is anchored by negative lookaround rather than `\y`, which requires
+a word character on the inside edge and would therefore never match a name
+beginning with punctuation or an emoji.
+
+**Availability.** Every read of the operator's settings inside the views compares
+JSON rather than casting, because `('maybe')::boolean` raises and a raise inside
+`published_messages` would take the entire public archive offline. An absent
+setting takes the shipped default; a present but malformed one reads as "off".
+
+**Limits, stated plainly.** Under `redact` the row stays published, so a copy
+already fetched by a feed reader or a crawler keeps the pre-redaction text, and a
+browser tab already showing the card keeps it until reloaded (the live reconcile
+adds and removes whole cards, it does not rewrite one in place). `withhold`
+removes the row from the feed and from the live stream, and is the stronger choice
+where that matters.
 
 ## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
 

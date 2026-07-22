@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-006**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -242,13 +242,21 @@ The history below records the pre-CCB-S2-003 state.
       disambiguate; genuine ambiguity ranked by market cap, capped, shown with the figure, and
       auto-resolved on dominance; state questions never become consent prompts; elliptical
       follow-ups inherit read-only intents; short discourse fillers allowed before her name.
-- [ ] **Cinderella's own messages in the archive (CCB-S3-006 §9) — NOT BUILT.** Her replies are
-      still absent from the public stream, so published conversations read as one-sided. The
-      work needs a `publish_bot_messages` setting, capture of her own `groupSnd` items, a
-      publication path that derives from that setting rather than from consent, a consent-leak
+- [x] **Cinderella's own messages in the archive (CCB-S3-006 §9 → built as CCB-S3-007).**
+      `publish_bot_messages` (default on), capture of her own group sends at the send site,
+      publication derived from the operator's setting rather than from consent, a consent-leak
       guard that redacts or withholds replies naming a member who has not opted in, and
-      per-category noise exclusions. Deliberately deferred rather than rushed: it changes the
-      publication derivation, which is the consent gate.
+      per-category noise exclusions. See D-042, D-043, D-044.
+- [ ] **Her welcome message and the avatar flush are still not archived.** The welcome
+      message is the consent notice itself, and arguably the most publish-worthy thing she
+      says, but it is sent from the one-shot `npm run connect` process, whose capture
+      pipeline is not running. The avatar-flush message bypasses `sendToChat` and is
+      correctly absent — though by omission rather than by rule.
+- [ ] **The live front does not re-render a card whose body changed.** `reconcile` adds and
+      removes whole cards; it never rewrites one in place. Under the `redact` guard a
+      revocation changes a body without changing the id set, so an already-open tab keeps
+      the pre-redaction text until reload. `withhold` has no such gap. The same limitation
+      applies to a member EDITING a published message, so it predates CCB-S3-007.
 - [ ] **More assets and a second provider** — only HEX, BTC, ETH, USD and EUR ship. Adding an
       asset is a registry line in the admin, no code change; adding a second provider is an
       implementation of the `PriceProvider` interface. A fallback chain across providers is

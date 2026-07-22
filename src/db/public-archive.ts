@@ -52,6 +52,13 @@ export interface PublicItem {
   /** True when a downloadable/renderable media file is attached AND published. */
   hasMedia: boolean;
   mediaMime: string | null;
+  /**
+   * True when Cinderella wrote this, rather than a member (CCB-S3-007). The
+   * public front marks her cards so a reader can tell whose voice they are
+   * reading; it is presentation only — publication was already decided by the
+   * view this row came out of.
+   */
+  isBot: boolean;
 }
 
 export interface PublicPage {
@@ -69,6 +76,7 @@ interface ItemRow {
   text_body: string | null;
   has_media: boolean;
   media_mime: string | null;
+  is_bot: boolean;
   links: unknown;
 }
 
@@ -116,7 +124,7 @@ export function decodeCursor(s: string): Cursor | null {
 /** Shared SELECT list for a public item row (includes the full-precision sort key). */
 const ITEM_COLUMNS = `m.id, m.sender_display_name, m.sent_at, m.sent_at::text AS sort_ts,
             m.type::text AS type, m.text_body,
-            (m.media_path IS NOT NULL) AS has_media, m.media_mime,
+            (m.media_path IS NOT NULL) AS has_media, m.media_mime, m.is_bot,
             COALESCE(
               (SELECT json_agg(json_build_object('url', l.url, 'title', l.title) ORDER BY l.id)
                FROM links l WHERE l.message_id = m.id),
@@ -137,6 +145,7 @@ function mapItem(r: ItemRow): PublicItem {
     links: toLinks(r.links),
     hasMedia: r.has_media,
     mediaMime: r.media_mime,
+    isBot: r.is_bot === true,
   };
 }
 

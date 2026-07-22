@@ -164,6 +164,12 @@ env $(grep -v '^#' /etc/cinderella/cinderella.env | xargs) node dist/db/migrate.
 systemctl restart cinderella   # sessions survive this now
 ```
 
+> **Migration 013 rewrites the `messages` table.** It drops and recreates the
+> generated `search` column and its GIN index, which takes an `ACCESS EXCLUSIVE`
+> lock for the duration — the public archive is unavailable while it runs. That is
+> seconds on an archive of this size, but check the row count before running it on
+> a large one: `psql "$DATABASE_URL" -tAc 'SELECT count(*) FROM messages'`.
+
 ## Backup
 
 `deploy/backup.sh` dumps the archive DB and snapshots `media/` + the env file.

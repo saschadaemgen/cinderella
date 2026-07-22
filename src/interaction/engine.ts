@@ -45,10 +45,12 @@ import {
 } from './near-misses.js';
 import {
   DEFAULT_INTERACTION,
+  PERSONA_CATEGORY,
   fillPersona,
   type InteractionSettings,
   type PersonaKey,
 } from './settings.js';
+import type { BotReplyMeta, ReplyMention } from '../capture/bot-message.js';
 import { detectLanguage, fuzzyEquals, normTokens } from './text.js';
 import type { PriceOutcome } from '../plugins/crypto-prices/service.js';
 import { formatAmount, formatValue, describeAge } from '../price/format.js';
@@ -61,9 +63,18 @@ export interface InteractionDeps {
   settings: () => InteractionSettings;
   /**
    * Sends a reply in the chat the message came from. `opts.quote` decides
-   * whether it appears as a quoting reply (CCB-S3-003).
+   * whether it appears as a quoting reply (CCB-S3-003); the rest describes the
+   * reply for the archive (CCB-S3-007) — what kind of thing it is, what language
+   * it is in, and which member names it puts into the text.
+   *
+   * The engine does not decide whether any of that gets published. It states
+   * facts about the message; the derivation decides.
    */
-  send: (msg: CapturedMessage, text: string, opts: { quote: boolean }) => Promise<void>;
+  send: (
+    msg: CapturedMessage,
+    text: string,
+    opts: { quote: boolean } & BotReplyMeta,
+  ) => Promise<void>;
   /** Injectable clock (harness). */
   now?: () => number;
   /** Injectable randomness for retort rotation (harness). */
@@ -821,7 +832,15 @@ export class InteractionEngine {
       // A retort is a snub, not an address: no name prefix (that would read as
       // her talking TO the member, contradicting "never opens a conversation")
       // and no quote.
-      await this.sendReply(msg, s, { text: retort, quote: false }, { openWindow: false });
+      await this.sendReply(
+        msg,
+        s,
+        { text: retort, quote: false },
+        { openWindow: false },
+        // A retort names nobody — the instruction was discarded, not read, and a
+        // retort carries no name prefix (that would read as her talking TO them).
+        { category: 'nickname', lang, mentions: [] },
+      );
     }
     return true;
   }
@@ -875,7 +894,30 @@ export class InteractionEngine {
       displayName: msg.senderDisplayName,
       allowQuote: opts.neverQuote !== true,
     });
-    await this.sendReply(msg, s, out, opts);
+
+    // Which member names this reply carries into the archive (CCB-S3-007 §2).
+    // Only two things put one there: the mention prefix, which names the sender,
+    // and a third-party refusal, which names whoever the instruction pointed at.
+    // They are collected here, at the one place that knows both, and never
+    // inferred from the finished text.
+    const mentions: ReplyMention[] = [];
+    if (key === 'refuseThirdParty' && typeof vars['name'] === 'string') {
+      // Typed by the sender about somebody else, so the id is NOT known here and
+      // is looked up later — an ambiguous or unknown name stays unpublishable.
+      mentions.push({ displayName: vars['name'] });
+    }
+    // The prefix names the sender, whose id we already hold. Passing it avoids a
+    // display-name lookup that would come back empty for two members sharing a
+    // name, and redact somebody who had actually opted in.
+    if (out.prefixName) {
+      mentions.push({ displayName: out.prefixName, memberId: msg.senderMemberId });
+    }
+
+    await this.sendReply(msg, s, out, opts, {
+      category: PERSONA_CATEGORY[key],
+      lang,
+      mentions,
+    });
   }
 
   private async sendReply(
@@ -883,6 +925,7 @@ export class InteractionEngine {
     s: InteractionSettings,
     out: OutboundReply,
     opts: ReplyOptions,
+    meta: BotReplyMeta,
   ): Promise<void> {
     const now = this.now();
     const openWindow = opts.openWindow !== false;
@@ -905,7 +948,7 @@ export class InteractionEngine {
     }
 
     try {
-      await this.deps.send(msg, out.text, { quote: out.quote });
+      await this.deps.send(msg, out.text, { quote: out.quote, ...meta });
     } catch (err) {
       log.warn(
         `Interaction: failed to reply to member ${msg.senderMemberId}: ${

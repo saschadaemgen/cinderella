@@ -9,6 +9,7 @@
  */
 
 import type { api } from 'simplex-chat';
+import type { T } from '@simplex-chat/types';
 import { log } from '../log.js';
 import type { CapturedMessage } from '../capture/message.js';
 
@@ -18,7 +19,9 @@ export interface SendOptions {
 }
 
 /**
- * Sends `text` into the chat `msg` came from.
+ * Sends `text` into the chat `msg` came from, and returns the chat items the core
+ * created for it (CCB-S3-007 — her own messages are archived, and the item id is
+ * how one is identified).
  *
  * `apiSendTextMessage` with no `inReplyTo` is the plain form: a normal group
  * message. `msg.raw.chatInfo` is exactly the `ChatInfo` that overload accepts, so
@@ -33,16 +36,15 @@ export async function sendToChat(
   msg: CapturedMessage,
   text: string,
   opts: SendOptions,
-): Promise<void> {
+): Promise<T.AChatItem[]> {
   if (!opts.quote) {
     const chatInfo = msg.raw.chatInfo;
     if (chatInfo) {
-      await chat.apiSendTextMessage(chatInfo, text);
-      return;
+      return await chat.apiSendTextMessage(chatInfo, text);
     }
     log.warn(
       `Outbound reply for item ${msg.itemId} has no chat reference; falling back to a quoting reply.`,
     );
   }
-  await chat.apiSendTextReply(msg.raw, text);
+  return await chat.apiSendTextReply(msg.raw, text);
 }

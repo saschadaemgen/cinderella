@@ -162,6 +162,10 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow-wrap:anywhere;transition:var(--tr)}
 .item .meta{display:flex;gap:8px;align-items:baseline;font-size:.8rem;color:var(--muted);margin-bottom:6px}
 .item .who{font-weight:600;color:var(--text-bright)}
+/* Hers, marked quietly (CCB-S3-007 §4): a reader should be able to tell whose
+   voice a line is in without the archive turning into two visual systems. */
+.item.from-bot{border-left:2px solid color-mix(in srgb,var(--accent) 55%,transparent)}
+.item .badge-bot{color:var(--accent);font-size:.85em;line-height:1;opacity:.85}
 .item .body{white-space:pre-wrap;margin:0}
 .item img.media{max-width:100%;height:auto;border-radius:8px;margin-top:8px;display:block}
 .item video.media{display:block;width:100%;max-height:560px;margin-top:8px;border-radius:8px;background:#000;border:1px solid var(--border);object-fit:contain}
@@ -344,9 +348,10 @@ export function renderCards(
 ): SafeHtml {
   return html`${items.map(
     (it) =>
-      html`<li class="item" id="msg-${it.id}" data-cursor="${it.cursor}">
+      html`<li class="item${it.isBot ? ' from-bot' : ''}" id="msg-${it.id}" data-cursor="${it.cursor}">
         <div class="meta">
           <span class="who">${it.senderDisplayName}</span>
+          ${it.isBot ? html`<span class="badge-bot" title="Written by Cinderella">✦</span>` : html``}
           <time datetime="${it.sentAt}">${fmtTime(it.sentAt)}</time>
         </div>
         ${it.textBody ? html`<p class="body">${it.textBody}</p>` : html``}

@@ -52,7 +52,9 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 ## Layout
 
 - `src/` — `config.ts`, `log.ts`, `bot/` (core wiring, files, connect, avatar),
-  `capture/` (parse, media, links, persist), `consent/`, `interaction/`
+  `capture/` (parse, media, links, persist, her own sends), `consent/`,
+  `archive/` (whether her own messages publish, and name redaction),
+  `interaction/`
   (wake word, intent resolver, dialogue engine, persona), `plugins/` (plugin
   registry + the Crypto Prices plugin: providers, pinning, cache), `price/`
   (amount parsing + number formatting), `settings/`, `db/`,
@@ -61,7 +63,8 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   moderation gate · 005 deletion provenance · 006 webauthn + TOTP · 007 admin
   sessions (persisted across restarts) · 008 content reports · 009 consent action
   journal (provenance + undo) · 010 asset mappings (pinned symbol→asset) · 011
-  seeded major assets (locked pins) · 012 correct pins that predate the seed.
+  seeded major assets (locked pins) · 012 correct pins that predate the seed · 013
+  her own messages (bot rows, mentions, the second publication branch).
   Runner: `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.
@@ -73,7 +76,8 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 harnesses (real Postgres-in-WASM, no server needed): `verify:db`,
 `verify:consent`, `verify:admin`, `verify:admin-views`, `verify:interaction`
 (natural addressing), `verify:price` (market data; `-- --live` hits the real
-provider), plus `verify:security`, `verify:public`, `verify:site`.
+provider), `verify:archive` (her own messages + the consent leak guard), plus
+`verify:security`, `verify:public`, `verify:site`.
 `scripts/admin-preview.ts` boots a seeded local admin console for browser checks.
 
 ## Documentation maintenance (binding on every briefing)
