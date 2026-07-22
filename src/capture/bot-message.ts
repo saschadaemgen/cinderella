@@ -22,6 +22,7 @@ import { log } from '../log.js';
 import { withTransaction, type Queryable } from '../db/pool.js';
 import { insertBotMessage, resolveMemberByDisplayName, type BotMention } from '../db/bot-messages.js';
 import { redactNames } from '../archive/redact.js';
+import { messageIdFor } from '../media/pipeline.js';
 import type { ReplyCategory } from '../archive/settings.js';
 
 /** A member named in a reply, as the send site knows them. */
@@ -52,6 +53,13 @@ export interface BotReplyMeta {
   lang: string;
   /** Members named in the text. */
   mentions?: readonly ReplyMention[];
+  /**
+   * The member message this reply answers (CCB-S3-009), as (group, item). It is
+   * resolved to a row id at record time so the pair is one object: the
+   * derivation withholds an answer whose question is not published, and deleting
+   * the question takes the answer with it.
+   */
+  replyTo?: { groupId: number; itemId: number };
 }
 
 /** The one field of a sent group item we need beyond ids. */
@@ -135,10 +143,15 @@ export async function recordBotReply(
   const names = mentions.map((m) => m.displayName);
   const searchBody = names.length > 0 ? redactNames(text, names, redactedPlaceholder) : text;
 
+  const replyToId = meta.replyTo
+    ? await messageIdFor(db, meta.replyTo.groupId, meta.replyTo.itemId)
+    : null;
+
   for (const item of sent) {
     const parsed = parseSentGroupItem(item);
     if (!parsed) continue;
     await insertBotMessage(db, {
+      replyToId,
       groupId: parsed.groupId,
       groupMsgId: parsed.itemId,
       sharedMsgId: parsed.sharedMsgId,

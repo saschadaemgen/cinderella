@@ -66,7 +66,7 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   journal (provenance + undo) · 010 asset mappings (pinned symbol→asset) · 011
   seeded major assets (locked pins) · 012 correct pins that predate the seed · 013
   her own messages (bot rows, mentions, the second publication branch) · 014
-  stripped media derivatives.
+  stripped media derivatives · 015 member instructions + exchange pairing.
   Runner: `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.

@@ -166,6 +166,9 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
    voice a line is in without the archive turning into two visual systems. */
 .item.from-bot{border-left:2px solid color-mix(in srgb,var(--accent) 55%,transparent)}
 .item .badge-bot{color:var(--accent);font-size:.85em;line-height:1;opacity:.85}
+/* The pairing is shown, not left to be inferred from timestamps (CCB-S3-009). */
+.item .reply-to{font-size:.8em;opacity:.7;text-decoration:none;color:var(--accent)}
+.item .reply-to:hover{opacity:1;text-decoration:underline}
 .item .body{white-space:pre-wrap;margin:0}
 .item img.media{max-width:100%;height:auto;border-radius:8px;margin-top:8px;display:block}
 .item video.media{display:block;width:100%;max-height:560px;margin-top:8px;border-radius:8px;background:#000;border:1px solid var(--border);object-fit:contain}
@@ -352,6 +355,13 @@ export function renderCards(
         <div class="meta">
           <span class="who">${it.senderDisplayName}</span>
           ${it.isBot ? html`<span class="badge-bot" title="Written by Cinderella">✦</span>` : html``}
+          ${
+            it.replyToId !== null
+              ? html`<a class="reply-to" href="#msg-${it.replyToId}" title="In reply to"
+                  >↩ in reply</a
+                >`
+              : html``
+          }
           <time datetime="${it.sentAt}">${fmtTime(it.sentAt)}</time>
         </div>
         ${it.textBody ? html`<p class="body">${it.textBody}</p>` : html``}

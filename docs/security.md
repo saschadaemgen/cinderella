@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-009**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -561,6 +561,24 @@ purpose-built detector, validated in both directions against a hand-built GPS fi
 carried EXIF, IPTC, XMP or MP4 metadata atoms — the SimpleX client re-encodes images before
 sending. That is an accidental property of a third-party client, not a guarantee Cinderella
 makes, which is exactly why the stripping exists.
+
+## 9e. Member instructions are member content (CCB-S3-009)
+
+Messages consumed as instructions are now archived and publish on the ordinary consent rules.
+Two properties keep that safe.
+
+**Consent still decides.** An instruction from somebody who never opted in is not published, the
+same as any other message of theirs. Nothing about being addressed to a bot widens the gate.
+
+**An answer cannot outlive its question.** A reply publishes only if the message it answers
+does, derived on every read. So a non-consenting member's question stays private AND her answer
+to it is withheld — which matters because an answer often paraphrases the question. This
+composes with the CCB-S3-007 leak guard rather than replacing it: the guard handles names inside
+her text, this handles the exchange as a unit.
+
+The consent mechanics themselves — `/publish`, bare `yes` confirmations, disambiguation answers —
+are captured but excluded by default, so the operator's switch has something real behind it
+rather than the messages being dropped at the door.
 
 ## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
 

@@ -59,6 +59,8 @@ export interface PublicItem {
    * view this row came out of.
    */
   isBot: boolean;
+  /** The id of the message this one answers, when it is one (CCB-S3-009). */
+  replyToId: number | null;
 }
 
 export interface PublicPage {
@@ -77,6 +79,7 @@ interface ItemRow {
   has_media: boolean;
   media_mime: string | null;
   is_bot: boolean;
+  reply_to_id: string | null;
   links: unknown;
 }
 
@@ -124,7 +127,7 @@ export function decodeCursor(s: string): Cursor | null {
 /** Shared SELECT list for a public item row (includes the full-precision sort key). */
 const ITEM_COLUMNS = `m.id, m.sender_display_name, m.sent_at, m.sent_at::text AS sort_ts,
             m.type::text AS type, m.text_body,
-            (m.media_path IS NOT NULL) AS has_media, m.media_mime, m.is_bot,
+            (m.media_path IS NOT NULL) AS has_media, m.media_mime, m.is_bot, m.reply_to_id,
             COALESCE(
               (SELECT json_agg(json_build_object('url', l.url, 'title', l.title) ORDER BY l.id)
                FROM links l WHERE l.message_id = m.id),
@@ -146,6 +149,7 @@ function mapItem(r: ItemRow): PublicItem {
     hasMedia: r.has_media,
     mediaMime: r.media_mime,
     isBot: r.is_bot === true,
+    replyToId: r.reply_to_id === null ? null : Number(r.reply_to_id),
   };
 }
 

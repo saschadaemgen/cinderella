@@ -51,6 +51,7 @@ import {
   type PersonaKey,
 } from './settings.js';
 import type { BotReplyMeta, ReplyMention } from '../capture/bot-message.js';
+import type { MemberCategory } from '../archive/settings.js';
 import { detectLanguage, fuzzyEquals, normTokens } from './text.js';
 import type { PriceOutcome } from '../plugins/crypto-prices/service.js';
 import { formatAmount, formatValue, describeAge } from '../price/format.js';
@@ -175,6 +176,23 @@ const CARRY_OVER_MAX_TOKENS = 4;
 
 
 /**
+ * What kind of member message each intent represents, for the archive
+ * (CCB-S3-009 §2). UNKNOWN maps to nothing: a message she did not understand is
+ * ordinary conversation and publishes on the plain consent rules.
+ */
+const MEMBER_CATEGORY_FOR_INTENT: Record<string, MemberCategory | null> = {
+  PRICE: 'price',
+  SEARCH: 'search',
+  STATUS: 'status',
+  HELP: 'help',
+  // The consent mechanics themselves. Archiving them adds noise, not meaning.
+  PUBLISH: 'consent',
+  UNPUBLISH: 'consent',
+  UNDO: 'consent',
+  UNKNOWN: null,
+};
+
+/**
  * Is this fragment pure reaction rather than an instruction (§1)?
  *
  * Two ways to be one. It is made only of stop-words the operator listed, or it
@@ -197,6 +215,16 @@ export function isInterjection(text: string, stopWords: readonly string[]): bool
 
 export class InteractionEngine {
   private readonly state = new ConversationState();
+  /**
+   * What kind of instruction the message currently being handled turned out to
+   * be (CCB-S3-009). Held on the instance rather than returned, because
+   * threading it out would mean rewriting forty-odd return statements in a
+   * consent-carrying dispatch, and a mechanical edit that size is its own risk.
+   *
+   * Safe because capture is strictly sequential: the handler awaits `handle()`
+   * for one chat item before touching the next, and reads this immediately after.
+   */
+  private handledCategory: MemberCategory | null = null;
   private readonly now: () => number;
   private readonly random: () => number;
 
@@ -208,12 +236,19 @@ export class InteractionEngine {
   /**
    * Handles one captured group message.
    *
-   * Returns true when the message was a CONTROL message — something said to
-   * Cinderella rather than to the group — in which case the caller must not
-   * archive it. Returns false when the message is ordinary group content, which
-   * includes anything she decided to stay silent about.
+   * Returns true when she treated the message as an instruction. The caller
+   * archives it EITHER WAY (CCB-S3-009) and reads {@link lastHandledCategory} to
+   * record what kind it was — the boolean no longer means "do not archive".
+   *
+   * That it ever meant that is the whole of CCB-S3-009. It was right while an
+   * instruction meant `/publish`, and wrong from the moment natural addressing
+   * made a price question an instruction too: every question a member asked her
+   * was discarded, and the public archive showed her answers with nothing above
+   * them. A member's question is that member's message; consent decides whether
+   * it publishes.
    */
   async handle(msg: CapturedMessage): Promise<boolean> {
+    this.handledCategory = null;
     const s = this.deps.settings();
     if (!s.naturalAddressing) return false;
     // Media and files are content, never instructions — a caption that happens
@@ -246,6 +281,7 @@ export class InteractionEngine {
     // Nicknames (§6): a retort, and nothing else. Never resolved, never acted
     // on, never opens the follow-up window.
     if (address.kind === 'nickname') {
+      this.handledCategory = 'nickname';
       return this.handleNickname(msg, s, now);
     }
 
@@ -326,9 +362,11 @@ export class InteractionEngine {
     // An outstanding offer is answered before anything else is considered.
     if (pending) {
       if (this.matchesList(instruction, s.affirmations)) {
+        this.handledCategory = 'confirmation';
         return this.performConsentChange(msg, s, pending);
       }
       if (this.matchesList(instruction, s.declines)) {
+        this.handledCategory = 'confirmation';
         this.state.clearPending(msg.groupId, msg.senderMemberId);
         await this.reply(msg, s, pending.lang, 'cancelled', {});
         return true;
@@ -349,8 +387,10 @@ export class InteractionEngine {
     // A pending "which HEX did you mean?" is answered before anything else is
     // resolved — the reply is a bare "1" or a name, which resolves to nothing.
     const choice = this.state.getPendingChoice(msg.groupId, msg.senderMemberId, now);
-    if (choice && (await this.resolveChoice(msg, s, lang, instruction, choice, now))) {
-      return true;
+    if (choice) {
+      this.handledCategory = 'disambiguation';
+      if (await this.resolveChoice(msg, s, lang, instruction, choice, now)) return true;
+      this.handledCategory = null;
     }
 
     let result = await resolveIntent(instruction, {
@@ -431,6 +471,11 @@ export class InteractionEngine {
     if (pending && result.intent !== 'UNKNOWN') {
       this.state.clearPending(msg.groupId, msg.senderMemberId);
     }
+
+    // ONE place decides what kind of message this was for the archive
+    // (CCB-S3-009), keyed off the settled intent so a new intent has to be
+    // classified here rather than defaulting into a category by accident.
+    this.handledCategory = MEMBER_CATEGORY_FOR_INTENT[result.intent] ?? null;
 
     // Only READ-ONLY intents are remembered (§7c). Storing a consent intent here
     // is what would make a later bare "yes" dangerous, so it never happens.
@@ -631,6 +676,14 @@ export class InteractionEngine {
   /** Test hook: seed the remembered intent that drives carry-over (§7c). */
   rememberIntentForTest(groupId: number, memberId: string, intent: 'PRICE' | 'SEARCH'): void {
     this.state.rememberIntent(groupId, memberId, intent);
+  }
+
+  /**
+   * The category of the message just handled (CCB-S3-009). Read by the capture
+   * path immediately after `handle()` returns.
+   */
+  lastHandledCategory(): MemberCategory | null {
+    return this.handledCategory;
   }
 
   /** Recent ignored candidates, for the admin console. */
@@ -953,7 +1006,12 @@ export class InteractionEngine {
         { openWindow: false },
         // A retort names nobody — the instruction was discarded, not read, and a
         // retort carries no name prefix (that would read as her talking TO them).
-        { category: 'nickname', lang, mentions: [] },
+        {
+          category: 'nickname',
+          lang,
+          mentions: [],
+          replyTo: { groupId: msg.groupId, itemId: msg.itemId },
+        },
       );
     }
     return true;
@@ -1031,6 +1089,9 @@ export class InteractionEngine {
       category: PERSONA_CATEGORY[key],
       lang,
       mentions,
+      // The question this answers (CCB-S3-009), so the pair publishes or
+      // withholds together.
+      replyTo: { groupId: msg.groupId, itemId: msg.itemId },
     });
   }
 

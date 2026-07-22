@@ -557,6 +557,107 @@ async function main(): Promise<void> {
 
   check('a format with no stripper is recognised as such', !isStrippable('video/mp4'));
 
+  /* ── 9. CCB-S3-009 — member questions, and pair coherence ─────────────── */
+
+  section('9. CCB-S3-009 — a member question and its answer are one unit');
+
+  await saveArchive({});
+  const { MEMBER_CATEGORIES, MEMBER_CATEGORY_LABELS } = await import('../src/archive/settings.js');
+
+  /** A member instruction, archived with its category the way capture now does. */
+  async function memberAsks(
+    member: string,
+    text: string,
+    category: string | null,
+    minute: number,
+  ): Promise<number> {
+    const id = await memberSays(member, text, minute);
+    await db.query('UPDATE messages SET member_category = $2 WHERE id = $1', [id, category]);
+    return id;
+  }
+  /** One of her replies, linked to the question it answers. */
+  async function sheAnswers(text: string, replyToId: number, minute: number): Promise<number> {
+    const id = await sheSays(text, { category: 'price', minute });
+    await db.query('UPDATE messages SET reply_to_id = $2 WHERE id = $1', [id, replyToId]);
+    return id;
+  }
+
+  // CASE 1 — both published. The transcript from the briefing.
+  const q1 = await memberAsks(ALICE, 'cinderella price of 1 monero?', 'price', 40);
+  const a1 = await sheAnswers('1 MONERO is about 348.6434 USD', q1, 41);
+  check('an opted-in member’s price question is archived at all', await published(q1));
+  check('and her answer with it', await published(a1));
+
+  const exchange = await listPublishedItems(db, ALL_TYPES, { page: 1, pageSize: 50 });
+  const iq = exchange.items.findIndex((i) => i.id === q1);
+  const ia = exchange.items.findIndex((i) => i.id === a1);
+  check(
+    'the answer sits directly beside the question, in order',
+    iq >= 0 && ia >= 0 && Math.abs(iq - ia) === 1,
+    `question at ${String(iq)}, answer at ${String(ia)}`,
+  );
+
+  // CASE 2 — the question’s category is excluded, so the answer goes too.
+  const q2 = await memberAsks(ALICE, '/publish', 'consent', 42);
+  const a2 = await sheAnswers('🕯️ You are opted in.', q2, 43);
+  check('a consent command is NOT published', !(await published(q2)));
+  check('and neither is the reply to it', !(await published(a2)));
+
+  const q3 = await memberAsks(ALICE, 'yes', 'confirmation', 44);
+  check('a bare confirmation is not published', !(await published(q3)));
+  const q4 = await memberAsks(ALICE, '2', 'disambiguation', 45);
+  check('nor a bare disambiguation answer', !(await published(q4)));
+  const q5 = await memberAsks(ALICE, 'cindy?', 'nickname', 46);
+  check('nor a nickname-only message', !(await published(q5)));
+
+  // An UNCLASSIFIED member message publishes — the opposite default from hers.
+  const q6 = await memberAsks(ALICE, 'just chatting', null, 47);
+  check('an unclassified member message publishes on the plain consent rules', await published(q6));
+
+  // CASE 3 — the asker never opted in.
+  const q7 = await memberAsks(ROBIN, 'cinderella price of 1 btc?', 'price', 48);
+  const a7 = await sheAnswers('1 BTC is about 65000 USD', q7, 49);
+  check('a question from someone who never opted in is not published', !(await published(q7)));
+  check('and her answer to it is withheld too', !(await published(a7)));
+
+  // CASE 4 — the asker unpublishes afterwards. Both halves go, retroactively.
+  check('before: the exchange is public', (await published(q1)) && (await published(a1)));
+  await recordOptOut(db, ALICE, at(50));
+  check('after the member unpublishes, the question goes', !(await published(q1)));
+  check('and the answer goes with it — derived, not backfilled', !(await published(a1)));
+  await recordOptIn(db, ALICE, at(0));
+  check('opting back in restores both halves', (await published(q1)) && (await published(a1)));
+
+  // Each category is switchable, and the defaults match the briefing’s table.
+  await saveArchive({
+    memberCategories: { ...DEFAULT_ARCHIVE.memberCategories, price: false },
+  });
+  check('switching a member category off withholds the question', !(await published(q1)));
+  check('and its answer', !(await published(a1)));
+  await saveArchive({});
+
+  for (const c of MEMBER_CATEGORIES) {
+    check(
+      `member category "${c}" defaults to ${DEFAULT_ARCHIVE.memberCategories[c] ? 'publish' : 'exclude'}`,
+      DEFAULT_ARCHIVE.memberCategories[c] ===
+        ['price', 'search', 'status', 'help'].includes(c),
+    );
+    check(`and "${c}" has operator-facing copy`, MEMBER_CATEGORY_LABELS[c].help.length > 10);
+  }
+
+  // The SQL defaults must agree with the TypeScript ones, as for bot categories.
+  await db.query('DELETE FROM settings WHERE key = $1', ['archive']);
+  const { rows: memberSql } = await db.query<{ categories: Record<string, boolean> | string }>(
+    'SELECT * FROM member_publish_settings',
+  );
+  const mcats =
+    typeof memberSql[0]?.categories === 'string'
+      ? (JSON.parse(memberSql[0].categories) as Record<string, boolean>)
+      : ((memberSql[0]?.categories ?? {}) as Record<string, boolean>);
+  for (const c of MEMBER_CATEGORIES) {
+    check(`SQL default for "${c}" agrees with TypeScript`, mcats[c] === DEFAULT_ARCHIVE.memberCategories[c]);
+  }
+
   console.log(
     failures === 0
       ? '\nAll CCB-S3-007 archive checks passed.'

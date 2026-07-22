@@ -38,6 +38,50 @@ export const REPLY_CATEGORIES = [
 ] as const;
 export type ReplyCategory = (typeof REPLY_CATEGORIES)[number];
 
+/**
+ * What kind of instruction a MEMBER's message was (CCB-S3-009 §2).
+ *
+ * Note the opposite default from `ReplyCategory`: an unclassified message of
+ * hers is excluded, an unclassified message of a member's is published. Her
+ * words need a reason to be public; an opted-in member's words need a reason not
+ * to be.
+ */
+export const MEMBER_CATEGORIES = [
+  'price',
+  'search',
+  'status',
+  'help',
+  'consent',
+  'confirmation',
+  'nickname',
+  'disambiguation',
+] as const;
+export type MemberCategory = (typeof MEMBER_CATEGORIES)[number];
+
+/** Operator-facing description of each member category. */
+export const MEMBER_CATEGORY_LABELS: Record<MemberCategory, { label: string; help: string }> = {
+  price: { label: 'Price questions', help: 'A member asking what something is worth.' },
+  search: { label: 'Search requests', help: 'A member asking what the group has said about something.' },
+  status: { label: 'Status questions', help: 'A member asking what she keeps for them.' },
+  help: { label: 'Help requests', help: 'A member asking what she can do.' },
+  consent: {
+    label: 'Consent commands',
+    help: 'Excluded by default: /publish, /unpublish and their spoken forms are the mechanics of the consent system, not conversation.',
+  },
+  confirmation: {
+    label: 'Confirmation answers',
+    help: 'Excluded by default: a bare "yes" to a consent prompt is a button press, not something said.',
+  },
+  nickname: {
+    label: 'Nickname-only messages',
+    help: 'Excluded by default: "cindy?" on its own carries nothing for a reader.',
+  },
+  disambiguation: {
+    label: 'Disambiguation answers',
+    help: 'Excluded by default: a bare number answering "which did you mean?" is meaningless without the list.',
+  },
+};
+
 /** What to do when one of her messages names a member who has not opted in. */
 export const MENTION_GUARDS = ['redact', 'withhold'] as const;
 export type MentionGuard = (typeof MENTION_GUARDS)[number];
@@ -55,6 +99,11 @@ export interface ArchiveSettings {
   mentionGuard: MentionGuard;
   /** Per-category publication. A category missing here is treated as excluded. */
   categories: Record<ReplyCategory, boolean>;
+  /**
+   * Which kinds of MEMBER instruction are archived (CCB-S3-009). These gate a
+   * member's own words, so they only ever narrow what consent already allows.
+   */
+  memberCategories: Record<MemberCategory, boolean>;
   /**
    * Strip metadata from published media (CCB-S3-011 §1). On by default.
    *
@@ -97,6 +146,18 @@ export const DEFAULT_ARCHIVE: ArchiveSettings = {
   publishBotMessages: true,
   mentionGuard: 'redact',
   stripMediaMetadata: true,
+  // The briefing's table. Everything a member actually SAID publishes; the
+  // consent mechanics and one-word answers do not.
+  memberCategories: {
+    price: true,
+    search: true,
+    status: true,
+    help: true,
+    consent: false,
+    confirmation: false,
+    nickname: false,
+    disambiguation: false,
+  },
   categories: {
     consent: true,
     price: true,
@@ -167,12 +228,18 @@ export function normalizeArchive(input: unknown): ArchiveSettings {
   const cats = rec(o['categories']);
   const categories = {} as Record<ReplyCategory, boolean>;
   for (const c of REPLY_CATEGORIES) categories[c] = bool(cats[c], d.categories[c]);
+  const memberCats = rec(o['memberCategories']);
+  const memberCategories = {} as Record<MemberCategory, boolean>;
+  for (const c of MEMBER_CATEGORIES) {
+    memberCategories[c] = bool(memberCats[c], d.memberCategories[c]);
+  }
 
   const rawGuard = o['mentionGuard'];
   const guard = typeof rawGuard === 'string' ? rawGuard.trim() : '';
   return {
     publishBotMessages: bool(o['publishBotMessages'], d.publishBotMessages),
     stripMediaMetadata: bool(o['stripMediaMetadata'], d.stripMediaMetadata),
+    memberCategories,
     mentionGuard: (MENTION_GUARDS as readonly string[]).includes(guard)
       ? (guard as MentionGuard)
       : d.mentionGuard,

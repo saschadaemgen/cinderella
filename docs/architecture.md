@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-009**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -540,6 +540,20 @@ list, so a new column is invisible to every public reader until it is named ther
 
 Stripping runs at capture, not lazily at first request — a photograph should never be one
 cache-miss away from being served with its GPS intact.
+
+## 17. Member instructions and exchange pairing (CCB-S3-009)
+
+Capture persists EVERY member message, including ones she treats as instructions, and then
+records what kind it was (`member_category`). The order matters: persist runs before the
+dialogue, so her reply has a row to point at via `reply_to_id`.
+
+`message_publish_state` now derives both halves together. A member instruction publishes on the
+consent rules unless its category is switched off; one of her replies publishes only if the
+message it answers does. Nothing is stored as a flag, so a `/unpublish` removes the question and
+the answer on the next read.
+
+The public front marks the pairing explicitly with an "in reply" link rather than leaving a
+reader to infer it from timestamps.
 
 ## Appendix: divergences (code wins)
 

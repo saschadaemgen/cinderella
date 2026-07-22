@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-009**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -53,6 +53,45 @@ import — no change to the sidebar, the resolver, or the settings framework.
 `src/interaction/intent.ts` (`setActiveIntents`, `isActiveIntent`);
 `src/interaction/resolver.ts`; `src/interaction/rules.ts`; `src/web/views/plugins.ts`;
 `scripts/verify-price.ts` §1.
+
+---
+
+### D-050 — A member's instruction is that member's message
+
+**Status: IMPLEMENTED (CCB-S3-009).**
+**Decision.** Messages the interaction layer consumes are captured and published on the
+ordinary consent rules, classified by kind. Instruction categories default to PUBLISH — the
+opposite of bot replies (D-047 era, CCB-S3-007 §3) — because her words need a reason to be
+public and an opted-in member's words need a reason not to be. Only the consent mechanics are
+excluded: `/publish`, its spoken forms, bare `yes` confirmations, nickname-only messages and
+bare disambiguation answers.
+**Rationale.** The capture path did `if (await interacted(msg)) continue;` — never persisting
+anything she handled. That was correct while an instruction meant `/publish`, which is
+plumbing. Natural addressing (CCB-S3-002) made a price question an instruction too, and from
+that moment every question a member asked her was discarded. The live archive showed her
+answers with nothing above them: she appeared to be answering nobody, at exactly the points
+where the conversation was most worth reading.
+**Evidence.** `src/capture/handler.ts` (persist now runs BEFORE the dialogue);
+`src/interaction/engine.ts` (`MEMBER_CATEGORY_FOR_INTENT`, `lastHandledCategory`);
+`migrations/015_member_instructions.sql`; `scripts/verify-archive.ts` §9.
+
+---
+
+### D-051 — Question and answer publish or withhold together
+
+**Status: IMPLEMENTED (CCB-S3-009 §3).**
+**Decision.** A reply carries `reply_to_id`, and `message_publish_state` publishes it only if
+the message it answers is itself published. Derived, like everything else, so a later
+`/unpublish` removes both halves on the next read.
+**Rationale.** Publishing half an exchange misrepresents what happened, and the half that
+survives is HERS — which reads as her talking about a member who chose not to be quoted. The
+three cases that matter all fall out of one rule: an excluded category takes its answer with
+it, a non-consenting asker takes her answer with them, and a later revocation takes both.
+**Note.** The pairing is also the reason capture had to be reordered: the member's row must
+exist before she answers, so the reply has something to point at. `ON DELETE CASCADE` makes the
+pair one object, so deleting a question can never orphan its answer.
+**Evidence.** `migrations/015_member_instructions.sql` (the `base` CTE and the pair clause);
+`src/capture/bot-message.ts` (`replyTo`); `scripts/verify-archive.ts` §9, all four cases.
 
 ---
 

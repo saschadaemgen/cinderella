@@ -23,7 +23,7 @@ import { makePersistenceHooks } from './capture/persist.js';
 import { withBotCapture, type BotReplyMeta } from './capture/bot-message.js';
 import { makeConsentHandler } from './consent/commands.js';
 import { assertDbReachable, closePool, getPool } from './db/pool.js';
-import { markInterruptedMediaReceipts } from './db/messages.js';
+import { markInterruptedMediaReceipts, setMemberCategory } from './db/messages.js';
 import { SettingsService } from './settings/service.js';
 import { SecurityService } from './security/settings.js';
 import { SiteService } from './site/settings.js';
@@ -159,6 +159,16 @@ async function startCaptureWorker(
     });
     noteReply = (g, m) => engine.noteExternalReply(g, m);
     hooks.onInteraction = (msg) => engine.handle(msg);
+    // CCB-S3-009: the message is already archived by now; this records what kind
+    // of instruction it was, which is what the category switches act on.
+    hooks.onInstruction = async (msg, category) => {
+      await setMemberCategory(
+        getPool(),
+        msg.groupId,
+        msg.itemId,
+        category ?? engine.lastHandledCategory(),
+      );
+    };
     hooks.isAddressed = (msg) => engine.isExplicitAddress(msg);
 
     // Resolve the configured group to its STABLE numeric id, so capture keeps

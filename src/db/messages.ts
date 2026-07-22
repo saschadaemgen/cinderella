@@ -74,6 +74,23 @@ export async function upsertMessage(db: Queryable, row: MessageRow): Promise<num
   return Number(first.id);
 }
 
+/**
+ * Records what kind of instruction a member's message was (CCB-S3-009).
+ * Separate from the insert because classification happens after the dialogue has
+ * run, and the row must exist before she can answer it.
+ */
+export async function setMemberCategory(
+  db: Queryable,
+  groupId: number,
+  groupMsgId: number,
+  category: string | null,
+): Promise<void> {
+  await db.query(
+    'UPDATE messages SET member_category = $3 WHERE group_id = $1 AND group_msg_id = $2',
+    [groupId, groupMsgId, category],
+  );
+}
+
 /** Replaces the links for a message (delete-then-insert). */
 export async function replaceLinks(
   db: Queryable,

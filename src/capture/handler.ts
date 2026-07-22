@@ -36,6 +36,12 @@ export interface CaptureHooks {
    */
   onInteraction?: (msg: CapturedMessage) => Promise<boolean>;
   /**
+   * Called after {@link onInteraction} handled a message, so the archive can
+   * record WHAT KIND of instruction it was (CCB-S3-009). The message has already
+   * been persisted by then.
+   */
+  onInstruction?: (msg: CapturedMessage, category?: string) => Promise<void> | void;
+  /**
    * Side-effect-free "was this addressed to the bot?" test, used on EDITS. An
    * edit must not re-run the dialogue, but an instruction aimed at the bot must
    * not be archived either.
@@ -164,6 +170,16 @@ export function registerCapture(
       // Consent commands are control messages — handle and do NOT persist.
       const command = commandFor(msg);
       if (command) {
+        // Archived like anything else, under the `consent` category, which ships
+        // EXCLUDED. Capturing it and then excluding it is what makes the
+        // operator's switch mean something — dropping it at the door would leave
+        // a setting with nothing behind it.
+        await persist(msg);
+        try {
+          await hooks.onInstruction?.(msg, 'consent');
+        } catch {
+          // Best-effort classification; the row is already safely stored.
+        }
         if (hooks.onCommand) {
           try {
             await hooks.onCommand(msg, command);
@@ -178,11 +194,30 @@ export function registerCapture(
         continue;
       }
 
-      // Natural addressing (CCB-S3-002): if she was spoken to, the message is a
-      // control message and is not archived.
-      if (await interacted(msg)) continue;
-
+      // CCB-S3-009: a member's question is that member's message.
+      //
+      // This used to `continue` when she handled the message, so every question
+      // asked of her was discarded and the public archive showed her answers with
+      // nothing above them. Now the message is ALWAYS archived, and what kind of
+      // instruction it was is recorded alongside it — publication is decided by
+      // consent and by the category table, which is where that decision belongs.
+      //
+      // Persist runs FIRST so the row exists before she answers: her reply is
+      // linked to it, and the pair publishes or withholds together.
       const persisted = await persist(msg);
+      const handled = await interacted(msg);
+      if (handled) {
+        try {
+          await hooks.onInstruction?.(msg);
+        } catch (err) {
+          log.error(
+            `onInstruction hook failed for item ${msg.itemId}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+        continue;
+      }
 
       // Only receive the file if the row exists — otherwise the media would be
       // moved into the store with no row to point at it (an orphan).

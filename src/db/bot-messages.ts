@@ -48,6 +48,8 @@ export interface BotMessageRow {
    */
   searchBody: string;
   mentions: readonly BotMention[];
+  /** The member message this answers, when there is one (CCB-S3-009). */
+  replyToId?: number | null;
   rawJson: unknown;
 }
 
@@ -67,8 +69,8 @@ export async function insertBotMessage(db: Queryable, row: BotMessageRow): Promi
     `INSERT INTO messages
        (group_id, group_msg_id, shared_msg_id, sender_member_id, sender_display_name,
         sent_at, type, text_body, links_text, raw_json,
-        is_bot, bot_category, bot_lang, search_body, mentions_scanned)
-     VALUES ($1, $2, $3, $4, $5, $6, 'text', $7, NULL, $8::jsonb, TRUE, $9, $10, $11, TRUE)
+        is_bot, bot_category, bot_lang, search_body, mentions_scanned, reply_to_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'text', $7, NULL, $8::jsonb, TRUE, $9, $10, $11, TRUE, $12)
      ON CONFLICT (group_id, group_msg_id) DO NOTHING
      RETURNING id`,
     [
@@ -83,6 +85,7 @@ export async function insertBotMessage(db: Queryable, row: BotMessageRow): Promi
       row.category,
       row.lang,
       row.searchBody,
+      row.replyToId ?? null,
     ],
   );
   // DO NOTHING rather than DO UPDATE, deliberately: an UPDATE here could set

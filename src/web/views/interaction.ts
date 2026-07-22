@@ -27,6 +27,8 @@ import {
 } from '../../interaction/settings.js';
 import {
   CATEGORY_LABELS,
+  MEMBER_CATEGORIES,
+  MEMBER_CATEGORY_LABELS,
   REPLY_CATEGORIES,
   type ArchiveSettings,
 } from '../../archive/settings.js';
@@ -157,6 +159,25 @@ function archiveCard(a: ArchiveSettings, csrf: string): SafeHtml {
         applied to the pixels first so nothing appears rotated. Video and document formats have
         no stripper on this instance, and are listed as such rather than assumed clean.
       </span>
+
+      <div class="flex flex-col gap-2">
+        <span class="text-sm font-medium text-slate-700">
+          Which member questions are archived
+        </span>
+        <span class="text-xs text-slate-500">
+          A member's question is that member's message, so these publish on the ordinary consent
+          rules unless switched off here. Note the opposite default from her replies below: her
+          words need a reason to be public, an opted-in member's words need a reason not to be.
+          An answer whose question is excluded is excluded with it, so the archive never shows
+          her answering nobody.
+        </span>
+        ${MEMBER_CATEGORIES.map(
+          (c) => html`<div class="flex flex-col">
+            ${checkbox(`mcat:${c}`, MEMBER_CATEGORY_LABELS[c].label, a.memberCategories[c])}
+            <span class="ml-6 text-xs text-slate-500">${MEMBER_CATEGORY_LABELS[c].help}</span>
+          </div>`,
+        )}
+      </div>
 
       <div class="flex flex-col gap-2">
         <span class="text-sm font-medium text-slate-700">Which of her replies are archived</span>
@@ -725,12 +746,15 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         // and returns rather than falling through to the interaction save.
         const categories: Record<string, boolean> = {};
         for (const c of REPLY_CATEGORIES) categories[c] = `cat:${c}` in body;
+        const memberCategories: Record<string, boolean> = {};
+        for (const c of MEMBER_CATEGORIES) memberCategories[c] = `mcat:${c}` in body;
         await ctx.archive.save(
           {
             publishBotMessages: 'publishBotMessages' in body,
             stripMediaMetadata: 'stripMediaMetadata' in body,
             mentionGuard: bodyString(body, 'mentionGuard'),
             categories,
+            memberCategories,
           },
           actor,
         );

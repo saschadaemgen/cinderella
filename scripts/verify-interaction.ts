@@ -1473,7 +1473,13 @@ async function main(): Promise<void> {
     'ordinary group chatter is archived',
     persisted.includes('hello everyone, nice weather today'),
   );
-  check('an instruction to her is NOT archived', !persisted.includes('Cinderella publish me'));
+  // REVERSED BY CCB-S3-009, deliberately. This used to assert that an
+  // instruction was dropped. That was right while an instruction meant
+  // `/publish`; once natural addressing made a price question an instruction it
+  // meant every question a member asked her vanished, and the public archive
+  // showed her answers with nothing above them. A member's question is that
+  // member's message — it is archived, and its CATEGORY decides publication.
+  check('an instruction to her IS archived now', persisted.includes('Cinderella publish me'));
   check(
     'talking about her IS archived (it is ordinary conversation)',
     persisted.includes('I think Cinderella is great'),
@@ -1481,7 +1487,10 @@ async function main(): Promise<void> {
 
   await deliver('/publish');
   check('slash commands still reach the consent handler', commandsSeen === 1);
-  check('and are not archived', !persisted.includes('/publish'));
+  check(
+    'and ARE archived, under the consent category, which ships excluded',
+    persisted.includes('/publish'),
+  );
 
   // The follow-up window from `Cinderella publish me` above is still open here,
   // which is exactly the case worth testing: a disabled slash command must not
