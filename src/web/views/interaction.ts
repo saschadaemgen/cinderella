@@ -26,7 +26,6 @@ import {
   type ReplyMode,
 } from '../../interaction/settings.js';
 import { NEAR_MISS_REASONS, recentNearMisses } from '../../interaction/near-misses.js';
-import { assetsToText } from '../../interaction/settings.js';
 import { activeResolverName } from '../../interaction/resolver.js';
 import { html, page, raw, type SafeHtml } from '../html.js';
 import type { ViewContext } from '../server.js';
@@ -390,57 +389,6 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
           )}`,
       );
 
-      const priceCard = card(
-        'Market data',
-        html`<p class="mb-3 text-sm text-slate-500">
-            She can answer "what is HEX worth". Assets are resolved through the registry below,
-            never by looking a bare ticker up at the provider: three different assets share the
-            symbol HEX, so a symbol lookup is a coin flip. Quotes are cached, and when the provider
-            cannot be reached she says so rather than serving a stale number.
-          </p>
-          ${form(
-            'price',
-            html`
-              ${checkbox('priceEnabled', 'Answer price questions', s.price.enabled)}
-              ${labelled(
-                'Default quote currency',
-                textField('baseCurrency', s.price.baseCurrency),
-                'Prices default to this, and asset-to-asset conversions are crossed through it.',
-              )}
-              ${labelled('Provider', textField('provider', s.price.provider), 'Only "coingecko" ships today.')}
-              ${labelled(
-                'Provider API key (optional)',
-                textField('apiKey', s.price.apiKey),
-                'Blank uses the free endpoint. Stored with the other settings, shown here because it is not a server secret.',
-              )}
-              ${labelled(
-                'Cache lifetime (seconds)',
-                numberField('cacheTtlSeconds', s.price.cacheTtlSeconds, 5, 3600),
-                'How long a quote is reused. Lower means fresher numbers and more provider calls.',
-              )}
-              ${labelled(
-                'Price questions per member, per minute',
-                numberField('priceRateMember', s.price.rateLimitPerMember, 1, 120),
-              )}
-              ${labelled(
-                'Price questions per chat, per minute',
-                numberField('priceRateChat', s.price.rateLimitPerChat, 1, 600),
-              )}
-              ${labelled(
-                'Disclaimer (optional, off by default)',
-                textField('disclaimer', s.price.disclaimer, 'Market data for information only.'),
-                'Appended on its own line to every price reply. Empty means no disclaimer.',
-              )}
-              ${labelled(
-                'Asset registry',
-                textArea('assets', assetsToText(s.price.assets), 8),
-                'One asset per line: SYMBOL | provider-id | Name | crypto or fiat | decimals | aliases,comma,separated | chain | contract. The provider id is what is actually queried.',
-              )}
-              ${saveButton()}
-            `,
-          )}`,
-      );
-
       const answering = card(
         'How she answers',
         html`<p class="mb-3 text-sm text-slate-500">
@@ -608,7 +556,7 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         ${pageHeader('Interaction', 'How she is addressed, what she understands, and how she speaks')}
         ${notice} ${intro}
         <div class="flex flex-col gap-6">
-          ${addressing} ${guards} ${nearMissCard} ${language} ${answering} ${priceCard} ${safety}
+          ${addressing} ${guards} ${nearMissCard} ${language} ${answering} ${safety}
           ${nicknames} ${personaCards} ${retortCards} ${reset}
         </div>
       `;
@@ -658,18 +606,6 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
           maxInstructionLength: bodyString(body, 'maxInstructionLength'),
           lengthGuardConfidence: bodyString(body, 'lengthGuardConfidence'),
           logNearMisses: 'logNearMisses' in body,
-        };
-      } else if (section === 'price') {
-        next['price'] = {
-          enabled: 'priceEnabled' in body,
-          baseCurrency: bodyString(body, 'baseCurrency'),
-          provider: bodyString(body, 'provider'),
-          apiKey: bodyString(body, 'apiKey'),
-          cacheTtlSeconds: bodyString(body, 'cacheTtlSeconds'),
-          rateLimitPerMember: bodyString(body, 'priceRateMember'),
-          rateLimitPerChat: bodyString(body, 'priceRateChat'),
-          disclaimer: bodyString(body, 'disclaimer'),
-          assets: bodyString(body, 'assets'),
         };
       } else if (section === 'language') {
         next['replyLanguageMode'] = bodyString(body, 'replyLanguageMode');

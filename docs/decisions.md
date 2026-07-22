@@ -13,9 +13,84 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
-### D-035 — Prices resolve through a pinned asset registry, are cached, and fail honestly
+### D-037 — Symbols are resolved once, pinned in the database, and never silently re-resolved
 
 **Status: IMPLEMENTED (CCB-S3-004).**
+**Decision.** The first time a symbol is asked for it is resolved against the provider chain.
+One match is pinned automatically; several make Cinderella ASK the member, and their answer is
+pinned. Pins live in `asset_mappings`, are GLOBAL by default (HEX is HEX whichever group
+asks, with a per-community scope available for genuine exceptions), and are never re-resolved.
+An operator can lock a mapping so automatic resolution can never touch it, edit it, or delete
+it to force a fresh resolution. A row identifies an ASSET — display name, chain, contract —
+and carries a `provider_ids` map, because ids are not portable between providers.
+**Rationale.** Provider search rankings move. Re-resolving on every request means the same
+question can quietly return a different token's price on a later day, and nobody would notice
+until someone acted on it. Pinning makes the answer reproducible and makes any change to it a
+deliberate, visible act. Asking rather than choosing is the same instinct as the consent
+handshake: a wrong pin is durable, so the cheap question is worth it once.
+**Evidence.** `migrations/010_asset_mappings.sql`; `src/db/asset-mappings.ts`;
+`src/plugins/crypto-prices/service.ts` (`resolve`, `pin`); `scripts/verify-price.ts` §5–§7.
+
+---
+
+### D-036 — Capabilities beyond the archive are PLUGINS, and a disabled plugin registers no intents
+
+**Status: IMPLEMENTED (CCB-S3-004).**
+**Decision.** A plugin declares an id, a name, a version, a default-enabled flag, the intents
+it contributes, and its own admin page. Enablement lives under the `plugins` settings key and
+each plugin's settings under `plugin:<id>`. The sidebar has a **Plugins** entry whose submenu
+is generated from the registry. Crucially, the intent catalog is now split: a compile-time
+closed set (`INTENTS`, which makes an invented intent a type error) and a RUNTIME ACTIVE set
+recomputed whenever enablement changes. A disabled plugin's intents are absent from the active
+set, so the rule engine skips their patterns and the resolver seam downgrades them to UNKNOWN.
+**Rationale.** "Disabled" must mean the capability is not there, not that a handler declines
+politely. A half-wired handler behind a switch that is off is exactly the shape of thing that
+answers a question it should not — and CCB-S3-005 had just finished proving how expensive an
+unwanted answer is. Making absence the mechanism means there is no handler to reason about.
+**Consequence.** Adding a second plugin is a `definePlugin` call, a settings page, and one
+import — no change to the sidebar, the resolver, or the settings framework.
+**Evidence.** `src/plugins/registry.ts`, `src/plugins/service.ts`;
+`src/interaction/intent.ts` (`setActiveIntents`, `isActiveIntent`);
+`src/interaction/resolver.ts`; `src/interaction/rules.ts`; `src/web/views/plugins.ts`;
+`scripts/verify-price.ts` §1.
+
+---
+
+### D-038 — Provider chain with failover, licence-bound attribution, and write-only encrypted keys
+
+**Status: IMPLEMENTED (CCB-S3-004).**
+**Decision.** Three adapters behind one interface — CoinMarketCap, CoinGecko, Dexscreener —
+tried in an operator-configured order with automatic failover on error, timeout, rate limit,
+or "does not know this asset". Each is individually enabled, with its own key, timeout and
+request budget. **API keys are write-only**: encrypted at rest with AES-256-GCM under a key
+derived from `SESSION_SECRET`, never rendered back into the form, never logged, and never
+included in an audit entry. Saving the form with the field blank keeps the stored key;
+clearing is an explicit checkbox. **Attribution is bound to the answering provider** and
+emitted in the reply.
+**Rationale (checked, not assumed).** The providers' current terms were read at build time as
+the briefing required. CoinGecko's licence requires the credit "Powered by CoinGecko" wherever
+its data appears and requires cached data to be refreshed at least daily; CoinMarketCap
+requires "Data provided by CoinMarketCap.com"; Dexscreener requires neither. A chat group has
+no footer to put a credit in, so it rides on the reply — and because failover means the
+answering provider is not necessarily the first one tried, a static template string would
+eventually credit the wrong source, which is both a licence breach and a factual error.
+**Caching verdicts.** CoinGecko: permitted, with a 24h refresh ceiling the cache enforces per
+provider. CoinMarketCap: caching explicitly carved out of its storage ban. Dexscreener: terms
+silent, so treated as transient by policy. No provider is exempt from the cache; CoinGecko is
+the one that constrains it.
+**Open question, recorded rather than resolved.** Whether CoinMarketCap's FREE tier licenses
+showing data to a group is genuinely unclear — its live pricing table now says "Commercial
+use" while the personal agreement still says personal use only. The console states this next
+to the switch so the operator decides with the facts in front of them.
+**Evidence.** `src/plugins/crypto-prices/providers/`; `src/plugins/secrets.ts`;
+`src/plugins/crypto-prices/service.ts`; `src/web/views/plugins.ts`;
+`scripts/verify-price.ts` §2, §8.
+
+---
+
+### D-035 — Prices resolve through a pinned asset registry, are cached, and fail honestly
+
+**Status: Superseded by D-036 and D-037 (CCB-S3-004, revised briefing).** The first cut shipped a hardcoded, code-level asset registry and a single provider. The revised briefing replaced both: mappings are now resolved lazily and persisted, and the provider is a chain of three adapters. What survives unchanged is the principle — never resolve a price from a bare symbol.
 **Decision.** A `PRICE` intent joins the closed catalog. Assets are never resolved by
 symbol at the provider: an admin-editable **registry** maps the symbols members type to a
 **canonical provider id**, recording chain and contract for tokens. HEX ships pinned to the

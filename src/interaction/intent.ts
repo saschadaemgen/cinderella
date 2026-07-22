@@ -30,6 +30,44 @@ export const INTENTS = [
 
 export type Intent = (typeof INTENTS)[number];
 
+/**
+ * Intents that are always available, whatever plugins are installed. The consent
+ * intents live here because they are the product, not a capability bolted onto it.
+ */
+export const CORE_INTENTS: readonly Intent[] = [
+  'PUBLISH',
+  'UNPUBLISH',
+  'STATUS',
+  'SEARCH',
+  'HELP',
+  'UNDO',
+  'UNKNOWN',
+];
+
+/**
+ * The catalog as it stands RIGHT NOW: the core intents plus whatever enabled
+ * plugins contribute (CCB-S3-004 §0).
+ *
+ * `INTENTS` above is the compile-time closed set — it is what makes an invented
+ * intent a type error. This is the runtime subset, and it is what the resolver
+ * seam validates against, so a disabled plugin's intent is not merely unhandled
+ * but absent: nothing can resolve to it.
+ */
+let activeIntents = new Set<Intent>(CORE_INTENTS);
+
+/** Replaces the active catalog. Called whenever plugin enablement changes. */
+export function setActiveIntents(extra: readonly Intent[]): void {
+  activeIntents = new Set<Intent>([...CORE_INTENTS, ...extra]);
+}
+
+export function isActiveIntent(v: unknown): v is Intent {
+  return isIntent(v) && activeIntents.has(v);
+}
+
+export function activeIntentList(): Intent[] {
+  return [...activeIntents];
+}
+
 /** Intents that change consent, and therefore always require confirmation (§4.1). */
 export const CONSENT_INTENTS: readonly Intent[] = ['PUBLISH', 'UNPUBLISH'];
 

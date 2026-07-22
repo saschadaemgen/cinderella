@@ -27,6 +27,7 @@ import {
   Trash,
   Globe,
   Sparkles,
+  Blocks,
 } from 'lucide-static';
 import { raw, type SafeHtml } from './html.js';
 
@@ -67,6 +68,7 @@ const ICONS = {
   trash: Trash,
   site: Globe,
   interaction: Sparkles,
+  plugin: Blocks,
 } as const;
 
 /** Icon for a message type. */

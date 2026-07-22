@@ -19,6 +19,11 @@ import type { SettingsService } from '../settings/service.js';
 import type { SecurityService } from '../security/settings.js';
 import { SiteService } from '../site/settings.js';
 import { InteractionService } from '../interaction/settings.js';
+import { PluginService } from '../plugins/service.js';
+import { listPlugins } from '../plugins/registry.js';
+// Side-effect import: defining a plugin is what puts it in the registry, and the
+// sidebar is built from the registry.
+import '../plugins/crypto-prices/plugin.js';
 import { log } from '../log.js';
 import { GlobalRateLimiter, LoginRateLimiter } from './auth.js';
 import {
@@ -56,6 +61,7 @@ export interface AdminContext {
   security: SecurityService;
   site: SiteService;
   interaction: InteractionService;
+  plugins: PluginService;
   sessions: SessionStore;
   loginLimiter: LoginRateLimiter;
   challenges: ChallengeStore;
@@ -69,6 +75,7 @@ export interface ViewContext {
   security: SecurityService;
   site: SiteService;
   interaction: InteractionService;
+  plugins: PluginService;
   sessions: SessionStore;
 }
 
@@ -84,6 +91,8 @@ export interface ServerDeps {
   /** Interaction settings (CCB-S3-002). Optional — buildServer falls back to the
    * briefing defaults so harnesses need not seed an `interaction` row. */
   interaction?: InteractionService;
+  /** Plugin state (CCB-S3-004). Optional; harnesses get defaults. */
+  plugins?: PluginService;
   mediaRoot: string;
   registerViews?: (app: FastifyInstance, ctx: ViewContext) => void;
 }
@@ -104,6 +113,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const { db, adminCfg, cfg, settings, security } = deps;
   const site = deps.site ?? SiteService.withDefaults(db);
   const interaction = deps.interaction ?? InteractionService.withDefaults(db);
+  const plugins = deps.plugins ?? PluginService.withDefaults(db);
   const app = Fastify({ trustProxy: 'loopback', logger: false });
 
   // The public marketing site (CCB-S2-012). Locales are loaded once so the routes
@@ -136,6 +146,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     security,
     site,
     interaction,
+    plugins,
     sessions,
     loginLimiter,
     challenges,
@@ -278,6 +289,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     security,
     site,
     interaction,
+    plugins,
     sessions,
   };
   registerPublicEmbed(app, viewCtx);
@@ -311,6 +323,19 @@ export function registerNav(): void {
     { key: 'consent', href: '/consent', label: 'Consent', icon: icon('consent') },
     { key: 'settings', href: '/settings', label: 'Settings', icon: icon('settings') },
     { key: 'interaction', href: '/interaction', label: 'Interaction', icon: icon('interaction') },
+    {
+      key: 'plugins',
+      href: '/plugins',
+      label: 'Plugins',
+      icon: icon('plugin'),
+      // Installing a plugin adds a child here; no sidebar change is needed.
+      children: listPlugins().map((p) => ({
+        key: `plugin:${p.id}`,
+        href: p.adminPath,
+        label: p.name,
+        icon: icon('plugin'),
+      })),
+    },
     { key: 'security', href: '/security', label: 'Security', icon: icon('shield') },
     { key: 'embeds', href: '/embeds', label: 'Embeds', icon: icon('embed') },
     { key: 'site', href: '/website', label: 'Website', icon: icon('site') },

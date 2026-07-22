@@ -53,13 +53,15 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 
 - `src/` — `config.ts`, `log.ts`, `bot/` (core wiring, files, connect, avatar),
   `capture/` (parse, media, links, persist), `consent/`, `interaction/`
-  (wake word, intent resolver, dialogue engine, persona), `price/` (asset
-  registry, provider, cache, conversion), `settings/`, `db/`,
+  (wake word, intent resolver, dialogue engine, persona), `plugins/` (plugin
+  registry + the Crypto Prices plugin: providers, pinning, cache), `price/`
+  (amount parsing + number formatting), `settings/`, `db/`,
   `web/` (server, auth, session, views), `index.ts`.
 - `migrations/` — 001 messages/links · 002 consent+views · 003 admin · 004
   moderation gate · 005 deletion provenance · 006 webauthn + TOTP · 007 admin
   sessions (persisted across restarts) · 008 content reports · 009 consent action
-  journal (provenance + undo). Runner: `node dist/db/migrate.js`.
+  journal (provenance + undo) · 010 asset mappings (pinned symbol→asset).
+  Runner: `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.
 - Git-ignored: `.env`, `state/`, `media/`, `public/` (built assets), `dist/`.

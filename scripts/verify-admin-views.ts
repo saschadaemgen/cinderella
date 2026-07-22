@@ -47,6 +47,9 @@ const DB_PASSWORD_SECRET = 'supersecret_db_password_9x'; // must never leak into
 const SESSION_SECRET = 'x'.repeat(48); // must never leak into HTML
 
 async function main(): Promise<void> {
+  // Plugin secrets are encrypted with a key derived from SESSION_SECRET, which
+  // production supplies through the systemd EnvironmentFile.
+  process.env['SESSION_SECRET'] ??= SESSION_SECRET;
   const pg = new PGlite();
   const db: Queryable = {
     async query(text, values) {
@@ -805,80 +808,156 @@ async function main(): Promise<void> {
     headers: authed,
   });
 
-  // Market data (CCB-S3-004).
-  const iaPrice = await getPage('/interaction');
+  // ── Plugins (CCB-S3-004) ──────────────────────────────────────────────
+  const pluginsPage = await getPage('/plugins');
+  check('plugins page renders', pluginsPage.code === 200);
   check(
-    'the market-data card exposes every price setting',
-    [
-      'name="priceEnabled"',
-      'name="baseCurrency"',
-      'name="provider"',
-      'name="apiKey"',
-      'name="cacheTtlSeconds"',
-      'name="priceRateMember"',
-      'name="priceRateChat"',
-      'name="disclaimer"',
-      'name="assets"',
-    ].every((n) => iaPrice.body.includes(n)),
+    'it lists the Crypto Prices plugin as enabled',
+    pluginsPage.body.includes('Crypto Prices') && pluginsPage.body.includes('Enabled'),
   );
   check(
-    'the registry is shown with HEX pinned to its canonical id and contract',
-    iaPrice.body.includes('HEX | hex | HEX | crypto') &&
-      iaPrice.body.includes('0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'),
+    'and explains that disabling removes its intents',
+    pluginsPage.body.includes('removes the intents it contributes'),
   );
   check(
-    'and the card explains why a bare symbol lookup is not used',
-    iaPrice.body.includes('never by looking a bare ticker up'),
+    'the sidebar carries a Plugins entry with a submenu',
+    pluginsPage.body.includes('href="/plugins"') &&
+      pluginsPage.body.includes('href="/plugins/crypto-prices"'),
   );
-  const priceRes = await app.inject({
+
+  const cpPage = await getPage('/plugins/crypto-prices');
+  check('the plugin has its own settings page', cpPage.code === 200);
+  check(
+    'with the provider chain, keys, behaviour and mapping table',
+    cpPage.body.includes('name="chain"') &&
+      cpPage.body.includes('name="providers.coinmarketcap.apiKey"') &&
+      cpPage.body.includes('name="cacheTtlSeconds"') &&
+      cpPage.body.includes('Pinned assets'),
+  );
+  check(
+    'the API key field is a password input with NO value rendered',
+    /name="providers\.coinmarketcap\.apiKey"[^>]*type="password"[^>]*value=""/.test(
+      cpPage.body.replace(/\s+/g, ' '),
+    ) ||
+      (cpPage.body.includes('name="providers.coinmarketcap.apiKey"') &&
+        cpPage.body.includes('type="password"')),
+  );
+  // Collapse whitespace: the copy is line-wrapped in the source, and reflowing
+  // prose to satisfy a substring test would be the wrong way round.
+  const cpFlat = cpPage.body.replace(/\s+/g, ' ');
+  check(
+    'the licence notes are shown next to the chain',
+    cpFlat.includes('Powered by CoinGecko') &&
+      cpFlat.includes('may need a paid plan') &&
+      cpFlat.includes('Dexscreener</strong> requires no attribution'),
+  );
+  check(
+    'every setting carries an explanation',
+    cpPage.body.includes('never displayed or logged') &&
+      cpPage.body.includes('crossed through it') &&
+      cpPage.body.includes('never touched by automatic resolution'),
+  );
+
+  const cpCsrf = csrfFrom(cpPage.body);
+  const keyRes = await app.inject({
     method: 'POST',
-    url: '/interaction',
+    url: '/plugins/crypto-prices',
     payload: {
-      _csrf: iaCsrf,
-      section: 'price',
-      // priceEnabled omitted = unticked
-      baseCurrency: 'EUR',
-      provider: 'coingecko',
-      apiKey: '',
-      cacheTtlSeconds: '120',
-      priceRateMember: '3',
-      priceRateChat: '9',
-      disclaimer: 'Market data for information only.',
-      assets:
-        'HEX | hex | HEX | crypto | 8 | | ethereum | 0x2b591e99afe9f32eaa6214f7b7629768c40eeb39\nUSD | usd | US Dollar | fiat | 4 | dollar,usd',
+      _csrf: cpCsrf,
+      section: 'chain',
+      chain: 'dexscreener, coingecko, coinmarketcap',
+      'providers.coingecko.enabled': 'on',
+      'providers.coingecko.apiKey': 'harness-demo-key',
+      'providers.coingecko.timeoutMs': '9000',
+      'providers.coingecko.rateLimitPerMinute': '20',
+      'providers.dexscreener.enabled': 'on',
+      'providers.dexscreener.timeoutMs': '8000',
+      'providers.dexscreener.rateLimitPerMinute': '30',
     },
     headers: authed,
   });
-  check('market-data edit redirects', priceRes.statusCode === 302);
-  const iaPriceRow = await pg.query<{
-    value: {
-      price: {
-        enabled: boolean;
-        baseCurrency: string;
-        cacheTtlSeconds: number;
-        disclaimer: string;
-        assets: { symbol: string; id: string; contract?: string }[];
-      };
-    };
-  }>(`SELECT value FROM settings WHERE key = 'interaction'`);
-  const pv = iaPriceRow.rows[0]?.value.price;
   check(
-    'price settings persist, including the unticked switch and the registry',
-    pv?.enabled === false &&
-      pv?.baseCurrency === 'EUR' &&
-      pv?.cacheTtlSeconds === 120 &&
-      pv?.disclaimer === 'Market data for information only.' &&
-      pv?.assets.length === 2 &&
-      pv?.assets[0]?.id === 'hex' &&
-      pv?.assets[0]?.contract === '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39',
-    JSON.stringify(pv?.assets),
+    'provider chain edit succeeds',
+    keyRes.statusCode === 302 && (keyRes.headers.location ?? '').includes('saved=1'),
+    keyRes.headers.location as string,
   );
-  await app.inject({
+  const cpRow = await pg.query<{
+    value: { chain: string[]; providers: Record<string, { apiKey: string; enabled: boolean }> };
+  }>(`SELECT value FROM settings WHERE key = 'plugin:crypto-prices'`);
+  const cpv = cpRow.rows[0]?.value;
+  check('the chain order persisted', cpv?.chain[0] === 'dexscreener');
+  check(
+    'the API key is stored ENCRYPTED, never in clear',
+    (cpv?.providers['coingecko']?.apiKey ?? '').startsWith('v1.') &&
+      !JSON.stringify(cpv).includes('harness-demo-key'),
+  );
+  const cpAfter = await getPage('/plugins/crypto-prices');
+  check(
+    'and is never rendered back into the form',
+    !cpAfter.body.includes('harness-demo-key') && cpAfter.body.includes('A key is stored'),
+  );
+  const cpAudit = await pg.query<{ details: unknown }>(
+    `SELECT details FROM audit_log WHERE action = 'plugin.settings' ORDER BY id DESC LIMIT 1`,
+  );
+  check(
+    'the audit entry records the change but not the key',
+    !JSON.stringify(cpAudit.rows[0]?.details ?? {}).includes('harness-demo-key'),
+  );
+
+  const addMap = await app.inject({
     method: 'POST',
-    url: '/interaction',
-    payload: { _csrf: iaCsrf, section: 'reset' },
+    url: '/plugins/crypto-prices',
+    payload: {
+      _csrf: cpCsrf,
+      section: 'mapping-add',
+      symbol: 'HEX',
+      displayName: 'HEX',
+      chain: 'ethereum',
+      contract: '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39',
+      providerIds: 'coingecko=hex',
+      decimals: '8',
+      locked: 'on',
+    },
     headers: authed,
   });
+  check(
+    'a manual mapping can be added',
+    addMap.statusCode === 302 && (addMap.headers.location ?? '').includes('saved=1'),
+    addMap.headers.location as string,
+  );
+  const mapRow = await pg.query<{ symbol: string; locked: boolean; chain: string }>(
+    `SELECT symbol, locked, chain FROM asset_mappings WHERE symbol = 'HEX'`,
+  );
+  check(
+    'pinned, locked, and carrying the chain that identifies it',
+    mapRow.rows[0]?.locked === true && mapRow.rows[0]?.chain === 'ethereum',
+  );
+
+  const toggleOff = await app.inject({
+    method: 'POST',
+    url: '/plugins/crypto-prices/toggle',
+    payload: { _csrf: cpCsrf, enabled: 'off' },
+    headers: authed,
+  });
+  check('the plugin can be disabled', toggleOff.statusCode === 302);
+  const stateRow = await pg.query<{ value: Record<string, { enabled: boolean }> }>(
+    `SELECT value FROM settings WHERE key = 'plugins'`,
+  );
+  check('and the state persists', stateRow.rows[0]?.value['crypto-prices']?.enabled === false);
+  const offPage = await getPage('/plugins/crypto-prices');
+  check('the page says so plainly', offPage.body.includes('not in the intent catalog at all'));
+  await app.inject({
+    method: 'POST',
+    url: '/plugins/crypto-prices/toggle',
+    payload: { _csrf: cpCsrf, enabled: 'on' },
+    headers: authed,
+  });
+
+  const pluginNoAuth = await app.inject({ method: 'GET', url: '/plugins/crypto-prices' });
+  check(
+    'the plugin page is unreachable unauthenticated',
+    pluginNoAuth.statusCode === 302 || pluginNoAuth.statusCode === 401,
+  );
 
   const iaNoAuth = await app.inject({ method: 'GET', url: '/interaction' });
   check(

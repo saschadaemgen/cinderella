@@ -9,14 +9,15 @@
  *
  * The catalog is enforced HERE rather than trusted from the implementation. A
  * resolver that invents an intent, returns a confidence outside 0..1, or throws
- * is treated as having said UNKNOWN. For a rule engine that is belt-and-braces;
+ * is treated as having said UNKNOWN. The catalog is the ACTIVE one, so an intent
+ * whose plugin is switched off is rejected the same way an invented one is. For a rule engine that is belt-and-braces;
  * for a model it is the difference between "I did not understand" and an
  * unauthorised publish.
  */
 
 import { log } from '../log.js';
 import {
-  isIntent,
+  isActiveIntent,
   unknownResult,
   type IntentContext,
   type IntentResolver,
@@ -48,7 +49,10 @@ export function activeResolverName(): string {
 function sanitize(raw: unknown, lang: string): IntentResult {
   if (!raw || typeof raw !== 'object') return unknownResult(lang);
   const r = raw as Record<string, unknown>;
-  if (!isIntent(r['intent'])) return unknownResult(lang);
+  // Validated against the ACTIVE catalog, not just the compile-time one: an
+  // intent belonging to a disabled plugin is treated exactly like an invented
+  // one (CCB-S3-004 §0).
+  if (!isActiveIntent(r['intent'])) return unknownResult(lang);
 
   const confidence =
     typeof r['confidence'] === 'number' && Number.isFinite(r['confidence'])

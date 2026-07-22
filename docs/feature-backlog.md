@@ -217,7 +217,19 @@ The history below records the pre-CCB-S2-003 state.
       detected from the member's message (scored, not single-hint), remembered for the
       follow-up window, and pinned across a confirmation handshake.
       See [`src/interaction/near-misses.ts`](../src/interaction/near-misses.ts).
-- [x] **Price lookups (CCB-S3-004)** — a `PRICE` intent answers "what is HEX worth" and
+- [x] **Plugin framework (CCB-S3-004)** — capabilities beyond the archive are plugins with
+      their own settings page and their own intents; the sidebar has a Plugins submenu built
+      from the registry. A disabled plugin's intents leave the active catalog entirely.
+      Adding a second plugin needs no framework change.
+- [x] **Price lookups, rebuilt (CCB-S3-004 revised)** — three provider adapters
+      (CoinMarketCap, CoinGecko, Dexscreener) in an ordered chain with automatic failover;
+      symbols resolved lazily then PINNED in `asset_mappings` and never silently
+      re-resolved; ambiguity asks the member once and remembers the answer globally;
+      write-only encrypted API keys; licence-required attribution bound to the provider that
+      answered. See [`src/plugins/crypto-prices/`](../src/plugins/crypto-prices/).
+- [ ] **Superseded first cut** — the original hardcoded asset registry and single CoinGecko
+      provider were replaced wholesale; nothing of it remains.
+- [x] **Price lookups (superseded)** — a `PRICE` intent answers "what is HEX worth" and
       "how much Ethereum for 1 million HEX" in EN and DE. Assets resolve through an
       admin-editable registry pinned to canonical provider ids (HEX pinned to the original
       Ethereum token by contract), never by symbol; an ambiguous symbol asks. Quotes are

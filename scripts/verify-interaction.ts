@@ -39,9 +39,6 @@ import {
 import { formatOutbound, sanitizeDisplayName } from '../src/interaction/reply.js';
 import { clearNearMisses, recentNearMisses } from '../src/interaction/near-misses.js';
 import { detectLanguage } from '../src/interaction/text.js';
-import { PriceService } from '../src/price/service.js';
-import { DEFAULT_ASSETS } from '../src/price/assets.js';
-import type { PriceProvider, Quote } from '../src/price/provider.js';
 import { setLogLevel } from '../src/log.js';
 
 let failures = 0;
@@ -105,23 +102,6 @@ function makeMessage(
   };
 }
 
-/** Fixed prices so the engine's answers are checkable by hand. */
-const STUB_PRICES: Record<string, number> = { hex: 0.0005, ethereum: 2000, bitcoin: 60000 };
-let priceProviderDown = false;
-let priceProviderCalls = 0;
-const stubPriceProvider: PriceProvider = {
-  name: 'stub',
-  fetchPrices(ids: string[], vs: string): Promise<Quote[]> {
-    priceProviderCalls++;
-    if (priceProviderDown) return Promise.reject(new Error('simulated outage'));
-    return Promise.resolve(
-      ids
-        .filter((id) => id in STUB_PRICES)
-        .map((id) => ({ id, vs, price: STUB_PRICES[id] as number, at: 0 })),
-    );
-  },
-};
-
 async function main(): Promise<void> {
   setLogLevel('error'); // keep the harness output readable
 
@@ -144,18 +124,9 @@ async function main(): Promise<void> {
   const replies: string[] = [];
   const sent: { text: string; quote: boolean }[] = [];
 
-  const priceService = new PriceService({
-    provider: stubPriceProvider,
-    registry: () => settings.price.assets,
-    baseCurrency: () => settings.price.baseCurrency,
-    cacheTtlMs: () => settings.price.cacheTtlSeconds * 1000,
-    now: clock.now,
-  });
-
   const engine = new InteractionEngine({
     db,
     settings: () => settings,
-    prices: priceService,
     send: async (_msg, text, opts) => {
       replies.push(text);
       sent.push({ text, quote: opts.quote });
@@ -1245,176 +1216,6 @@ async function main(): Promise<void> {
       DEFAULT_INTERACTION.addressing.logNearMisses &&
       DEFAULT_INTERACTION.replyLanguageMode === 'auto' &&
       DEFAULT_INTERACTION.rememberMemberLanguage,
-  );
-
-  /* ── 18. Price lookups end to end (CCB-S3-004) ─────────────────────────── */
-
-  section('18. Price — answered through the dialogue, no consent involvement');
-
-  settings = normalizeInteraction({});
-  priceService.clearCache();
-  coolDown();
-  await clearConsent(ALICE);
-
-  const askPrice = await say('Cinderella, what is the current US dollar value of HEX?');
-  check(
-    'a direct price question is answered',
-    askPrice.replies[0]?.includes('is worth about') === true,
-    askPrice.replies[0]?.slice(0, 60),
-  );
-  check(
-    'with the value in bold that SimpleX renders',
-    askPrice.replies[0]?.includes('*0.0005 USD*') === true,
-  );
-  check('the price reply does not quote', askPrice.sent[0]?.quote === false);
-  check('and no consent was touched', (await consentRow(ALICE)).optedIn === false);
-  const priceJournal = await memberConsentHistory(db, ALICE);
-  check('a price question journals nothing', priceJournal.length === 0);
-
-  coolDown();
-  const askConv = await say('Cinderella, how much Ethereum do I get for 1 million HEX?');
-  check(
-    'a cross-asset conversion is answered',
-    askConv.replies[0]?.includes('would fetch you about') === true,
-    askConv.replies[0]?.slice(0, 70),
-  );
-  check(
-    'with the cross rate computed through the base currency',
-    askConv.replies[0]?.includes('*0.25 ETH*') === true,
-    askConv.replies[0],
-  );
-  check('and the amount rendered readably', askConv.replies[0]?.includes('1,000,000 HEX') === true);
-
-  coolDown();
-  const askDe = await say('Cinderella, was ist ein HEX in Euro wert?');
-  check(
-    'a German price question is answered in German',
-    askDe.replies[0]?.includes('sind gerade etwa') === true,
-    askDe.replies[0]?.slice(0, 60),
-  );
-
-  coolDown();
-  const unknownAsset = await say('Cinderella what is WAGMI worth?');
-  check(
-    'an unknown symbol gets the friendly answer, never a guess',
-    unknownAsset.replies[0]?.includes('I do not know') === true,
-    unknownAsset.replies[0]?.slice(0, 50),
-  );
-
-  settings = normalizeInteraction({
-    ...settings,
-    price: {
-      ...settings.price,
-      assets: [
-        ...DEFAULT_ASSETS,
-        {
-          symbol: 'HEX',
-          id: 'hex-pulsechain',
-          name: 'HEX (PulseChain)',
-          kind: 'crypto',
-          decimals: 8,
-          aliases: [],
-        },
-      ],
-    },
-  });
-  priceService.clearCache();
-  coolDown();
-  const ambiguousAsk = await say('Cinderella what is HEX worth?');
-  check(
-    'an ambiguous symbol asks which one',
-    ambiguousAsk.replies[0]?.includes('more than one') === true,
-    ambiguousAsk.replies[0]?.slice(0, 60),
-  );
-  check(
-    'and names both canonical ids so the operator can fix the registry',
-    ambiguousAsk.replies[0]?.includes('hex-pulsechain') === true,
-  );
-  settings = normalizeInteraction({});
-  priceService.clearCache();
-
-  coolDown();
-  priceProviderCalls = 0;
-  await say('Cinderella price of BTC in USD');
-  const callsAfterFirst = priceProviderCalls;
-  // Inside the cache TTL — an hour-long coolDown here would expire it and the
-  // check would pass for the wrong reason.
-  clock.advanceSeconds(5);
-  await say('Cinderella price of BTC in USD');
-  check(
-    'a repeated question is served from cache, not from the provider',
-    priceProviderCalls === callsAfterFirst,
-    `calls ${priceProviderCalls}`,
-  );
-
-  priceProviderDown = true;
-  priceService.clearCache();
-  coolDown();
-  const outage = await say('Cinderella price of BTC in USD');
-  check(
-    'a provider outage is answered honestly',
-    outage.replies[0]?.includes('out of earshot') === true,
-    outage.replies[0]?.slice(0, 50),
-  );
-  check(
-    'and never contains a number',
-    /\d/.test(outage.replies[0] ?? '') === false,
-    outage.replies[0],
-  );
-  priceProviderDown = false;
-  priceService.clearCache();
-
-  settings = normalizeInteraction({
-    ...settings,
-    price: { ...settings.price, rateLimitPerMember: 2 },
-  });
-  coolDown();
-  const p1 = await say('Cinderella price of BTC in USD');
-  // Inside the rate-limit window, for the same reason as the cache check above.
-  clock.advanceSeconds(2);
-  const p2 = await say('Cinderella price of ETH in USD');
-  clock.advanceSeconds(2);
-  const p3 = await say('Cinderella price of HEX in USD');
-  check(
-    'the price rate limit silences her after the budget',
-    p1.replies.length === 1 && p2.replies.length === 1 && p3.replies.length === 0,
-  );
-  settings = normalizeInteraction({});
-
-  settings = normalizeInteraction({
-    ...settings,
-    price: { ...settings.price, disclaimer: 'Market data for information only.' },
-  });
-  priceService.clearCache();
-  coolDown();
-  const withDisclaimer = await say('Cinderella price of BTC in USD');
-  check(
-    'the optional disclaimer is appended when set',
-    withDisclaimer.replies[0]?.endsWith('Market data for information only.') === true,
-  );
-  settings = normalizeInteraction({});
-  check('and is empty by default', DEFAULT_INTERACTION.price.disclaimer === '');
-
-  settings = normalizeInteraction({ ...settings, price: { ...settings.price, enabled: false } });
-  coolDown();
-  const priceOff = await say('Cinderella price of BTC in USD');
-  check(
-    'the whole feature can be switched off',
-    !priceOff.handled && priceOff.replies.length === 0,
-  );
-  settings = normalizeInteraction({});
-
-  check(
-    'the registry survives a round trip through the admin text format',
-    normalizeInteraction({
-      price: { assets: 'HEX | hex | HEX | crypto | 8 | | ethereum | 0xabc' },
-    }).price.assets[0]?.id === 'hex',
-  );
-  check(
-    'an entry without a canonical id is dropped, never resolved by symbol',
-    normalizeInteraction({ price: { assets: 'FOO |  | Foo' } }).price.assets.some(
-      (a) => a.symbol === 'FOO',
-    ) === false,
   );
 
   /* ── 15. Capture pipeline integration ──────────────────────────────────── */

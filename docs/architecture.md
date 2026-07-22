@@ -409,37 +409,56 @@ Verified by [`scripts/verify-interaction.ts`](../scripts/verify-interaction.ts) 
 real PGlite + the real capture pipeline) and §11 of
 [`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
 
-## 14. Market data (CCB-S3-004)
+## 14. Plugins (CCB-S3-004)
 
-Cinderella answers "what is HEX worth". The code lives in [`src/price/`](../src/price/) and is
-reached only through the `PRICE` intent, which is read-only — no confirmation, no consent
-involvement, nothing journalled.
+Capabilities beyond the archive itself are plugins. The framework is in
+[`src/plugins/`](../src/plugins/) and is deliberately thin — it has to carry a plugin, not
+become one.
+
+A plugin declares an id, name, version, default-enabled flag, the intents it contributes, and
+its admin page. Enablement lives under the `plugins` settings key; its own settings under
+`plugin:<id>`. The sidebar's **Plugins** submenu is generated from the registry, so adding a
+second plugin is a `definePlugin` call, a settings page and one import.
+
+**A disabled plugin registers no intents.** The intent catalog is now two things: `INTENTS`
+is the compile-time closed set that makes an invented intent a type error, and a RUNTIME
+ACTIVE set recomputed whenever enablement changes. When a plugin is off its intents leave the
+active set, so `rules.ts` skips their patterns and `resolver.ts` downgrades anything
+claiming them to UNKNOWN. Absence is the mechanism; there is no handler left to reason about.
+
+## 15. Market data — the Crypto Prices plugin (CCB-S3-004)
+
+Code in [`src/plugins/crypto-prices/`](../src/plugins/crypto-prices/). `PRICE` is read-only:
+no confirmation, no consent involvement, nothing journalled.
 
 | Module | Responsibility |
 |---|---|
-| `assets.ts` | The registry: symbol → **canonical provider id**, plus chain/contract, aliases, decimals |
-| `amount.ts` | `1 million`, `1m`, `1.5k`, `1.000.000`, `1,5` — and rejecting absurd values |
-| `provider.ts` | The `PriceProvider` seam and the CoinGecko implementation |
-| `service.ts` | Resolution, the quote cache, and cross-rate conversion |
+| `providers/types.ts` | The `PriceProvider` seam: resolve, quote, capabilities, attribution |
+| `providers/adapters.ts` | CoinMarketCap, CoinGecko, Dexscreener |
+| `service.ts` | Lazy resolution, pinning, the quote cache, failover, cross rates |
+| `settings.ts` | The plugin's own settings, including write-only keys |
+| `../secrets.ts` | AES-256-GCM at rest for provider keys |
+| `../../db/asset-mappings.ts` | The pinned symbol→asset table |
 
-**Why a registry.** Three different assets answer to the ticker `HEX` at the provider, so a
-symbol lookup would eventually price the wrong one. Nothing is ever queried by symbol: the
-registry pins each symbol to a canonical id the operator has chosen, and records the chain and
-contract address as durable evidence of which asset that is. A symbol matched by two entries
-produces a question rather than a choice.
+**Resolved once, pinned forever.** A symbol is resolved on first use; one match pins
+automatically, several make her ask and the member's answer is pinned. Pins are global by
+default and never silently re-resolved, because provider rankings move and a quietly different
+answer on a later day is worse than no answer. An operator can lock, edit or delete a pin;
+deleting forces a fresh resolution.
 
-**Cross rates.** `HEX → ETH` has no direct pair worth trusting, so both legs are priced in the
-configured base currency and divided. Precision follows the magnitude, capped per asset, so a
-HEX price keeps its fraction of a cent while a Bitcoin price does not sprout eight decimals.
+**Identity is (chain, contract), not a ticker.** Ethereum HEX and PulseChain HEX share an
+identical contract address, because PulseChain is an Ethereum state fork — so the Dexscreener
+adapter always uses the chain-scoped endpoint. An address-only lookup returns the deepest pool
+across all chains, which for HEX is the PulseChain one and roughly 2.4x wrong.
 
-**Failure is honest.** A provider timeout, a non-OK response, or an answer missing one leg of a
-cross rate all produce the "markets are out of earshot" reply. A missing price is treated as a
-MISS rather than a zero, because a zero would render as a real answer.
+**Failover and attribution.** Providers are tried in the operator's order and skipped on error,
+timeout, rate limit, or "does not know this asset". Ids are never reused across providers.
+The licence-required credit travels with the quote and names whichever provider actually
+answered.
 
-**Caching and limits.** Quotes are cached per asset+currency for a configurable TTL (60s by
-default) so the provider is not called per message, and price questions carry their own
-per-member and per-chat budget on top of the general reply limit — a price question costs an
-outbound HTTPS call to a throttled third party, not just a message.
+**Prices are always fetched on request** — never preloaded. The only thing between a question
+and a provider is a short TTL cache, capped per provider by what its licence permits, plus a
+per-member and per-chat budget on price questions.
 
 ## Appendix: divergences (code wins)
 

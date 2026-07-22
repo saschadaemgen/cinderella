@@ -31,11 +31,26 @@ export interface PendingConfirmation {
   expiresAt: number;
 }
 
+/** An asset choice she has offered and is waiting for an answer to (§1). */
+export interface PendingChoice {
+  symbol: string;
+  options: {
+    id: string;
+    symbol: string;
+    name: string;
+    chain?: string;
+    contract?: string;
+    provider: string;
+  }[];
+  expiresAt: number;
+}
+
 interface MemberEntry {
   followUpUntil: number;
   /** Language detected for this member, kept for the follow-up window (§6). */
   lang: string | undefined;
   pending: PendingConfirmation | undefined;
+  choice: PendingChoice | undefined;
   /** Consecutive nickname addresses; resets on a proper address or after a rest. */
   nicknameStreak: number;
   lastNicknameAt: number;
@@ -83,6 +98,7 @@ export class ConversationState {
         followUpUntil: 0,
         lang: undefined,
         pending: undefined,
+        choice: undefined,
         nicknameStreak: 0,
         lastNicknameAt: 0,
         replies: [],
@@ -157,6 +173,27 @@ export class ConversationState {
   clearPending(groupId: number, memberId: string): void {
     const entry = this.members.get(ConversationState.key(groupId, memberId));
     if (entry) entry.pending = undefined;
+  }
+
+  /* ── Pending asset disambiguation (CCB-S3-004 §1) ──────────────────────── */
+
+  getPendingChoice(groupId: number, memberId: string, now: number): PendingChoice | undefined {
+    const entry = this.members.get(ConversationState.key(groupId, memberId));
+    if (!entry?.choice) return undefined;
+    if (entry.choice.expiresAt <= now) {
+      entry.choice = undefined;
+      return undefined;
+    }
+    return entry.choice;
+  }
+
+  setPendingChoice(groupId: number, memberId: string, choice: PendingChoice): void {
+    this.member(groupId, memberId).choice = choice;
+  }
+
+  clearPendingChoice(groupId: number, memberId: string): void {
+    const entry = this.members.get(ConversationState.key(groupId, memberId));
+    if (entry) entry.choice = undefined;
   }
 
   /* ── Nicknames (§6) ────────────────────────────────────────────────────── */

@@ -74,6 +74,11 @@ export interface NavItem {
   href: string;
   label: string;
   icon: SafeHtml;
+  /**
+   * Nested entries, rendered as a submenu (CCB-S3-004 §0). Plugins live here, so
+   * installing one adds a child rather than another top-level item.
+   */
+  children?: NavItem[];
 }
 
 let navItems: NavItem[] = [];
@@ -85,6 +90,33 @@ export function setNavItems(items: NavItem[]): void {
 
 function navLink(item: NavItem, active: string | undefined): SafeHtml {
   const isActive = item.key === active;
+  if (item.children && item.children.length > 0) {
+    return html`<div class="flex flex-col">
+      <a
+        href="${item.href}"
+        class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          isActive
+            ? 'bg-slate-900 text-white'
+            : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+        }"
+        >${item.icon}<span>${item.label}</span></a
+      >
+      <div class="ml-4 mt-1 flex flex-col gap-1 border-l border-slate-200 pl-2">
+        ${item.children.map(
+          (c) =>
+            html`<a
+              href="${c.href}"
+              class="rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                c.key === active
+                  ? 'bg-slate-200 font-medium text-slate-900'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+              }"
+              >${c.label}</a
+            >`,
+        )}
+      </div>
+    </div>`;
+  }
   return html`<a
     href="${item.href}"
     class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${

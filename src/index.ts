@@ -29,8 +29,9 @@ import { SiteService } from './site/settings.js';
 import { InteractionService } from './interaction/settings.js';
 import { InteractionEngine } from './interaction/engine.js';
 import { activeResolverName } from './interaction/resolver.js';
-import { CoinGeckoProvider } from './price/provider.js';
-import { PriceService } from './price/service.js';
+import { PluginService } from './plugins/service.js';
+import { CryptoPriceService } from './plugins/crypto-prices/service.js';
+import { CRYPTO_PRICES_ID } from './plugins/crypto-prices/plugin.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
 import { registerAdminViews } from './web/views/index.js';
@@ -89,6 +90,7 @@ async function startCaptureWorker(
   cfg: Config,
   settings: SettingsService,
   interaction: InteractionService,
+  plugins: PluginService,
 ): Promise<BotHandle | null> {
   try {
     const botHandle = await startBot(cfg, { getFileTimeoutMs: () => settings.fileTimeoutMs });
@@ -97,23 +99,23 @@ async function startCaptureWorker(
 
     // Natural addressing (CCB-S3-002). The engine only ever decides and replies;
     // consent changes go through the same write path as the slash commands.
-    // Market data (CCB-S3-004). Every setting is read live, so changing the
-    // registry or the cache TTL in the console takes effect on the next question.
-    const prices = new PriceService({
-      provider: new CoinGeckoProvider({
-        get apiKey() {
-          return interaction.get().price.apiKey;
-        },
-      }),
-      registry: () => interaction.get().price.assets,
-      baseCurrency: () => interaction.get().price.baseCurrency,
-      cacheTtlMs: () => interaction.get().price.cacheTtlSeconds * 1000,
+    // Market data, provided by the Crypto Prices plugin (CCB-S3-004). Every
+    // setting is read live, so a chain reorder or a new API key takes effect on
+    // the next question without a restart.
+    const prices = new CryptoPriceService({
+      db: getPool(),
+      settings: () => plugins.getCryptoPrices(),
     });
 
     const engine = new InteractionEngine({
       db: getPool(),
       settings: () => interaction.get(),
-      prices,
+      // Handed over only while the plugin is enabled; when it is off, PRICE is
+      // not in the active intent catalog either, so this is belt and braces.
+      // Handed over only while the plugin is enabled; when it is off, PRICE is
+      // not in the active intent catalog either, so this is belt and braces.
+      ...(plugins.isEnabled(CRYPTO_PRICES_ID) ? { prices } : {}),
+      priceSettings: () => plugins.getCryptoPrices(),
       // Presentation is the engine's decision (CCB-S3-003); this is only the
       // transport. Both this and the slash-command path go through sendToChat,
       // so the two can never disagree about quoting again.
@@ -148,7 +150,7 @@ async function startCaptureWorker(
     log.info(
       `Interaction layer: wake word "${ia.wakeWord}", natural addressing ` +
         `${ia.naturalAddressing ? 'on' : 'off'}, slash commands ${ia.slashCommands ? 'on' : 'off'}, ` +
-        `prices ${ia.price.enabled ? `on via "${ia.price.provider}" (${ia.price.assets.length} assets, base ${ia.price.baseCurrency})` : 'off'}, ` +
+        `plugins [${plugins.list().map((p) => `${p.id}:${p.enabled ? 'on' : 'off'}`).join(' ')}], ` +
         `reply mode "${ia.replyMode}"${ia.replyMode === 'mention' && !ia.namePrefix.enabled ? ' (name prefix off)' : ''}, ` +
         `resolver "${activeResolverName()}".`,
     );
@@ -185,6 +187,7 @@ async function runApp(cfg: Config): Promise<void> {
   const security = await SecurityService.load(getPool());
   const site = await SiteService.load(getPool());
   const interaction = await InteractionService.load(getPool());
+  const plugins = await PluginService.load(getPool());
 
   // One process (A2): the admin web server and the capture worker together.
   const adminCfg = loadAdminConfig();
@@ -196,11 +199,12 @@ async function runApp(cfg: Config): Promise<void> {
     security,
     site,
     interaction,
+    plugins,
     cfg,
     registerViews: registerAdminViews,
   });
 
-  const botHandle = await startCaptureWorker(cfg, settings, interaction);
+  const botHandle = await startCaptureWorker(cfg, settings, interaction, plugins);
   log.info('Cinderella is capturing to PostgreSQL (consent-gated). Press Ctrl+C to stop.');
 
   await new Promise<void>((resolve) => {

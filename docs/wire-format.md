@@ -158,22 +158,29 @@ never quote** in any mode, and **nickname retorts never quote and never carry a 
 falls back to the quoting form rather than dropping the message — cluttered is recoverable,
 an unsent consent confirmation is not.
 
-## 3d. Market data is the instance's first outbound call (CCB-S3-004)
+## 3d. Market data: the instance's only outbound calls (CCB-S3-004)
 
-Everything else Cinderella does is inbound: SimpleX delivers, she stores. The price feature
-adds the first EGRESS — an HTTPS request to the configured price provider
-(`api.coingecko.com` by default).
+Everything else Cinderella does is inbound. The Crypto Prices plugin adds the only EGRESS, to
+whichever of three providers is configured.
 
-- **What leaves the host:** canonical asset ids and a currency code (`ids=hex,ethereum&
-  vs_currencies=usd`). No member id, no message text, no group identity. A price question is
-  not distinguishable at the provider from any other instance asking the same thing.
-- **What comes back is not trusted:** a non-OK status, a timeout, or a missing/non-finite
-  price is a failure, never a zero and never a reused old value beyond the cache TTL.
-- **Call volume is bounded** by the quote cache and by a per-member and per-chat price budget,
-  so the group cannot drive the instance into the provider's rate limit.
-- **The API key, if configured, is stored in the `interaction` settings row** rather than the
-  environment, because it is a third-party read-only key rather than a server secret. Treat it
-  accordingly.
+- **What leaves the host:** a canonical asset id (or a chain and contract address) and a
+  currency code. No member id, no message text, no group identity.
+- **Attribution is a licence term.** CoinGecko requires "Powered by CoinGecko" and
+  CoinMarketCap requires "Data provided by CoinMarketCap.com" wherever their data is shown.
+  A group chat has no footer, so the credit is appended to the reply and names the provider
+  that ACTUALLY answered — after failover that is not necessarily the first one tried.
+  Dexscreener requires no attribution.
+- **Caching rights, read from the current terms rather than assumed:** CoinGecko permits
+  caching but requires a refresh at least daily, which the cache enforces as a per-provider
+  ceiling; CoinMarketCap carves caching out of its storage ban; Dexscreener's terms are silent,
+  so its data is treated as transient by policy.
+- **Responses are not trusted:** a bad status, a timeout, a missing price, or a cross rate with
+  only one leg is a failure, never a zero and never a stale value beyond the TTL.
+- **Chain-scoped lookups are mandatory for on-chain sources.** Forked chains reuse contract
+  addresses — Ethereum and PulseChain HEX share one — so an address-only query can return
+  another chain's price with no error.
+- **Keys are stored encrypted** in the plugin's settings row and never rendered back, logged,
+  or written to an audit entry.
 
 ## 4. There is no private per-member channel — consent is group-only, and confirmations are public
 

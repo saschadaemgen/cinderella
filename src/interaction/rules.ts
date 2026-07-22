@@ -21,6 +21,7 @@
  */
 
 import {
+  isActiveIntent,
   unknownResult,
   type Intent,
   type IntentContext,
@@ -1015,6 +1016,10 @@ function resolveRules(text: string, ctx: IntentContext): IntentResult {
 
   let best: { pattern: Pattern; match: Match; score: number } | null = null;
   for (const pattern of PATTERNS) {
+    // A pattern belonging to a disabled plugin is not merely outranked, it is
+    // never considered — so a price question with the plugin off is UNKNOWN and
+    // follows the CCB-S3-005 silence rules rather than half-matching.
+    if (!isActiveIntent(pattern.intent)) continue;
     const match = findWindow(instr, pattern.tokens);
     if (!match) continue;
 

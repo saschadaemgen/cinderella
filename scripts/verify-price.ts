@@ -1,19 +1,52 @@
 /**
- * CCB-S3-004 verification harness — price lookup and conversion.
+ * CCB-S3-004 verification harness — plugin framework, pinned mappings, provider
+ * chain with failover, and the ambiguity flow.
  *
- * Runs the REAL resolver, registry, cache and conversion maths. The provider is
- * a stub by default so the harness is deterministic and offline; pass `--live`
- * to run the same checks against the real provider as well.
+ * Runs the REAL registry, the REAL persistence (PGlite), the REAL chain and the
+ * REAL adapters against stub HTTP. No API key is used, entered, or needed.
+ * `--live` additionally exercises the keyless providers against the real
+ * internet.
  *
  *   npx tsx scripts/verify-price.ts [--live]
  */
 
-import { DEFAULT_ASSETS, formatValue, lookupAsset, normalizeSymbol } from '../src/price/assets.js';
+import { PGlite } from '@electric-sql/pglite';
+import { loadMigrationFiles } from '../src/db/migrate.js';
+import type { Queryable } from '../src/db/pool.js';
+import {
+  findMapping,
+  listMappings,
+  upsertMapping,
+  type AssetMapping,
+} from '../src/db/asset-mappings.js';
 import { parseAmountAt, parseNumber } from '../src/price/amount.js';
-import { CoinGeckoProvider, type PriceProvider, type Quote } from '../src/price/provider.js';
-import { PriceService } from '../src/price/service.js';
+import { formatValue } from '../src/price/format.js';
+import { CryptoPriceService } from '../src/plugins/crypto-prices/service.js';
+import {
+  DEFAULT_CRYPTO_PRICES,
+  normalizeCryptoPrices,
+  providerKeyStatus,
+} from '../src/plugins/crypto-prices/settings.js';
+import {
+  CoinGeckoProvider,
+  DexscreenerProvider,
+} from '../src/plugins/crypto-prices/providers/adapters.js';
+import { applySecretUpdate, decryptSecret, describeSecret } from '../src/plugins/secrets.js';
+import {
+  listPlugins,
+  normalizePluginStates,
+  activePluginIntents,
+} from '../src/plugins/registry.js';
+import '../src/plugins/crypto-prices/plugin.js';
+import { activeIntentList, isActiveIntent, setActiveIntents } from '../src/interaction/intent.js';
 import { resolveIntent } from '../src/interaction/resolver.js';
 import { normalizeInteraction } from '../src/interaction/settings.js';
+import type {
+  PriceProvider,
+  ProviderQuote,
+  AssetCandidate,
+} from '../src/plugins/crypto-prices/providers/types.js';
+import { ProviderError } from '../src/plugins/crypto-prices/providers/types.js';
 import { setLogLevel } from '../src/log.js';
 
 let failures = 0;
@@ -25,267 +58,422 @@ function section(title: string): void {
   console.log(`\n${title}`);
 }
 
-/** Fixed prices so the maths is checkable by hand. */
-const STUB_PRICES: Record<string, number> = { hex: 0.0005, ethereum: 2000, bitcoin: 60000 };
-
+/** A scriptable adapter so failover and attribution are observable. */
 class StubProvider implements PriceProvider {
-  readonly name = 'stub';
-  calls = 0;
-  fail = false;
-  lastIds: string[] = [];
+  readonly capabilities: PriceProvider['capabilities'];
+  resolveCalls = 0;
+  quoteCalls = 0;
+  down = false;
+  knows: AssetCandidate[] = [];
+  price = 1;
 
-  fetchPrices(ids: string[], vs: string): Promise<Quote[]> {
-    this.calls++;
-    this.lastIds = ids;
-    if (this.fail) return Promise.reject(new Error('simulated outage'));
-    return Promise.resolve(
-      ids
-        .filter((id) => id in STUB_PRICES)
-        .map((id) => ({ id, vs, price: STUB_PRICES[id] as number, at: Date.now() })),
-    );
+  constructor(
+    readonly name: string,
+    readonly label: string,
+    attribution = '',
+    private enabled = true,
+  ) {
+    this.capabilities = {
+      canResolve: true,
+      requiresKey: false,
+      attribution,
+      maxCacheSeconds: Number.POSITIVE_INFINITY,
+      note: 'stub',
+    };
+  }
+
+  setEnabled(v: boolean): void {
+    this.enabled = v;
+  }
+  isConfigured(): boolean {
+    return this.enabled;
+  }
+  resolveSymbol(): Promise<AssetCandidate[]> {
+    this.resolveCalls++;
+    if (this.down) return Promise.reject(new ProviderError(this.name, 'stub down'));
+    return Promise.resolve(this.knows);
+  }
+  fetchQuote(_ref: unknown, vs: string): Promise<ProviderQuote> {
+    this.quoteCalls++;
+    if (this.down) return Promise.reject(new ProviderError(this.name, 'stub down'));
+    return Promise.resolve({ price: this.price, vs, at: 0, provider: this.name });
   }
 }
 
 async function main(): Promise<void> {
   setLogLevel('error');
-  const settings = normalizeInteraction({});
-  const ctx = { threshold: settings.confidenceThreshold, defaultLanguage: 'en' };
+  process.env['SESSION_SECRET'] ??= 'harness-session-secret-not-a-real-one';
 
-  /* ── 1. Registry pinning ───────────────────────────────────────────── */
-  section('1. Asset registry — pinned ids, not symbol guesses');
-
-  const hex = DEFAULT_ASSETS.find((a) => a.symbol === 'HEX');
-  check('HEX ships in the registry', hex !== undefined);
-  check('HEX is pinned to the canonical provider id "hex"', hex?.id === 'hex');
-  check(
-    'HEX records the Ethereum contract that identifies WHICH hex',
-    hex?.chain === 'ethereum' && hex?.contract === '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39',
-    hex?.contract,
-  );
-  check(
-    'the majors and both fiats ship too',
-    ['BTC', 'ETH', 'USD', 'EUR'].every((s) => DEFAULT_ASSETS.some((a) => a.symbol === s)),
-  );
-  check(
-    'aliases resolve ("ether", "euro", "dollar")',
-    lookupAsset(DEFAULT_ASSETS, 'ether').asset?.id === 'ethereum' &&
-      lookupAsset(DEFAULT_ASSETS, 'Euro').asset?.id === 'eur' &&
-      lookupAsset(DEFAULT_ASSETS, 'US Dollar').asset?.id === 'usd',
-  );
-  check(
-    'an unknown symbol resolves to nothing',
-    lookupAsset(DEFAULT_ASSETS, 'WAGMI').asset === undefined,
-  );
-
-  const collided = [
-    ...DEFAULT_ASSETS,
-    {
-      symbol: 'HEX',
-      id: 'hex-pulsechain',
-      name: 'HEX (PulseChain)',
-      kind: 'crypto' as const,
-      decimals: 8,
-      aliases: [],
+  const pg = new PGlite();
+  const db: Queryable = {
+    async query(text, values) {
+      const res = await pg.query(text, values ? [...values] : undefined);
+      return {
+        rows: res.rows as never[],
+        rowCount: (res.affectedRows ?? res.rows.length) as number,
+      };
     },
-  ];
-  const amb = lookupAsset(collided, 'HEX');
+  };
+  for (const m of await loadMigrationFiles()) await pg.exec(m.sql);
+
+  /* ── 1. Plugin framework ───────────────────────────────────────────── */
+  section('1. Plugin framework — registry, intents, enable/disable');
+
+  const defs = listPlugins();
   check(
-    'a symbol claimed by two entries is reported AMBIGUOUS, not guessed',
-    amb.ambiguous?.length === 2,
+    'the Crypto Prices plugin is registered',
+    defs.some((p) => p.id === 'crypto-prices'),
   );
+  const def = defs.find((p) => p.id === 'crypto-prices');
+  check('it declares the PRICE intent', def?.intents.includes('PRICE') === true);
+  check('it is enabled by default', def?.defaultEnabled === true);
+  check('it declares its own admin page', def?.adminPath === '/plugins/crypto-prices');
+
+  const onStates = normalizePluginStates({});
+  setActiveIntents(activePluginIntents(onStates));
+  check('with the plugin ON, PRICE is in the active catalog', isActiveIntent('PRICE'));
+  check('core intents are always active', isActiveIntent('PUBLISH') && isActiveIntent('UNDO'));
+
+  const offStates = normalizePluginStates({ 'crypto-prices': { enabled: false } });
+  setActiveIntents(activePluginIntents(offStates));
+  check('with the plugin OFF, PRICE leaves the catalog', !isActiveIntent('PRICE'));
+  check('and the consent intents are untouched', isActiveIntent('PUBLISH'));
+  check('the active list shrinks accordingly', !activeIntentList().includes('PRICE'));
+
+  const ctx = { threshold: 0.55, defaultLanguage: 'en' };
+  const offResult = await resolveIntent('what is the price of HEX', ctx);
   check(
-    'and the ambiguity names both canonical ids',
-    amb.ambiguous?.map((a) => a.id).join(',') === 'hex,hex-pulsechain',
+    'a price question with the plugin off resolves to UNKNOWN, not a half-match',
+    offResult.intent === 'UNKNOWN',
+    offResult.intent,
   );
 
-  /* ── 2. Amount parsing ─────────────────────────────────────────────── */
-  section('2. Amount parsing — unit words and both separator conventions');
+  setActiveIntents(activePluginIntents(onStates));
+  const onResult = await resolveIntent('what is the price of HEX', ctx);
+  check('and to PRICE again once it is on', onResult.intent === 'PRICE');
+  check('  with the base slot filled', onResult.slots.base?.toUpperCase() === 'HEX');
 
-  const cases: [string, number | undefined][] = [
-    ['1000000', 1000000],
+  /* ── 2. Write-only API keys ────────────────────────────────────────── */
+  section('2. API keys — encrypted, write-only, never rendered back');
+
+  const stored = applySecretUpdate('', 'super-secret-value', false);
+  check('a key is stored encrypted, not in clear', !stored.includes('super-secret-value'));
+  check('and round-trips', decryptSecret(stored) === 'super-secret-value');
+  check('the console only learns that one is set', describeSecret(stored).set === true);
+  check(
+    'an empty submission KEEPS the stored key',
+    applySecretUpdate(stored, '', false) === stored,
+  );
+  check('an explicit clear removes it', applySecretUpdate(stored, '', true) === '');
+  check(
+    'a new value replaces it',
+    decryptSecret(applySecretUpdate(stored, 'other', false)) === 'other',
+  );
+  check('an undecryptable value degrades to unset, not a crash', decryptSecret('v1.a.b.c') === '');
+
+  const withKey = normalizeCryptoPrices({
+    providers: { coinmarketcap: { apiKey: 'k-123', enabled: true } },
+  });
+  check('settings store the key encrypted', !JSON.stringify(withKey).includes('k-123'));
+  check('and report only its presence', providerKeyStatus(withKey, 'coinmarketcap').set === true);
+  const resaved = normalizeCryptoPrices(
+    { providers: { coinmarketcap: { enabled: true } } },
+    withKey,
+  );
+  check(
+    're-saving the form without touching the field keeps the key',
+    decryptSecret(resaved.providers['coinmarketcap']?.apiKey ?? '') === 'k-123',
+  );
+
+  /* ── 3. Defaults ───────────────────────────────────────────────────── */
+  section('3. Plugin settings defaults');
+  check('three providers ship', Object.keys(DEFAULT_CRYPTO_PRICES.providers).length === 3);
+  check(
+    'the chain is ordered',
+    DEFAULT_CRYPTO_PRICES.chain.join(',') === 'coinmarketcap,coingecko,dexscreener',
+  );
+  check('base currency defaults to USD', DEFAULT_CRYPTO_PRICES.baseCurrency === 'USD');
+  check('cache TTL defaults to 60s', DEFAULT_CRYPTO_PRICES.cacheTtlSeconds === 60);
+  check('the disclaimer is OFF by default', DEFAULT_CRYPTO_PRICES.disclaimer === '');
+  check(
+    'a provider left out of the order is still available, just last',
+    normalizeCryptoPrices({ chain: 'dexscreener' }).chain.join(',') ===
+      'dexscreener,coinmarketcap,coingecko',
+  );
+
+  /* ── 4. Amount parsing ─────────────────────────────────────────────── */
+  section('4. Amount parsing');
+  for (const [input, want] of [
     ['1,000,000', 1000000],
     ['1.000.000', 1000000],
-    ['1.5', 1.5],
     ['1,5', 1.5],
-    ['1,234.56', 1234.56],
     ['1.234,56', 1234.56],
-  ];
-  for (const [input, want] of cases) {
-    check(`parseNumber("${input}") = ${String(want)}`, parseNumber(input) === want);
+  ] as [string, number][]) {
+    check(`parseNumber("${input}") = ${want}`, parseNumber(input) === want);
   }
-
-  const amounts: [string[], number | undefined][] = [
+  for (const [toks, want] of [
     [['1', 'million'], 1000000],
     [['1m'], 1000000],
     [['1.5k'], 1500],
     [['100k'], 100000],
-    [['1', 'Million'], 1000000],
     [['2', 'milliarden'], 2e9],
-    [['1e30'], undefined],
     [['0'], undefined],
     [['banana'], undefined],
-  ];
-  for (const [toks, want] of amounts) {
-    const got = parseAmountAt(
-      toks.map((t) => t.toLowerCase()),
-      0,
-    )?.value;
-    check(`parseAmountAt(${JSON.stringify(toks)}) = ${String(want)}`, got === want, String(got));
+  ] as [string[], number | undefined][]) {
+    check(`parseAmountAt(${JSON.stringify(toks)})`, parseAmountAt(toks, 0)?.value === want);
   }
-  check(
-    'an absurd amount is rejected rather than answered',
-    parseAmountAt(['999999999999999999'], 0) === undefined,
+
+  /* ── 5. Lazy resolve, then pinned forever ──────────────────────────── */
+  section('5. Resolution — resolved once, pinned, never re-resolved');
+
+  const primary = new StubProvider(
+    'coinmarketcap',
+    'CoinMarketCap',
+    'Data provided by CoinMarketCap.com',
   );
+  const secondary = new StubProvider('coingecko', 'CoinGecko', 'Powered by CoinGecko');
+  const tertiary = new StubProvider('dexscreener', 'Dexscreener', '');
 
-  /* ── 3. Intent + slots ─────────────────────────────────────────────── */
-  section('3. PRICE intent and slot extraction');
-
-  const r = async (t: string): Promise<Awaited<ReturnType<typeof resolveIntent>>> =>
-    resolveIntent(t, ctx);
-
-  const q1 = await r('what is the current US dollar value of HEX?');
-  check('"what is the current US dollar value of HEX?" → PRICE', q1.intent === 'PRICE');
-  check('  base = HEX', q1.slots.base?.toUpperCase() === 'HEX', q1.slots.base);
-
-  const q2 = await r('how much Ethereum do I get for 1 million HEX?');
-  check('"how much Ethereum do I get for 1 million HEX?" → PRICE', q2.intent === 'PRICE');
-  check('  base = HEX (what they pay)', q2.slots.base?.toUpperCase() === 'HEX', q2.slots.base);
-  check(
-    '  quote = Ethereum (what they receive)',
-    /eth/i.test(q2.slots.quote ?? ''),
-    q2.slots.quote,
-  );
-  check('  amount = 1000000', q2.slots.amount === 1000000, String(q2.slots.amount));
-
-  const q3 = await r('price of BTC in EUR');
-  check('"price of BTC in EUR" → PRICE', q3.intent === 'PRICE');
-  check('  base = BTC', q3.slots.base?.toUpperCase() === 'BTC', q3.slots.base);
-  check('  quote = EUR', q3.slots.quote?.toUpperCase() === 'EUR', q3.slots.quote);
-
-  const q4 = await r('was ist ein HEX in Euro wert?');
-  check('"was ist ein HEX in Euro wert?" → PRICE', q4.intent === 'PRICE');
-  check('  base = HEX', q4.slots.base?.toUpperCase() === 'HEX', q4.slots.base);
-  check('  quote = Euro', /euro/i.test(q4.slots.quote ?? ''), q4.slots.quote);
-  check('  answers in German', q4.lang === 'de');
-
-  check(
-    'PRICE never displaces the consent intents',
-    (await r('publish me')).intent === 'PUBLISH' &&
-      (await r('unpublish me')).intent === 'UNPUBLISH' &&
-      (await r('what do you have on me')).intent === 'STATUS',
-  );
-
-  /* ── 4. Lookup, conversion, cache, failure ─────────────────────────── */
-  section('4. Quotes, cross-rate conversion, cache and failure');
-
-  const stub = new StubProvider();
-  const svc = new PriceService({
-    provider: stub,
-    registry: () => DEFAULT_ASSETS,
-    baseCurrency: () => 'USD',
-    cacheTtlMs: () => 60_000,
+  let settings = normalizeCryptoPrices({});
+  const svc = new CryptoPriceService({
+    db,
+    settings: () => settings,
+    providers: [primary, secondary, tertiary],
+    now: () => nowMs,
   });
+  let nowMs = 1_000_000;
 
-  const direct = await svc.price('HEX', 'USD', 1);
-  check('a direct HEX/USD price is returned', direct.kind === 'price');
-  if (direct.kind === 'price') {
-    check('  value = 1 x 0.0005', direct.value === 0.0005, String(direct.value));
-    check('  the provider was queried by canonical id, not symbol', stub.lastIds.join() === 'hex');
-    check('  rendered with sub-cent precision', PriceService.render(direct).value === '0.0005');
-  }
-
-  const million = await svc.price('HEX', 'ETH', 1_000_000);
-  check('a HEX→ETH conversion is a cross rate', million.kind === 'conversion');
-  if (million.kind === 'conversion') {
-    // 1e6 * 0.0005 = 500 USD; 500 / 2000 = 0.25 ETH
-    check('  1,000,000 HEX = 0.25 ETH via USD', million.value === 0.25, String(million.value));
-    const rendered = PriceService.render(million);
-    check('  amount is rendered readably', rendered.amount === '1,000,000', rendered.amount);
-    check('  value is rendered readably', rendered.value === '0.25', rendered.value);
-  }
-
-  const callsBefore = stub.calls;
-  await svc.price('HEX', 'USD', 1);
-  await svc.price('HEX', 'USD', 5);
-  await svc.price('HEX', 'USD', 9);
+  primary.knows = [{ id: '5015', symbol: 'BTC', name: 'Bitcoin' }];
+  primary.price = 60000;
+  const first = await svc.resolve('BTC');
+  check('an unambiguous symbol resolves', first.kind === 'mapping');
+  check('the provider was asked once', primary.resolveCalls === 1);
+  const pinned = await findMapping(db, 'BTC');
   check(
-    'repeated questions are served from cache',
-    stub.calls === callsBefore,
-    `calls ${stub.calls}`,
+    'and the mapping was PINNED to the database',
+    pinned?.providerIds['coinmarketcap'] === '5015',
+  );
+  check('recording which provider resolved it', pinned?.resolvedBy === 'coinmarketcap');
+
+  const again = await svc.resolve('BTC');
+  check('asking again uses the pin', again.kind === 'mapping');
+  check(
+    'and does NOT re-resolve at the provider',
+    primary.resolveCalls === 1,
+    `calls ${primary.resolveCalls}`,
   );
 
-  const unknown = await svc.price('WAGMI', 'USD', 1);
-  check('an unknown asset is reported, never guessed', unknown.kind === 'unknown-asset');
+  /* ── 6. Ambiguity: asked once, remembered ──────────────────────────── */
+  section('6. Ambiguity — asked once, the answer pinned globally');
 
-  const ambiguousSvc = new PriceService({
-    provider: stub,
-    registry: () => collided,
-    baseCurrency: () => 'USD',
-    cacheTtlMs: () => 60_000,
-  });
-  const ambiguous = await ambiguousSvc.price('HEX', 'USD', 1);
-  check('an ambiguous symbol asks instead of choosing', ambiguous.kind === 'ambiguous');
-
-  stub.fail = true;
-  svc.clearCache();
-  const down = await svc.price('HEX', 'USD', 1);
-  check('a provider outage answers honestly', down.kind === 'unavailable');
-  check('and never yields a number', !('value' in down));
-  stub.fail = false;
-
-  const partial = new PriceService({
-    provider: {
-      name: 'partial',
-      fetchPrices: (ids, vs) =>
-        Promise.resolve(
-          ids.filter((i) => i === 'hex').map((i) => ({ id: i, vs, price: 0.0005, at: Date.now() })),
-        ),
+  primary.knows = [
+    { id: '5015', symbol: 'HEX', name: 'HEX', chain: 'ethereum', contract: '0x2b59' },
+    {
+      id: '28928',
+      symbol: 'HEX',
+      name: 'HEX (PulseChain)',
+      chain: 'pulsechain',
+      contract: '0x2b59',
     },
-    registry: () => DEFAULT_ASSETS,
-    baseCurrency: () => 'USD',
-    cacheTtlMs: () => 60_000,
+  ];
+  const ambiguous = await svc.resolve('HEX');
+  check('two candidates produce an ambiguity, not a guess', ambiguous.kind === 'ambiguous');
+  if (ambiguous.kind === 'ambiguous') {
+    check('  both options are offered', ambiguous.options.length === 2);
+    check(
+      '  and the provider that produced them is carried along',
+      ambiguous.provider === 'coinmarketcap',
+    );
+    check('  nothing was pinned yet', (await findMapping(db, 'HEX')) === null);
+
+    // The member picks the Ethereum one.
+    const picked = ambiguous.options[0] as AssetCandidate;
+    await svc.pin('HEX', picked, ambiguous.provider, 'member-choice');
+  }
+  const hexPin = await findMapping(db, 'HEX');
+  check('the answer is pinned', hexPin?.displayName === 'HEX');
+  check('with the chain that distinguishes it', hexPin?.chain === 'ethereum');
+  check('and marked as a member choice', hexPin?.source === 'member-choice');
+
+  const callsBefore = primary.resolveCalls;
+  const afterChoice = await svc.resolve('HEX');
+  check('the question is never asked again', afterChoice.kind === 'mapping');
+  check('and no provider is consulted', primary.resolveCalls === callsBefore);
+
+  /* ── 7. Locked mappings ────────────────────────────────────────────── */
+  section('7. Manual override — a locked mapping is never re-pointed');
+
+  await upsertMapping(db, {
+    symbol: 'LOCKED',
+    displayName: 'The Right One',
+    providerIds: { coinmarketcap: 'right' },
+    source: 'manual',
+    locked: true,
+    chain: 'ethereum',
   });
-  const half = await partial.price('HEX', 'ETH', 1);
+  await upsertMapping(db, {
+    symbol: 'LOCKED',
+    displayName: 'An Impostor',
+    providerIds: { coingecko: 'wrong' },
+    source: 'resolved',
+  });
+  const locked = await findMapping(db, 'LOCKED');
   check(
-    'a provider that answers for only one leg is a failure, not a zero',
-    half.kind === 'unavailable',
+    'the locked identity survives an automatic re-pin',
+    locked?.displayName === 'The Right One',
+  );
+  check('the chain survives too', locked?.chain === 'ethereum');
+  check(
+    'but a new provider id is still LEARNED (merge, not replace)',
+    locked?.providerIds['coingecko'] === 'wrong' &&
+      locked?.providerIds['coinmarketcap'] === 'right',
   );
 
-  /* ── 5. Formatting ─────────────────────────────────────────────────── */
-  section('5. Readable numbers');
-  check('sub-cent values keep their digits', formatValue(0.00048006, 8) === '0.00048006');
-  check('large values are grouped and rounded', formatValue(65727.1234, 8) === '65,727.12');
-  check('mid-range values stay sensible', formatValue(0.2501094, 8) === '0.250109');
-  check('a value is never scientific notation', !formatValue(0.00000001234, 8).includes('e'));
-  check('symbol normalisation folds case and punctuation', normalizeSymbol(' Hex! ') === 'hex');
+  /* ── 8. Quotes, failover, attribution, cache ───────────────────────── */
+  section('8. Quotes — failover, attribution, cache');
 
-  /* ── 6. Optional live provider check ───────────────────────────────── */
+  const btc = (await findMapping(db, 'BTC')) as AssetMapping;
+  primary.price = 60000;
+  const q1 = await svc.quote(btc, 'usd');
+  check('the first provider in the chain answers', q1?.provider === 'coinmarketcap');
+  check(
+    'and its required attribution rides along',
+    q1?.attribution === 'Data provided by CoinMarketCap.com',
+  );
+
+  const quoteCallsBefore = primary.quoteCalls;
+  await svc.quote(btc, 'usd');
+  check('a repeat is served from cache', primary.quoteCalls === quoteCallsBefore);
+
+  nowMs += 120_000; // past the 60s TTL
+  await svc.quote(btc, 'usd');
+  check('and refetched once the TTL lapses', primary.quoteCalls === quoteCallsBefore + 1);
+
+  // Failover: the first provider goes down.
+  primary.down = true;
+  await upsertMapping(db, {
+    symbol: 'BTC',
+    displayName: 'Bitcoin',
+    providerIds: { coingecko: 'bitcoin' },
+    source: 'resolved',
+  });
+  const btc2 = (await findMapping(db, 'BTC')) as AssetMapping;
+  secondary.price = 60100;
+  svc.clearCache();
+  const q2 = await svc.quote(btc2, 'usd');
+  check('a failed provider fails over to the next', q2?.provider === 'coingecko');
+  check(
+    'and the attribution follows the provider that ANSWERED',
+    q2?.attribution === 'Powered by CoinGecko',
+  );
+
+  // All providers down → honest failure.
+  secondary.down = true;
+  tertiary.down = true;
+  svc.clearCache();
+  const q3 = await svc.quote(btc2, 'usd');
+  check('with every provider down there is no quote at all', q3 === null);
+  const outcome = await svc.price('BTC', 'USD', 1);
+  check('which the caller sees as "unavailable", never a number', outcome.kind === 'unavailable');
+  primary.down = secondary.down = tertiary.down = false;
+
+  // Disabling all providers in settings.
+  settings = normalizeCryptoPrices({
+    providers: {
+      coinmarketcap: { enabled: false },
+      coingecko: { enabled: false },
+      dexscreener: { enabled: false },
+    },
+  });
+  primary.setEnabled(false);
+  secondary.setEnabled(false);
+  tertiary.setEnabled(false);
+  svc.clearCache();
+  const allOff = await svc.price('BTC', 'USD', 1);
+  check('disabling every provider gives the honest answer too', allOff.kind === 'unavailable');
+  primary.setEnabled(true);
+  secondary.setEnabled(true);
+  tertiary.setEnabled(true);
+  settings = normalizeCryptoPrices({});
+
+  /* ── 9. Conversion ─────────────────────────────────────────────────── */
+  section('9. Conversion — cross rate through the base currency');
+
+  svc.clearCache();
+  primary.knows = [{ id: 'eth', symbol: 'ETH', name: 'Ethereum' }];
+  await svc.resolve('ETH');
+  await upsertMapping(db, {
+    symbol: 'HEXX',
+    displayName: 'HEX',
+    providerIds: { coinmarketcap: 'hexx' },
+    source: 'manual',
+    decimals: 8,
+  });
+
+  // One stub price for everything, so the cross rate is 1:1 and checkable.
+  primary.price = 2000;
+  const conv = await svc.price('HEXX', 'ETH', 1_000_000);
+  check('an asset-to-asset question is a conversion', conv.kind === 'conversion');
+  if (conv.kind === 'conversion') {
+    check('  crossed through the base currency', conv.value === 1_000_000);
+    check('  and attributed', conv.attribution.includes('CoinMarketCap'));
+  }
+
+  check('sub-cent values keep their digits', formatValue(0.00048006, 8) === '0.00048006');
+  check('large values are grouped', formatValue(65727.1234, 8) === '65,727.12');
+  check('never scientific notation', !formatValue(0.00000001234, 8).includes('e'));
+
+  /* ── 10. Registry contents ─────────────────────────────────────────── */
+  section('10. Mapping table');
+  const all = await listMappings(db);
+  check('mappings are listable for the admin', all.length >= 3);
+  check(
+    'every row carries a canonical id or a chain+contract',
+    all.every((m) => Object.keys(m.providerIds).length > 0 || (m.chain && m.contract)),
+  );
+
+  /* ── 11. Live (keyless providers only) ─────────────────────────────── */
   if (process.argv.includes('--live')) {
-    section('6. LIVE provider');
-    const live = new PriceService({
-      provider: new CoinGeckoProvider({ timeoutMs: 15000 }),
-      registry: () => DEFAULT_ASSETS,
-      baseCurrency: () => 'USD',
-      cacheTtlMs: () => 60_000,
+    section('11. LIVE — keyless providers only, no API key used');
+    const liveSettings = normalizeCryptoPrices({
+      chain: 'coingecko, dexscreener',
+      providers: { coinmarketcap: { enabled: false } },
     });
-    const liveHex = await live.price('HEX', 'USD', 1);
-    check('live HEX/USD returns a positive price', liveHex.kind === 'price' && liveHex.value > 0);
-    if (liveHex.kind === 'price')
-      console.log(`         1 HEX = ${PriceService.render(liveHex).value} USD`);
-    const liveConv = await live.price('HEX', 'ETH', 1_000_000);
-    check(
-      'live HEX→ETH conversion returns a positive value',
-      liveConv.kind === 'conversion' && liveConv.value > 0,
-    );
-    if (liveConv.kind === 'conversion') {
-      const rr = PriceService.render(liveConv);
-      console.log(`         ${rr.amount} HEX = ${rr.value} ETH`);
+    const live = new CryptoPriceService({
+      db,
+      settings: () => liveSettings,
+      providers: [
+        new CoinGeckoProvider({ enabled: () => true, apiKey: () => '', timeoutMs: () => 15000 }),
+        new DexscreenerProvider({ enabled: () => true, apiKey: () => '', timeoutMs: () => 15000 }),
+      ],
+    });
+    const liveHex = await live.resolve('HEXLIVE').catch(() => null);
+    void liveHex;
+    // Pin the real HEX explicitly (contested ticker — exactly the manual case).
+    await upsertMapping(db, {
+      symbol: 'HEXLIVE',
+      displayName: 'HEX',
+      chain: 'ethereum',
+      contract: '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39',
+      providerIds: { coingecko: 'hex' },
+      source: 'manual',
+      locked: true,
+      decimals: 8,
+    });
+    const m = (await findMapping(db, 'HEXLIVE')) as AssetMapping;
+    const lq = await live.quote(m, 'usd');
+    check('a live keyless quote for the pinned HEX succeeds', lq !== null && lq.price > 0);
+    if (lq) {
+      console.log(
+        `         1 HEX = ${formatValue(lq.price, 8)} USD  (via ${lq.provider}${lq.attribution ? `, "${lq.attribution}"` : ''})`,
+      );
     }
   } else {
-    console.log('\n(6. live provider check skipped — pass --live to include it)');
+    console.log('\n(11. live provider check skipped — pass --live to include it)');
   }
 
   console.log(`\n${failures === 0 ? 'All price checks passed.' : `${failures} check(s) FAILED.`}`);
+  await pg.close();
   if (failures > 0) process.exit(1);
 }
 

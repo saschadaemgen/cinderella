@@ -35,7 +35,11 @@ import { applyConsentChange } from '../consent/apply.js';
 import type { CapturedMessage } from '../capture/message.js';
 import { detectAddress } from './addressing.js';
 import { resolveIntent } from './resolver.js';
-import { ConversationState, type PendingConfirmation } from './state.js';
+import {
+  ConversationState,
+  type PendingChoice,
+  type PendingConfirmation,
+} from './state.js';
 import {
   NEAR_MISS_EXCERPT,
   recordNearMiss,
@@ -50,7 +54,8 @@ import {
   type PersonaKey,
 } from './settings.js';
 import { detectLanguage, fuzzyEquals, normTokens } from './text.js';
-import { PriceService } from '../price/service.js';
+import type { PriceOutcome } from '../plugins/crypto-prices/service.js';
+import { formatAmount, formatValue, describeAge } from '../price/format.js';
 import { formatOutbound, type OutboundReply } from './reply.js';
 
 export interface InteractionDeps {
@@ -67,11 +72,16 @@ export interface InteractionDeps {
   /** Injectable randomness for retort rotation (harness). */
   random?: () => number;
   /**
-   * Market data (CCB-S3-004). Optional: without it the PRICE intent answers
-   * "the markets are out of earshot" rather than throwing, so an instance that
-   * has not configured a provider degrades honestly.
+   * Market data (CCB-S3-004), injected by the plugin. Absent when the plugin is
+   * disabled — in which case PRICE is not in the active catalog either, so this
+   * is belt and braces rather than the only guard.
    */
-  prices?: PriceService;
+  prices?: {
+    price(base: string, quote: string | undefined, amount: number, scope?: string): Promise<PriceOutcome>;
+    pin(symbol: string, candidate: { id: string; symbol: string; name: string; chain?: string; contract?: string }, provider: string, source: 'member-choice'): Promise<unknown>;
+  };
+  /** Live plugin settings for the price feature. */
+  priceSettings?: () => { rateLimitPerMember: number; rateLimitPerChat: number; disclaimer: string };
 }
 
 interface ReplyOptions {
@@ -95,6 +105,33 @@ interface ReplyOptions {
    * prompt is theirs, but must not repeat their message back at the group.
    */
   neverQuote?: boolean;
+}
+
+/**
+ * Matches a member's reply to one of the offered assets: a number ("2"), the
+ * asset's name, or its chain. Deliberately strict — a wrong pin is permanent
+ * until an operator changes it, so anything unrecognised leaves the question
+ * open rather than guessing.
+ */
+function matchChoice(
+  instruction: string,
+  choice: PendingChoice,
+): PendingChoice['options'][number] | undefined {
+  const t = instruction.trim().toLowerCase();
+  if (!t) return undefined;
+  const asIndex = Number.parseInt(t, 10);
+  if (Number.isInteger(asIndex) && asIndex >= 1 && asIndex <= choice.options.length) {
+    return choice.options[asIndex - 1];
+  }
+  for (const o of choice.options) {
+    if (o.name.toLowerCase() === t) return o;
+    if (o.chain && o.chain.toLowerCase() === t) return o;
+  }
+  // A distinctive word, e.g. "pulsechain" out of "HEX (PulseChain)".
+  const hits = choice.options.filter(
+    (o) => o.name.toLowerCase().includes(t) || (o.chain ?? '').toLowerCase().includes(t),
+  );
+  return hits.length === 1 ? hits[0] : undefined;
 }
 
 /**
@@ -254,6 +291,13 @@ export class InteractionEngine {
     const threshold = explicit
       ? s.confidenceThreshold
       : Math.max(s.confidenceThreshold, IMPLICIT_MIN_CONFIDENCE);
+
+    // A pending "which HEX did you mean?" is answered before anything else is
+    // resolved — the reply is a bare "1" or a name, which resolves to nothing.
+    const choice = this.state.getPendingChoice(msg.groupId, msg.senderMemberId, now);
+    if (choice && (await this.resolveChoice(msg, s, lang, instruction, choice, now))) {
+      return true;
+    }
 
     const result = await resolveIntent(instruction, {
       threshold,
@@ -443,7 +487,7 @@ export class InteractionEngine {
   /**
    * Answers a price question (CCB-S3-004). Read-only: no confirmation, no
    * consent involvement, nothing journalled — it is a lookup, and the only state
-   * it touches is a cache and a rate-limit counter.
+   * it touches is a cache, a rate-limit counter, and the pinned mapping table.
    */
   private async answerPrice(
     msg: CapturedMessage,
@@ -452,12 +496,17 @@ export class InteractionEngine {
     slots: { base?: string; quote?: string; amount?: number },
     now: number,
   ): Promise<boolean> {
-    if (!s.price.enabled) return false;
-
     const prices = this.deps.prices;
+    const cfg = this.deps.priceSettings?.();
     const base = slots.base;
-    if (!prices || !base) {
-      await this.reply(msg, s, lang, prices ? 'notUnderstood' : 'priceUnavailable', {});
+    if (!prices || !cfg) {
+      // The plugin is off or unconfigured. PRICE should not even be in the
+      // active catalog in that case, so this is the second line of defence.
+      await this.reply(msg, s, lang, 'priceUnavailable', {});
+      return true;
+    }
+    if (!base) {
+      await this.reply(msg, s, lang, 'notUnderstood', {});
       return true;
     }
 
@@ -468,8 +517,8 @@ export class InteractionEngine {
         msg.groupId,
         msg.senderMemberId,
         now,
-        s.price.rateLimitPerMember,
-        s.price.rateLimitPerChat,
+        cfg.rateLimitPerMember,
+        cfg.rateLimitPerChat,
       )
     ) {
       log.debug(`Price: rate limit hit for member ${msg.senderMemberId}; staying silent.`);
@@ -482,29 +531,90 @@ export class InteractionEngine {
       case 'unknown-asset':
         await this.reply(msg, s, lang, 'priceUnknownAsset', { symbol: outcome.symbol });
         return true;
-      case 'ambiguous':
+
+      case 'ambiguous': {
+        // Ask, never choose — and remember the options so the member's answer
+        // can be pinned globally and nobody is asked again (§1).
+        const options = outcome.options.slice(0, 5);
+        this.state.setPendingChoice(msg.groupId, msg.senderMemberId, {
+          symbol: outcome.symbol,
+          options: options.map((o) => ({
+            id: o.id,
+            symbol: o.symbol,
+            name: o.name,
+            ...(o.chain ? { chain: o.chain } : {}),
+            ...(o.contract ? { contract: o.contract } : {}),
+            provider: outcome.provider,
+          })),
+          expiresAt: now + Math.max(s.followUpSeconds * 1000, 60_000),
+        });
         await this.reply(msg, s, lang, 'priceAmbiguous', {
           symbol: outcome.symbol,
-          options: outcome.options.map((o) => `${o.name} (${o.id})`).join(' or '),
+          options: options
+            .map((o, i) => `${i + 1}) ${o.name}${o.chain ? ` on ${o.chain}` : ''}`)
+            .join(', '),
         });
         return true;
+      }
+
       case 'unavailable':
         // Honest failure. Never a stale or invented number.
         await this.reply(msg, s, lang, 'priceUnavailable', {});
         return true;
+
       default: {
-        const rendered = PriceService.render(outcome);
+        const quoteDecimals = 'decimals' in outcome.quote ? outcome.quote.decimals : 8;
+        const suffix = [cfg.disclaimer, outcome.attribution].filter((x) => x).join(' · ');
         await this.reply(
           msg,
           s,
           lang,
           outcome.kind === 'conversion' ? 'conversion' : 'price',
-          rendered,
-          { suffix: s.price.disclaimer },
+          {
+            amount: formatAmount(outcome.amount),
+            base: outcome.base.symbol,
+            quote: outcome.quote.symbol,
+            value: formatValue(outcome.value, quoteDecimals),
+            age: describeAge(outcome.at, now, lang),
+          },
+          { suffix },
         );
         return true;
       }
     }
+  }
+
+  /**
+   * Handles a member picking one of the assets she offered. The answer is pinned
+   * GLOBALLY, so the question is asked once per symbol for the whole instance
+   * rather than once per member (§1).
+   */
+  private async resolveChoice(
+    msg: CapturedMessage,
+    s: InteractionSettings,
+    lang: string,
+    instruction: string,
+    choice: PendingChoice,
+    now: number,
+  ): Promise<boolean> {
+    const picked = matchChoice(instruction, choice);
+    if (!picked) return false;
+
+    this.state.clearPendingChoice(msg.groupId, msg.senderMemberId);
+    const prices = this.deps.prices;
+    if (!prices) return false;
+    try {
+      await prices.pin(choice.symbol, picked, picked.provider, 'member-choice');
+      log.info(`Price: "${choice.symbol}" pinned to ${picked.name} by a member's choice.`);
+    } catch (err) {
+      log.error(
+        `Price: could not pin "${choice.symbol}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+      await this.reply(msg, s, lang, 'priceUnavailable', {});
+      return true;
+    }
+    // Answer the original question now that the ambiguity is settled.
+    return this.answerPrice(msg, s, lang, { base: choice.symbol }, now);
   }
 
   /* ── Actions ───────────────────────────────────────────────────────────── */

@@ -413,6 +413,14 @@ reason and are verified in [`scripts/verify-interaction.ts`](../scripts/verify-i
 | A disabled toggle half-applying | Command-shaped text (`/…`) never enters the conversational path | `engine.ts` |
 | Silent consent changes | Consent OUTCOME replies bypass the rate limiter, so a change is never made without saying so; failures are logged and raised to the runtime status | `engine.ts` (`ReplyOptions.bypassLimit`) |
 
+**Plugin API keys (CCB-S3-004).** Provider keys are encrypted at rest with AES-256-GCM under a
+key derived from `SESSION_SECRET` via scrypt, because the `settings` table ends up in every
+database backup. The admin field is WRITE-ONLY: it renders no value, saving it blank keeps the
+stored key, and clearing is an explicit checkbox. Keys never appear in logs or audit entries —
+the audit detail records only whether a key is set. Rotating `SESSION_SECRET` makes stored
+plugin keys undecryptable and they must be re-entered; that is the deliberate trade for not
+introducing a second operator-managed secret.
+
 **Outbound calls (CCB-S3-004).** The price feature is the instance's only egress. It sends
 canonical asset ids and a currency code to the configured provider and nothing else — no
 member id, no message text, no group identity. Responses are not trusted: a bad status, a
