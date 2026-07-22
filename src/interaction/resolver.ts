@@ -63,6 +63,16 @@ function sanitize(raw: unknown, lang: string): IntentResult {
   if (typeof rawSlots['targetName'] === 'string' && rawSlots['targetName'].trim()) {
     slots.targetName = rawSlots['targetName'].trim().slice(0, 80);
   }
+  for (const key of ['base', 'quote'] as const) {
+    const v = rawSlots[key];
+    if (typeof v === 'string' && v.trim()) slots[key] = v.trim().slice(0, 40);
+  }
+  // An amount that is not a finite positive number is dropped rather than
+  // coerced — the caller's default of 1 is always safe, a NaN never is.
+  if (typeof rawSlots['amount'] === 'number' && Number.isFinite(rawSlots['amount'])) {
+    const a = rawSlots['amount'];
+    if (a > 0 && a <= 1e15) slots.amount = a;
+  }
 
   return {
     intent: r['intent'],

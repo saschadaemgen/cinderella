@@ -805,6 +805,81 @@ async function main(): Promise<void> {
     headers: authed,
   });
 
+  // Market data (CCB-S3-004).
+  const iaPrice = await getPage('/interaction');
+  check(
+    'the market-data card exposes every price setting',
+    [
+      'name="priceEnabled"',
+      'name="baseCurrency"',
+      'name="provider"',
+      'name="apiKey"',
+      'name="cacheTtlSeconds"',
+      'name="priceRateMember"',
+      'name="priceRateChat"',
+      'name="disclaimer"',
+      'name="assets"',
+    ].every((n) => iaPrice.body.includes(n)),
+  );
+  check(
+    'the registry is shown with HEX pinned to its canonical id and contract',
+    iaPrice.body.includes('HEX | hex | HEX | crypto') &&
+      iaPrice.body.includes('0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'),
+  );
+  check(
+    'and the card explains why a bare symbol lookup is not used',
+    iaPrice.body.includes('never by looking a bare ticker up'),
+  );
+  const priceRes = await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: {
+      _csrf: iaCsrf,
+      section: 'price',
+      // priceEnabled omitted = unticked
+      baseCurrency: 'EUR',
+      provider: 'coingecko',
+      apiKey: '',
+      cacheTtlSeconds: '120',
+      priceRateMember: '3',
+      priceRateChat: '9',
+      disclaimer: 'Market data for information only.',
+      assets:
+        'HEX | hex | HEX | crypto | 8 | | ethereum | 0x2b591e99afe9f32eaa6214f7b7629768c40eeb39\nUSD | usd | US Dollar | fiat | 4 | dollar,usd',
+    },
+    headers: authed,
+  });
+  check('market-data edit redirects', priceRes.statusCode === 302);
+  const iaPriceRow = await pg.query<{
+    value: {
+      price: {
+        enabled: boolean;
+        baseCurrency: string;
+        cacheTtlSeconds: number;
+        disclaimer: string;
+        assets: { symbol: string; id: string; contract?: string }[];
+      };
+    };
+  }>(`SELECT value FROM settings WHERE key = 'interaction'`);
+  const pv = iaPriceRow.rows[0]?.value.price;
+  check(
+    'price settings persist, including the unticked switch and the registry',
+    pv?.enabled === false &&
+      pv?.baseCurrency === 'EUR' &&
+      pv?.cacheTtlSeconds === 120 &&
+      pv?.disclaimer === 'Market data for information only.' &&
+      pv?.assets.length === 2 &&
+      pv?.assets[0]?.id === 'hex' &&
+      pv?.assets[0]?.contract === '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39',
+    JSON.stringify(pv?.assets),
+  );
+  await app.inject({
+    method: 'POST',
+    url: '/interaction',
+    payload: { _csrf: iaCsrf, section: 'reset' },
+    headers: authed,
+  });
+
   const iaNoAuth = await app.inject({ method: 'GET', url: '/interaction' });
   check(
     'interaction console is unreachable unauthenticated',

@@ -50,6 +50,7 @@ import {
   type PersonaKey,
 } from './settings.js';
 import { detectLanguage, fuzzyEquals, normTokens } from './text.js';
+import { PriceService } from '../price/service.js';
 import { formatOutbound, type OutboundReply } from './reply.js';
 
 export interface InteractionDeps {
@@ -65,6 +66,12 @@ export interface InteractionDeps {
   now?: () => number;
   /** Injectable randomness for retort rotation (harness). */
   random?: () => number;
+  /**
+   * Market data (CCB-S3-004). Optional: without it the PRICE intent answers
+   * "the markets are out of earshot" rather than throwing, so an instance that
+   * has not configured a provider degrades honestly.
+   */
+  prices?: PriceService;
 }
 
 interface ReplyOptions {
@@ -80,6 +87,8 @@ interface ReplyOptions {
    * (two messages per change), so exempting them cannot be used to flood.
    */
   bypassLimit?: boolean;
+  /** Appended to the reply on its own line (the price disclaimer). */
+  suffix?: string;
   /**
    * Never quote, whatever `replyMode` says (CCB-S3-003 §1). Set on the consent
    * confirmation prompts: they may carry a name prefix so the member knows the
@@ -330,6 +339,9 @@ export class InteractionEngine {
       case 'UNDO':
         return this.performUndo(msg, s, lang);
 
+      case 'PRICE':
+        return this.answerPrice(msg, s, lang, result.slots, now);
+
       case 'UNKNOWN':
       default:
         // Inside the follow-up window an unrecognised message is far more likely
@@ -426,6 +438,73 @@ export class InteractionEngine {
   /** Recent ignored candidates, for the admin console. */
   nearMisses(limit?: number): NearMiss[] {
     return recentNearMisses(limit);
+  }
+
+  /**
+   * Answers a price question (CCB-S3-004). Read-only: no confirmation, no
+   * consent involvement, nothing journalled — it is a lookup, and the only state
+   * it touches is a cache and a rate-limit counter.
+   */
+  private async answerPrice(
+    msg: CapturedMessage,
+    s: InteractionSettings,
+    lang: string,
+    slots: { base?: string; quote?: string; amount?: number },
+    now: number,
+  ): Promise<boolean> {
+    if (!s.price.enabled) return false;
+
+    const prices = this.deps.prices;
+    const base = slots.base;
+    if (!prices || !base) {
+      await this.reply(msg, s, lang, prices ? 'notUnderstood' : 'priceUnavailable', {});
+      return true;
+    }
+
+    // A price question costs an outbound call to a throttled third party, so it
+    // has its own budget on top of the reply limit.
+    if (
+      !this.state.allowPrice(
+        msg.groupId,
+        msg.senderMemberId,
+        now,
+        s.price.rateLimitPerMember,
+        s.price.rateLimitPerChat,
+      )
+    ) {
+      log.debug(`Price: rate limit hit for member ${msg.senderMemberId}; staying silent.`);
+      return true;
+    }
+
+    const outcome = await prices.price(base, slots.quote, slots.amount ?? 1);
+
+    switch (outcome.kind) {
+      case 'unknown-asset':
+        await this.reply(msg, s, lang, 'priceUnknownAsset', { symbol: outcome.symbol });
+        return true;
+      case 'ambiguous':
+        await this.reply(msg, s, lang, 'priceAmbiguous', {
+          symbol: outcome.symbol,
+          options: outcome.options.map((o) => `${o.name} (${o.id})`).join(' or '),
+        });
+        return true;
+      case 'unavailable':
+        // Honest failure. Never a stale or invented number.
+        await this.reply(msg, s, lang, 'priceUnavailable', {});
+        return true;
+      default: {
+        const rendered = PriceService.render(outcome);
+        await this.reply(
+          msg,
+          s,
+          lang,
+          outcome.kind === 'conversion' ? 'conversion' : 'price',
+          rendered,
+          { suffix: s.price.disclaimer },
+        );
+        return true;
+      }
+    }
   }
 
   /* ── Actions ───────────────────────────────────────────────────────────── */
@@ -580,7 +659,10 @@ export class InteractionEngine {
     // prefix — see the {name} footgun note in reply.ts. Formatting deliberately
     // happens here rather than inside sendReply's try/catch, so a broken prefix
     // template fails loudly instead of being swallowed as a failed send.
-    const body = fillPersona(this.persona(s, lang, key), vars);
+    const suffix = opts.suffix?.trim();
+    const body = suffix
+      ? `${fillPersona(this.persona(s, lang, key), vars)}\n${suffix}`
+      : fillPersona(this.persona(s, lang, key), vars);
     const out = formatOutbound(body, {
       mode: s.replyMode,
       prefixTemplate: this.prefixTemplate(s, lang),

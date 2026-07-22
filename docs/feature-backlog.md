@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-005**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-004**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -217,6 +217,17 @@ The history below records the pre-CCB-S2-003 state.
       detected from the member's message (scored, not single-hint), remembered for the
       follow-up window, and pinned across a confirmation handshake.
       See [`src/interaction/near-misses.ts`](../src/interaction/near-misses.ts).
+- [x] **Price lookups (CCB-S3-004)** — a `PRICE` intent answers "what is HEX worth" and
+      "how much Ethereum for 1 million HEX" in EN and DE. Assets resolve through an
+      admin-editable registry pinned to canonical provider ids (HEX pinned to the original
+      Ethereum token by contract), never by symbol; an ambiguous symbol asks. Quotes are
+      cached, price questions have their own rate limit, cross-asset conversions go through
+      the base currency, and provider failure answers honestly instead of inventing a number.
+      See [`src/price/`](../src/price/).
+- [ ] **More assets and a second provider** — only HEX, BTC, ETH, USD and EUR ship. Adding an
+      asset is a registry line in the admin, no code change; adding a second provider is an
+      implementation of the `PriceProvider` interface. A fallback chain across providers is
+      not built.
 - [ ] **Placeholder markup injection** — `{name}`-style substitutions put member-controlled
       text into a message SimpleX will parse. The mention prefix strips the pairing delimiters
       (`sanitizeDisplayName`), but other placeholders (`{query}` in the search answer, `{name}`

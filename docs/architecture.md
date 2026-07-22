@@ -409,6 +409,38 @@ Verified by [`scripts/verify-interaction.ts`](../scripts/verify-interaction.ts) 
 real PGlite + the real capture pipeline) and §11 of
 [`scripts/verify-admin-views.ts`](../scripts/verify-admin-views.ts).
 
+## 14. Market data (CCB-S3-004)
+
+Cinderella answers "what is HEX worth". The code lives in [`src/price/`](../src/price/) and is
+reached only through the `PRICE` intent, which is read-only — no confirmation, no consent
+involvement, nothing journalled.
+
+| Module | Responsibility |
+|---|---|
+| `assets.ts` | The registry: symbol → **canonical provider id**, plus chain/contract, aliases, decimals |
+| `amount.ts` | `1 million`, `1m`, `1.5k`, `1.000.000`, `1,5` — and rejecting absurd values |
+| `provider.ts` | The `PriceProvider` seam and the CoinGecko implementation |
+| `service.ts` | Resolution, the quote cache, and cross-rate conversion |
+
+**Why a registry.** Three different assets answer to the ticker `HEX` at the provider, so a
+symbol lookup would eventually price the wrong one. Nothing is ever queried by symbol: the
+registry pins each symbol to a canonical id the operator has chosen, and records the chain and
+contract address as durable evidence of which asset that is. A symbol matched by two entries
+produces a question rather than a choice.
+
+**Cross rates.** `HEX → ETH` has no direct pair worth trusting, so both legs are priced in the
+configured base currency and divided. Precision follows the magnitude, capped per asset, so a
+HEX price keeps its fraction of a cent while a Bitcoin price does not sprout eight decimals.
+
+**Failure is honest.** A provider timeout, a non-OK response, or an answer missing one leg of a
+cross rate all produce the "markets are out of earshot" reply. A missing price is treated as a
+MISS rather than a zero, because a zero would render as a real answer.
+
+**Caching and limits.** Quotes are cached per asset+currency for a configurable TTL (60s by
+default) so the provider is not called per message, and price questions carry their own
+per-member and per-chat budget on top of the general reply limit — a price question costs an
+outbound HTTPS call to a throttled third party, not just a message.
+
 ## Appendix: divergences (code wins)
 
 Each divergence below is also noted inline at the relevant section. In every case the **code is treated as ground truth** and the conflicting outline/comment is flagged as stale.

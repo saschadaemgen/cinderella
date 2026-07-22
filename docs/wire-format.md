@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-005**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-004**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -157,6 +157,23 @@ never quote** in any mode, and **nickname retorts never quote and never carry a 
 (a retort is a snub, not an address). If the chat reference is somehow missing, `sendToChat`
 falls back to the quoting form rather than dropping the message — cluttered is recoverable,
 an unsent consent confirmation is not.
+
+## 3d. Market data is the instance's first outbound call (CCB-S3-004)
+
+Everything else Cinderella does is inbound: SimpleX delivers, she stores. The price feature
+adds the first EGRESS — an HTTPS request to the configured price provider
+(`api.coingecko.com` by default).
+
+- **What leaves the host:** canonical asset ids and a currency code (`ids=hex,ethereum&
+  vs_currencies=usd`). No member id, no message text, no group identity. A price question is
+  not distinguishable at the provider from any other instance asking the same thing.
+- **What comes back is not trusted:** a non-OK status, a timeout, or a missing/non-finite
+  price is a failure, never a zero and never a reused old value beyond the cache TTL.
+- **Call volume is bounded** by the quote cache and by a per-member and per-chat price budget,
+  so the group cannot drive the instance into the provider's rate limit.
+- **The API key, if configured, is stored in the `interaction` settings row** rather than the
+  environment, because it is a third-party read-only key rather than a server secret. Treat it
+  accordingly.
 
 ## 4. There is no private per-member channel — consent is group-only, and confirmations are public
 

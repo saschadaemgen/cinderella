@@ -37,6 +37,7 @@ import {
   tokenize,
   type Token,
 } from './text.js';
+import { parseAmountAt, unitMultiplier } from '../price/amount.js';
 
 /* ── Lexicon ─────────────────────────────────────────────────────────────── */
 
@@ -222,6 +223,54 @@ const LEXICON: LexEntry[] = [
       'wofür bist du da',
     ],
     keywords: ['hilfe', 'befehle'],
+  },
+  {
+    intent: 'PRICE',
+    lang: 'en',
+    phrases: [
+      'what is the price of',
+      'what is the current value of',
+      'what is the value of',
+      'what is the dollar value of',
+      'how much',
+      'how many',
+      'how much is',
+      'how much are',
+      'how much do i get for',
+      'how much would i get for',
+      'price of',
+      'value of',
+      'worth in',
+      'is worth',
+      'are worth',
+      'convert',
+      'exchange rate',
+      'rate of',
+    ],
+    keywords: ['price', 'worth', 'value', 'rate', 'quote'],
+  },
+  {
+    intent: 'PRICE',
+    lang: 'de',
+    phrases: [
+      'was ist ein',
+      'was kostet',
+      'was kosten',
+      'wie viel',
+      'wie viele',
+      'wie viel ist',
+      'wie viel sind',
+      'wie viel bekomme ich fuer',
+      'wie viel kriege ich fuer',
+      'kurs von',
+      'preis von',
+      'wert von',
+      'in euro wert',
+      'wert in',
+      'umrechnen',
+      'wechselkurs',
+    ],
+    keywords: ['kurs', 'preis', 'wert', 'wechselkurs'],
   },
   {
     intent: 'UNDO',
@@ -730,6 +779,226 @@ function extractQuery(text: string, tokens: Token[], m: Match): string | undefin
   return q || undefined;
 }
 
+/* ── Price slots (CCB-S3-004 §1) ─────────────────────────────────────────── */
+
+/**
+ * Words that are grammar rather than assets, so the symbol scan can skip them.
+ * Deliberately NOT a list of assets: which symbols exist is the registry's
+ * business, and the resolver must not need updating when an operator adds a
+ * token.
+ */
+const PRICE_STOPWORDS = new Set([
+  'what',
+  'whats',
+  'is',
+  'are',
+  'the',
+  'a',
+  'an',
+  'of',
+  'in',
+  'to',
+  'for',
+  'do',
+  'does',
+  'i',
+  'me',
+  'my',
+  'you',
+  'get',
+  'much',
+  'many',
+  'how',
+  'much',
+  'current',
+  'currently',
+  'now',
+  'right',
+  'about',
+  'worth',
+  'value',
+  'price',
+  'rate',
+  'quote',
+  'convert',
+  'at',
+  'moment',
+  'today',
+  'please',
+  'tell',
+  'give',
+  'would',
+  'will',
+  'and',
+  'one',
+  'exchange',
+  'was',
+  'ist',
+  'ein',
+  'eine',
+  'der',
+  'die',
+  'das',
+  'wie',
+  'viel',
+  'viele',
+  'von',
+  'im',
+  'kurs',
+  'preis',
+  'wert',
+  'kostet',
+  'kosten',
+  'bekomme',
+  'kriege',
+  'ich',
+  'fuer',
+  'mir',
+  'gerade',
+  'aktuell',
+  'aktuelle',
+  'aktueller',
+  'jetzt',
+  'bitte',
+  'sag',
+  'sage',
+  'und',
+  'umrechnen',
+  'wechselkurs',
+  'us',
+  'usd',
+]);
+
+/** Tokens that introduce the QUOTE currency. */
+const QUOTE_MARKERS = new Set(['in', 'to', 'into', 'gegen', 'nach']);
+/** Tokens that introduce the BASE asset: "the value OF hex". */
+const BASE_MARKERS = new Set(['of', 'von']);
+/** "the <currency> VALUE of x" — the word before these names the quote. */
+const VALUE_WORDS = new Set(['value', 'price', 'worth', 'wert', 'preis', 'kurs']);
+/** Tokens that introduce the amount+base in a "how much X for N Y" question. */
+const FOR_MARKERS = new Set(['for', 'fuer', 'per']);
+
+interface PriceSlots {
+  base?: string;
+  quote?: string;
+  amount?: number;
+}
+
+/**
+ * Pulls the asset words and the amount out of a price question.
+ *
+ * The resolver deliberately extracts CANDIDATE WORDS, not assets: it hands
+ * `base`/`quote` back as the member wrote them and the price service resolves
+ * them against the admin-editable registry. That keeps "which symbols exist"
+ * out of the resolver entirely, which is what lets an operator add a token
+ * without a code change — and it is the same separation that keeps the resolver
+ * free of anything it could execute.
+ *
+ * Two shapes matter most:
+ *   `price of HEX in EUR`                     → base HEX, quote EUR
+ *   `how much Ethereum do I get for 1m HEX`   → quote Ethereum, base HEX (reversed)
+ */
+function extractPriceSlots(tokens: Token[]): PriceSlots {
+  const norms = tokens.map((t) => t.norm);
+  const slots: PriceSlots = {};
+
+  // The amount, and where it sits.
+  let amountAt = -1;
+  let amountLen = 0;
+  for (let i = 0; i < norms.length; i++) {
+    const parsed = parseAmountAt(norms, i);
+    if (parsed) {
+      slots.amount = parsed.value;
+      amountAt = i;
+      amountLen = parsed.tokens;
+      break;
+    }
+  }
+
+  const isCandidate = (i: number): boolean => {
+    const n = norms[i];
+    if (!n) return false;
+    if (PRICE_STOPWORDS.has(n)) return false;
+    if (unitMultiplier(n) !== undefined) return false;
+    if (parseAmountAt(norms, i)) return false;
+    return true;
+  };
+  const nextCandidate = (from: number, stop = norms.length): string | undefined => {
+    for (let i = from; i < stop; i++) if (isCandidate(i)) return tokens[i]?.raw;
+    return undefined;
+  };
+
+  // Explicit "in <currency>" wins for the quote.
+  for (let i = 0; i < norms.length; i++) {
+    if (QUOTE_MARKERS.has(norms[i] as string)) {
+      const q = nextCandidate(i + 1);
+      if (q) {
+        slots.quote = q;
+        break;
+      }
+    }
+  }
+
+  // "the US dollar VALUE of HEX" — the word immediately before "value" names the
+  // currency they want it in. Only the immediately preceding token counts: in
+  // "the value of HEX" that token is "the", and inventing a quote there would
+  // silently answer a different question than the one asked.
+  if (!slots.quote) {
+    for (let i = 1; i < norms.length; i++) {
+      if (!VALUE_WORDS.has(norms[i] as string)) continue;
+      // Only the "<currency> value OF <asset>" shape. Without the trailing
+      // marker, "what is WAGMI worth" would read WAGMI as the currency and be
+      // left with no asset at all.
+      const hasBaseMarker = norms.slice(i + 1).some((n) => BASE_MARKERS.has(n));
+      if (!hasBaseMarker) continue;
+      const before = tokens[i - 1]?.raw;
+      if (before && isCandidate(i - 1)) {
+        slots.quote = before;
+        break;
+      }
+    }
+  }
+
+  // "how much X ... for N Y" — the asset named FIRST is what they want to
+  // receive, so it is the quote, and the one after the amount is the base.
+  const forAt = norms.findIndex((n) => FOR_MARKERS.has(n));
+  if (amountAt >= 0 && forAt >= 0 && forAt < amountAt) {
+    const wanted = nextCandidate(0, forAt);
+    if (wanted && !slots.quote) slots.quote = wanted;
+    const paid = nextCandidate(amountAt + amountLen);
+    if (paid) slots.base = paid;
+  }
+
+  // "the value OF hex" — an explicit marker beats positional guessing.
+  if (!slots.base) {
+    for (let i = 0; i < norms.length; i++) {
+      if (!BASE_MARKERS.has(norms[i] as string)) continue;
+      const b = nextCandidate(i + 1);
+      if (b && b !== slots.quote) {
+        slots.base = b;
+        break;
+      }
+    }
+  }
+
+  if (!slots.base && amountAt >= 0) {
+    const afterAmount = nextCandidate(amountAt + amountLen);
+    if (afterAmount) slots.base = afterAmount;
+  }
+  if (!slots.base) {
+    // First candidate that is not already claimed as the quote.
+    for (let i = 0; i < norms.length; i++) {
+      if (!isCandidate(i)) continue;
+      const raw = tokens[i]?.raw;
+      if (raw && raw !== slots.quote) {
+        slots.base = raw;
+        break;
+      }
+    }
+  }
+  return slots;
+}
+
 /* ── The resolver ────────────────────────────────────────────────────────── */
 
 function resolveRules(text: string, ctx: IntentContext): IntentResult {
@@ -778,6 +1047,13 @@ function resolveRules(text: string, ctx: IntentContext): IntentResult {
   if (pattern.intent === 'SEARCH') {
     const query = extractQuery(text, tokens, match);
     if (query !== undefined) slots.query = query;
+  }
+
+  if (pattern.intent === 'PRICE') {
+    const price = extractPriceSlots(tokens);
+    if (price.base !== undefined) slots.base = price.base;
+    if (price.quote !== undefined) slots.quote = price.quote;
+    if (price.amount !== undefined) slots.amount = price.amount;
   }
 
   // Third-party targeting only matters where consent is at stake.

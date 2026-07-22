@@ -29,6 +29,8 @@ import { SiteService } from './site/settings.js';
 import { InteractionService } from './interaction/settings.js';
 import { InteractionEngine } from './interaction/engine.js';
 import { activeResolverName } from './interaction/resolver.js';
+import { CoinGeckoProvider } from './price/provider.js';
+import { PriceService } from './price/service.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
 import { registerAdminViews } from './web/views/index.js';
@@ -95,9 +97,23 @@ async function startCaptureWorker(
 
     // Natural addressing (CCB-S3-002). The engine only ever decides and replies;
     // consent changes go through the same write path as the slash commands.
+    // Market data (CCB-S3-004). Every setting is read live, so changing the
+    // registry or the cache TTL in the console takes effect on the next question.
+    const prices = new PriceService({
+      provider: new CoinGeckoProvider({
+        get apiKey() {
+          return interaction.get().price.apiKey;
+        },
+      }),
+      registry: () => interaction.get().price.assets,
+      baseCurrency: () => interaction.get().price.baseCurrency,
+      cacheTtlMs: () => interaction.get().price.cacheTtlSeconds * 1000,
+    });
+
     const engine = new InteractionEngine({
       db: getPool(),
       settings: () => interaction.get(),
+      prices,
       // Presentation is the engine's decision (CCB-S3-003); this is only the
       // transport. Both this and the slash-command path go through sendToChat,
       // so the two can never disagree about quoting again.
@@ -132,6 +148,7 @@ async function startCaptureWorker(
     log.info(
       `Interaction layer: wake word "${ia.wakeWord}", natural addressing ` +
         `${ia.naturalAddressing ? 'on' : 'off'}, slash commands ${ia.slashCommands ? 'on' : 'off'}, ` +
+        `prices ${ia.price.enabled ? `on via "${ia.price.provider}" (${ia.price.assets.length} assets, base ${ia.price.baseCurrency})` : 'off'}, ` +
         `reply mode "${ia.replyMode}"${ia.replyMode === 'mention' && !ia.namePrefix.enabled ? ' (name prefix off)' : ''}, ` +
         `resolver "${activeResolverName()}".`,
     );

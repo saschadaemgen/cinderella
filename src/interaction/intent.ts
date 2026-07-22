@@ -24,6 +24,7 @@ export const INTENTS = [
   'SEARCH', // find something in the archive
   'HELP', // what can you do
   'UNDO', // revert the last action
+  'PRICE', // what is an asset worth (CCB-S3-004)
   'UNKNOWN', // not understood
 ] as const;
 
@@ -35,6 +36,12 @@ export const CONSENT_INTENTS: readonly Intent[] = ['PUBLISH', 'UNPUBLISH'];
 export interface IntentSlots {
   /** SEARCH: what the member is looking for. */
   query?: string;
+  /** PRICE: the asset being asked about, as the member wrote it. */
+  base?: string;
+  /** PRICE: the currency or asset to express it in. Defaults to the configured one. */
+  quote?: string;
+  /** PRICE: how much of the base asset. Defaults to 1. */
+  amount?: number;
   /**
    * PUBLISH/UNPUBLISH: another member the instruction appears to target. Its
    * presence means REFUSE (§4.2) — consent is first-person only, even for admins.

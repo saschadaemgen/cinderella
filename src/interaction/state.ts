@@ -41,12 +41,15 @@ interface MemberEntry {
   lastNicknameAt: number;
   /** Epoch ms of recent replies to this member (for the per-member limit). */
   replies: number[];
+  /** Epoch ms of recent price questions (a separate, scarcer budget). */
+  priceCalls: number[];
 }
 
 interface ChatEntry {
   /** Index of the last retort used here, so the next one differs. */
   lastRetort: number;
   replies: number[];
+  priceCalls: number[];
 }
 
 /** A nickname streak this old is forgiven — she is petty, not unforgiving. */
@@ -83,6 +86,7 @@ export class ConversationState {
         nicknameStreak: 0,
         lastNicknameAt: 0,
         replies: [],
+        priceCalls: [],
       };
       this.members.set(key, entry);
     }
@@ -92,7 +96,7 @@ export class ConversationState {
   private chat(groupId: number): ChatEntry {
     let entry = this.chats.get(groupId);
     if (!entry) {
-      entry = { lastRetort: -1, replies: [] };
+      entry = { lastRetort: -1, replies: [], priceCalls: [] };
       this.chats.set(groupId, entry);
     }
     return entry;
@@ -219,6 +223,28 @@ export class ConversationState {
     if (m.replies.length >= perMember || c.replies.length >= perChat) return false;
     m.replies.push(now);
     c.replies.push(now);
+    return true;
+  }
+
+  /**
+   * Consumes one PRICE allowance (CCB-S3-004 §3). Kept separate from the reply
+   * limiter because a price question costs an outbound HTTP call to a throttled
+   * third party, not just a message — the two budgets protect different things.
+   */
+  allowPrice(
+    groupId: number,
+    memberId: string,
+    now: number,
+    perMember: number,
+    perChat: number,
+  ): boolean {
+    const m = this.member(groupId, memberId);
+    const c = this.chat(groupId);
+    m.priceCalls = trim(m.priceCalls, now);
+    c.priceCalls = trim(c.priceCalls, now);
+    if (m.priceCalls.length >= perMember || c.priceCalls.length >= perChat) return false;
+    m.priceCalls.push(now);
+    c.priceCalls.push(now);
     return true;
   }
 

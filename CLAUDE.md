@@ -53,7 +53,8 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 
 - `src/` — `config.ts`, `log.ts`, `bot/` (core wiring, files, connect, avatar),
   `capture/` (parse, media, links, persist), `consent/`, `interaction/`
-  (wake word, intent resolver, dialogue engine, persona), `settings/`, `db/`,
+  (wake word, intent resolver, dialogue engine, persona), `price/` (asset
+  registry, provider, cache, conversion), `settings/`, `db/`,
   `web/` (server, auth, session, views), `index.ts`.
 - `migrations/` — 001 messages/links · 002 consent+views · 003 admin · 004
   moderation gate · 005 deletion provenance · 006 webauthn + TOTP · 007 admin
@@ -68,7 +69,8 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 `npm run build` (tsc + Tailwind/htmx assets) · `npm run lint` · and the PGlite
 harnesses (real Postgres-in-WASM, no server needed): `verify:db`,
 `verify:consent`, `verify:admin`, `verify:admin-views`, `verify:interaction`
-(natural addressing), plus `verify:security`, `verify:public`, `verify:site`.
+(natural addressing), `verify:price` (market data; `-- --live` hits the real
+provider), plus `verify:security`, `verify:public`, `verify:site`.
 `scripts/admin-preview.ts` boots a seeded local admin console for browser checks.
 
 ## Documentation maintenance (binding on every briefing)

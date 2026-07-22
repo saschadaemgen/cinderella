@@ -22,6 +22,7 @@
 import { getSetting, setSetting } from '../db/settings.js';
 import type { Queryable } from '../db/pool.js';
 import { writeAudit } from '../db/audit.js';
+import { DEFAULT_ASSETS, type AssetEntry } from '../price/assets.js';
 
 /** Languages shipped with preconfigured copy. More can be added as keys. */
 export const SHIPPED_LANGS = ['en', 'de'] as const;
@@ -46,6 +47,11 @@ export const PERSONA_KEYS = [
   'undoNothing', // nothing within the undo window
   'cancelled', // confirmation declined
   'help', // HELP intent — {wake}
+  'price', // PRICE — {amount} {base} {value} {quote}
+  'conversion', // PRICE, asset to asset — same placeholders
+  'priceUnknownAsset', // PRICE — {symbol}
+  'priceAmbiguous', // PRICE — {symbol} {options}
+  'priceUnavailable', // PRICE — provider unreachable
 ] as const;
 export type PersonaKey = (typeof PERSONA_KEYS)[number];
 export type PersonaStrings = Record<PersonaKey, string>;
@@ -117,7 +123,30 @@ export interface AddressingSettings {
 export const REPLY_LANGUAGE_MODES = ['auto', 'fixed'] as const;
 export type ReplyLanguageMode = (typeof REPLY_LANGUAGE_MODES)[number];
 
+/** Market data settings (CCB-S3-004 §6). */
+export interface PriceSettings {
+  /** Whether she answers price questions at all. */
+  enabled: boolean;
+  /** The currency prices default to, and the one cross rates are computed through. */
+  baseCurrency: string;
+  /** Provider name. Only `coingecko` ships; the seam takes others. */
+  provider: string;
+  /** Optional provider API key. Blank uses the free endpoint. */
+  apiKey: string;
+  /** How long a quote may be reused before the provider is asked again. */
+  cacheTtlSeconds: number;
+  /** Price questions allowed per member per minute. */
+  rateLimitPerMember: number;
+  /** Price questions allowed per chat per minute. */
+  rateLimitPerChat: number;
+  /** Appended to every price reply when set. Off by default. */
+  disclaimer: string;
+  /** The pinned asset registry — symbols mapped to canonical provider ids. */
+  assets: AssetEntry[];
+}
+
 export interface InteractionSettings {
+  price: PriceSettings;
   addressing: AddressingSettings;
   /** How the reply language is chosen (CCB-S3-005 §6). */
   replyLanguageMode: ReplyLanguageMode;
@@ -193,6 +222,12 @@ const PERSONA_EN: PersonaStrings = {
     '🕯️ Say "{wake}, publish me" and your words join the public archive. Say ' +
     '"{wake}, unpublish me" and they leave it again. Ask "{wake}, what do you have on me" ' +
     'for your tally, or "{wake}, search ..." to look through the archive.',
+  price: '💰 {amount} {base} is worth about *{value} {quote}* right now.',
+  conversion: '🔮 {amount} {base} would fetch you about *{value} {quote}* at the moment.',
+  priceUnknownAsset:
+    '🕯️ I do not know *{symbol}*. Ask the keeper of this house to add it to my ledger.',
+  priceAmbiguous: '🕯️ There is more than one *{symbol}*. Did you mean {options}?',
+  priceUnavailable: '🌙 The markets are out of earshot just now. Try again in a moment.',
 };
 
 const PERSONA_DE: PersonaStrings = {
@@ -227,6 +262,12 @@ const PERSONA_DE: PersonaStrings = {
     '🕯️ Sag "{wake}, veröffentliche mich", und deine Worte kommen ins öffentliche Archiv. Sag ' +
     '"{wake}, widerrufe das", und sie verschwinden wieder. Frag "{wake}, was hast du über mich" ' +
     'für deine Bilanz, oder "{wake}, suche ..." um das Archiv zu durchsuchen.',
+  price: '💰 {amount} {base} sind gerade etwa *{value} {quote}* wert.',
+  conversion: '🔮 {amount} {base} bringen dir im Moment etwa *{value} {quote}*.',
+  priceUnknownAsset:
+    '🕯️ *{symbol}* kenne ich nicht. Bitte den Hausherrn, es in mein Verzeichnis aufzunehmen.',
+  priceAmbiguous: '🕯️ Es gibt mehr als ein *{symbol}*. Meinst du {options}?',
+  priceUnavailable: '🌙 Die Märkte sind gerade außer Hörweite. Versuch es gleich noch einmal.',
 };
 
 const RETORTS_EN = [
@@ -260,6 +301,19 @@ const RETORTS_DE = [
 ];
 
 export const DEFAULT_INTERACTION: InteractionSettings = {
+  price: {
+    enabled: true,
+    baseCurrency: 'USD',
+    provider: 'coingecko',
+    apiKey: '',
+    cacheTtlSeconds: 60,
+    rateLimitPerMember: 5,
+    rateLimitPerChat: 20,
+    // Off by default: what a price reply must say legally differs by country, so
+    // enabling it is the operator's decision (same doctrine as D-025).
+    disclaimer: '',
+    assets: DEFAULT_ASSETS,
+  },
   // Operator decision (CCB-S3-005): ship `relaxed`. The guards below remove the
   // observed false positives without costing the natural "Cinderella publish me".
   addressing: {
@@ -486,12 +540,90 @@ function normalizeNamePrefix(input: unknown): Record<string, string> {
   return out;
 }
 
+/**
+ * The registry, from either stored JSON or the admin textarea. Every entry needs
+ * a symbol AND a canonical id — an entry without an id would be exactly the bare
+ * symbol lookup the registry exists to prevent, so it is dropped.
+ */
+function normalizeAssets(input: unknown): AssetEntry[] {
+  const rows = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+      ? parseAssetLines(input)
+      : undefined;
+  if (!rows) return DEFAULT_ASSETS.map((a) => ({ ...a, aliases: [...a.aliases] }));
+
+  const out: AssetEntry[] = [];
+  for (const row of rows) {
+    const r = rec(row);
+    const symbol = str(r['symbol'], '', 24).trim().toUpperCase();
+    const id = str(r['id'], '', 60).trim().toLowerCase();
+    if (!symbol || !id) continue;
+    const kind = str(r['kind'], 'crypto', 10).trim().toLowerCase() === 'fiat' ? 'fiat' : 'crypto';
+    const entry: AssetEntry = {
+      symbol,
+      id,
+      name: str(r['name'], symbol, 60).trim() || symbol,
+      kind,
+      decimals: int(r['decimals'], 0, 18, 8),
+      aliases: parseList(r['aliases'], { max: 12, maxLen: 40 }).map((a) => a.toLowerCase()),
+    };
+    const chain = str(r['chain'], '', 40).trim();
+    const contract = str(r['contract'], '', 80).trim();
+    if (chain) entry.chain = chain;
+    if (contract) entry.contract = contract;
+    out.push(entry);
+    if (out.length >= 200) break;
+  }
+  return out.length > 0 ? out : DEFAULT_ASSETS.map((a) => ({ ...a, aliases: [...a.aliases] }));
+}
+
+/**
+ * The admin edits the registry as one line per asset:
+ *   `SYMBOL | provider-id | Display Name | kind | decimals | aliases,here | chain | contract`
+ * A table of inputs would be a nicer form and a worse diff; a line is something
+ * an operator can paste, review and version.
+ */
+function parseAssetLines(text: string): unknown[] {
+  const rows: unknown[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const [symbol, id, name, kind, decimals, aliases, chain, contract] = t
+      .split('|')
+      .map((p) => p.trim());
+    rows.push({ symbol, id, name, kind, decimals, aliases, chain, contract });
+  }
+  return rows;
+}
+
+/** Renders the registry back into the admin textarea format. */
+export function assetsToText(assets: AssetEntry[]): string {
+  return assets
+    .map((a) =>
+      [
+        a.symbol,
+        a.id,
+        a.name,
+        a.kind,
+        String(a.decimals),
+        a.aliases.join(','),
+        a.chain ?? '',
+        a.contract ?? '',
+      ]
+        .join(' | ')
+        .replace(/(\s*\|\s*)+$/, ''),
+    )
+    .join('\n');
+}
+
 export function normalizeInteraction(input: unknown): InteractionSettings {
   const d = DEFAULT_INTERACTION;
   const o = rec(input);
   const nick = rec(o['nicknames']);
   const prefix = rec(o['namePrefix']);
   const addr = rec(o['addressing']);
+  const price = rec(o['price']);
 
   const rawAddressingMode = str(addr['mode'], d.addressing.mode, 16).trim().toLowerCase();
   const addressingMode: AddressingMode = (ADDRESSING_MODES as readonly string[]).includes(
@@ -525,6 +657,18 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
   const defaultLanguage = str(o['defaultLanguage'], d.defaultLanguage, 5).trim().toLowerCase();
 
   return {
+    price: {
+      enabled: bool(price['enabled'], d.price.enabled),
+      baseCurrency:
+        str(price['baseCurrency'], d.price.baseCurrency, 12).trim() || d.price.baseCurrency,
+      provider: str(price['provider'], d.price.provider, 40).trim() || d.price.provider,
+      apiKey: str(price['apiKey'], d.price.apiKey, 200).trim(),
+      cacheTtlSeconds: int(price['cacheTtlSeconds'], 5, 3600, d.price.cacheTtlSeconds),
+      rateLimitPerMember: int(price['rateLimitPerMember'], 1, 120, d.price.rateLimitPerMember),
+      rateLimitPerChat: int(price['rateLimitPerChat'], 1, 600, d.price.rateLimitPerChat),
+      disclaimer: str(price['disclaimer'], d.price.disclaimer, 300).trim(),
+      assets: normalizeAssets(price['assets']),
+    },
     addressing: {
       mode: addressingMode,
       ignoreForwarded: bool(addr['ignoreForwarded'], d.addressing.ignoreForwarded),

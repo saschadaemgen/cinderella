@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-005**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-004**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -10,6 +10,44 @@ actually behaves today, the divergence is called out inline.
 
 Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 `CLAUDE.md` (standing architecture). Paths below are repo-relative.
+
+---
+
+### D-035 — Prices resolve through a pinned asset registry, are cached, and fail honestly
+
+**Status: IMPLEMENTED (CCB-S3-004).**
+**Decision.** A `PRICE` intent joins the closed catalog. Assets are never resolved by
+symbol at the provider: an admin-editable **registry** maps the symbols members type to a
+**canonical provider id**, recording chain and contract for tokens. HEX ships pinned to the
+original Ethereum token (`hex`, `0x2b591e99afe9f32eaa6214f7b7629768c40eeb39`). A symbol
+claimed by two entries produces a question, never a choice. The provider sits behind a
+`PriceProvider` interface with CoinGecko as the first implementation; quotes are cached
+(default 60s) and price questions carry their own per-member and per-chat rate limit on top
+of the reply limit. Asset-to-asset questions are computed as a **cross rate** through the
+configured base currency. Provider failure, a missing leg, or an unparseable answer produce
+"the markets are out of earshot" — never a stale or invented number.
+**Rationale.** Three separate assets on the provider answer to the ticker `HEX` (the
+original, the PulseChain copy, and a bridged version), so a symbol lookup is a coin flip
+that is usually right, which is the worst kind of wrong in a channel where people discuss
+money. Pinning the id makes the answer reproducible and the operator's choice explicit and
+reviewable. Caching exists because free price APIs throttle quickly and a group can ask more
+often than the tier allows; a separate rate limit exists because a price question costs an
+outbound call to a third party, not just a message.
+**Notable properties.** `PRICE` is read-only: no confirmation, no consent involvement,
+nothing journalled — asserted in the harness rather than assumed. Amounts accept unit words
+and both separator conventions (`1 million`, `1m`, `1.000.000`, `1,5`); German
+"Billion" is deliberately unsupported because it means 10^12 while English "billion" means
+10^9, and guessing would be a factor-of-1000 error about money. The optional disclaimer
+ships OFF, following D-025: what a price message must say differs by country, so enabling it
+is the operator's decision.
+**New outbound dependency.** The instance now makes outbound HTTPS calls to the configured
+provider. That is the first egress this product makes; it carries no member data, only asset
+ids.
+**Evidence.** `src/price/` (`assets.ts`, `provider.ts`, `service.ts`, `amount.ts`);
+`src/interaction/rules.ts` (PRICE lexicon + slot extraction); `src/interaction/engine.ts`
+(`answerPrice`); `src/web/views/interaction.ts` (Market data card);
+`scripts/verify-price.ts` (offline by default, `--live` for the real provider);
+`scripts/verify-interaction.ts` §18.
 
 ---
 

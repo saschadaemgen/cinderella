@@ -333,9 +333,18 @@ export interface LanguageGuess {
   confident: boolean;
 }
 
-/** Minimum winning hits, and minimum lead over the loser, to call it confident. */
+/** Minimum winning hits to call a detection confident. */
 const MIN_HITS = 2;
-const MIN_LEAD = 2;
+
+/**
+ * How far ahead the winner must be. Short sentences carry few function words, so
+ * demanding a large lead there rejects perfectly clear questions; long texts get
+ * the stricter margin, which is where a single false friend could otherwise
+ * decide the outcome.
+ */
+function requiredLead(tokenCount: number): number {
+  return tokenCount <= 12 ? 1 : 2;
+}
 
 /**
  * Scores a message's tokens against both hint sets. Returns the winner only when
@@ -349,8 +358,9 @@ export function detectLanguageFromTokens(tokens: string[], fallback: string): La
     if (GERMAN_HINTS.has(t)) de++;
     if (ENGLISH_HINTS.has(t)) en++;
   }
-  if (de >= MIN_HITS && de - en >= MIN_LEAD) return { lang: 'de', confident: true };
-  if (en >= MIN_HITS && en - de >= MIN_LEAD) return { lang: 'en', confident: true };
+  const lead = requiredLead(tokens.length);
+  if (de >= MIN_HITS && de - en >= lead) return { lang: 'de', confident: true };
+  if (en >= MIN_HITS && en - de >= lead) return { lang: 'en', confident: true };
   return { lang: fallback, confident: false };
 }
 
