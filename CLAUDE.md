@@ -61,7 +61,7 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   moderation gate · 005 deletion provenance · 006 webauthn + TOTP · 007 admin
   sessions (persisted across restarts) · 008 content reports · 009 consent action
   journal (provenance + undo) · 010 asset mappings (pinned symbol→asset) · 011
-  seeded major assets (locked pins).
+  seeded major assets (locked pins) · 012 correct pins that predate the seed.
   Runner: `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.

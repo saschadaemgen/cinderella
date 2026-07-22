@@ -115,7 +115,16 @@ non-zero price can never render as `0`.
 `monero` never offered Monero at all; `one real bitcoin` resolved the asset as "real"; and
 `1 HEX` displayed as `0 USD` against a true value near $0.00048. A price of zero is not a
 rounding artefact to a reader, it is a claim that the thing is worthless.
-**Evidence.** `migrations/011_seed_major_assets.sql`; `src/price/format.ts`;
+**Correction (migration 012).** The seed alone was not enough. It used
+`ON CONFLICT DO NOTHING`, so on the live instance it skipped the rows members had already
+created by answering disambiguation questions — and those rows held the very errors this
+decision removes, `HEX` pinned to the PulseChain fork rather than the Ethereum token, and
+`BTC`/`ETH`/`BNB` carrying CoinMarketCap ids only, hence unreachable once CoinGecko became
+first and CoinMarketCap keyless. A seeded symbol is therefore corrected, not skipped, with
+provider ids replaced rather than merged so no wrong id survives; rows an operator authored
+(`source = 'manual'`) stay untouched.
+**Evidence.** `migrations/011_seed_major_assets.sql`,
+`migrations/012_correct_major_pins.sql`; `src/price/format.ts`;
 `src/plugins/crypto-prices/service.ts` (`weightOf`, dominance, `preferPinned`);
 `src/interaction/rules.ts` (filler stopwords, `looksLikeConversion`);
 `scripts/verify-price.ts` §10b.
