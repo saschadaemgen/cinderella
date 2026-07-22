@@ -56,7 +56,16 @@ async function main(): Promise<void> {
     'i18n: missing key falls back to the key',
     locales.t('en', 'no.such.key') === 'no.such.key',
   );
-  check('i18n: unknown locale is not supported', !locales.has('fr'));
+  check('i18n: unknown locale is not supported', !locales.has('xx'));
+  check(
+    'i18n: 40 locales loaded (D-030), all with endonym + ogLocale',
+    locales.codes.length === 40 &&
+      locales.codes.every((c) => !!locales.meta[c]?.name && !!locales.meta[c]?.ogLocale),
+  );
+  check(
+    'i18n: RTL locales carry dir=rtl',
+    ['ar', 'he', 'fa'].every((c) => locales.meta[c]?.dir === 'rtl'),
+  );
 
   // --- Loader resilience (CCB-S2-012 review): a bad locale file must NOT crash the
   // process (this one process also hosts the admin console + capture worker). ---
@@ -237,6 +246,9 @@ async function main(): Promise<void> {
     ['stub', await app.inject({ method: 'GET', url: '/en/docs' })],
   ] as const) {
     check(`csp: ${name} page renders zero style="" attributes`, !res.body.includes('style="'));
+    // Operator style rule (CCB-S3-001 follow-up): the em dash is banned from
+    // visible copy. Applies to every locale, enforced on the rendered output.
+    check(`copy: ${name} page contains no em dash`, !res.body.includes('—'));
   }
 
   // --- SEO head ---

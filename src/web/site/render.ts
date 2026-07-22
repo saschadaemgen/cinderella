@@ -7,8 +7,9 @@
  * nonce, fonts/avatar served same-origin, lucide icons inlined — no CDN, no
  * framework. The building blocks stay OFF by default (D-025): the cookie banner +
  * first-party analytics load NOTHING until the visitor accepts; social share is
- * script-free links. Essential storage — the theme (`cn-theme`) and the language
- * cookie — needs no consent.
+ * script-free links. The only essential storage is the language cookie (no
+ * consent needed). Dark is the ONLY theme (operator decision); em dashes are
+ * banned from visible copy (operator style rule, enforced by verify:site).
  *
  * NO STYLE ATTRIBUTES: the site CSP is `style-src 'nonce-…'`, and a nonce covers
  * only <style> elements — browsers block style ATTRIBUTES under it. Every layout
@@ -25,10 +26,10 @@ import { siteCss } from './css.js';
 import { siteIcon } from './icons.js';
 import {
   archiveDemoScript,
-  chromeScript,
+  CHROME_SCRIPT,
+  JS_BOOT_SCRIPT,
   REVEAL_SCRIPT,
   STARFIELD_SCRIPT,
-  themeBootScript,
   type DemoConfig,
   type DemoMessage,
 } from './client.js';
@@ -48,7 +49,8 @@ export interface SitePageView {
   t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
-const THEME_COLORS = { light: '#F4F7FA', dark: '#050A12' } as const;
+/** Dark is the only theme (operator decision, CCB-S3-001 follow-up). */
+const THEME_COLOR = '#050A12';
 const AVATAR_SRC = '/assets/site/cinderella-avatar.jpg';
 
 /** Sample data for the archive demo — placeholder content only (public repo). */
@@ -57,7 +59,7 @@ const AD_MSGS: DemoMessage[] = [
     g: '#privacy-talk',
     a: 'mara',
     t: '14:02',
-    text: 'New onion-routing writeup is up — covers guard selection end to end.',
+    text: 'New onion-routing writeup is up, covers guard selection end to end.',
   },
   {
     g: '#privacy-talk',
@@ -77,13 +79,13 @@ const AD_MSGS: DemoMessage[] = [
     g: '#foss-de',
     a: 'tomasz',
     t: '21:40',
-    text: 'AGPL vs GPL for a bot serving a public archive — 14 replies deep now.',
+    text: 'AGPL vs GPL for a bot serving a public archive, 14 replies deep now.',
   },
   {
     g: '#privacy-talk',
     a: 'mara',
     t: '14:20',
-    text: 'Passkey rollout checklist v2 attached — WebAuthn only, no fallback.',
+    text: 'Passkey rollout checklist v2 attached: WebAuthn only, no fallback.',
     media: 'file',
   },
   {
@@ -96,7 +98,7 @@ const AD_MSGS: DemoMessage[] = [
     g: '#selfhosting',
     a: 'kai',
     t: '10:02',
-    text: 'grafana-dashboard.png — capture throughput over 24h.',
+    text: 'grafana-dashboard.png: capture throughput over 24h.',
     media: 'image',
   },
   {
@@ -221,8 +223,16 @@ function navLinks(v: SitePageView): SafeHtml {
   return html`${links}`;
 }
 
-function headerControls(v: SitePageView): SafeHtml {
-  return html`<div class="lang-seg" role="group" aria-label="${v.t('lang.label')}">
+/** Language switcher: a details-dropdown that scales to the full locale set. */
+function langMenu(v: SitePageView): SafeHtml {
+  return html`<details class="lang-menu">
+    <summary aria-label="${v.t('lang.label')}" title="${v.t('lang.label')}">
+      ${siteIcon('globe', { size: 15 })}<span class="lm-code">${v.locale}</span>${siteIcon(
+        'chevron-down',
+        { size: 13, className: 'lm-chev' },
+      )}
+    </summary>
+    <div class="lang-panel" role="menu" aria-label="${v.t('lang.label')}">
       ${v.locales.codes.map(
         (code) =>
           html`<a
@@ -230,22 +240,15 @@ function headerControls(v: SitePageView): SafeHtml {
             hreflang="${code}"
             class="${code === v.locale ? 'on' : ''}"
             ${code === v.locale ? raw('aria-current="true"') : ''}
-            >${code}</a
+            ><span class="lc">${code}</span>${v.locales.meta[code]?.name ?? code.toUpperCase()}</a
           >`,
       )}
     </div>
-    <button
-      type="button"
-      id="cn-theme-toggle"
-      class="hdr-iconbtn"
-      aria-label="${v.t('a11y.theme')}"
-      title="${v.t('a11y.theme')}"
-    >
-      ${siteIcon('sun', { size: 18, className: 'i-sun' })}${siteIcon('moon', {
-        size: 18,
-        className: 'i-moon',
-      })}
-    </button>
+  </details>`;
+}
+
+function headerControls(v: SitePageView): SafeHtml {
+  return html`${langMenu(v)}
     <a class="nav-login" href="/login"
       >${siteIcon('key-round', { size: 14 })} ${v.t('nav.login')}</a
     >`;
@@ -286,7 +289,9 @@ function footerCol(title: string, items: Array<[string, string, boolean?]>): Saf
       ${items.map(
         ([label, href, external]) =>
           html`<a href="${href}" ${external ? raw('target="_blank" rel="noopener"') : ''}
-            >${label}</a
+            >${label}${
+              external ? siteIcon('external-link', { size: 11, className: 'ext' }) : null
+            }</a
           >`,
       )}
     </div>
@@ -315,6 +320,10 @@ function footer(v: SitePageView): SafeHtml {
         [v.t('footer.github'), GITHUB_URL, true],
         [v.t('footer.agpl'), `/${l}/open-source`],
         [v.t('footer.changelog'), `${GITHUB_URL}/commits/main`, true],
+      ])}
+      ${footerCol(v.t('footer.ecosystem'), [
+        ['SimpleX Chat', 'https://simplex.chat', true],
+        ['Matrix', 'https://matrix.org', true],
       ])}
       ${footerCol(v.t('footer.legal'), [
         [v.t('footer.legalnotice'), `/${l}/legal`],
@@ -1087,7 +1096,7 @@ function cookieBanner(v: SitePageView): SafeHtml {
   >
     <div class="cn-cookiebar-inner">
       <div class="cn-cookiebar-text">
-        <b>${v.t('cookie.title')}</b> — ${v.t('cookie.text')}
+        <b>${v.t('cookie.title')}:</b> ${v.t('cookie.text')}
         <a href="${policyHref}">${v.t('cookie.policy')}</a>.
       </div>
       <div class="cn-cookiebar-actions">
@@ -1133,7 +1142,7 @@ export function renderSitePage(v: SitePageView): string {
   const isHome = v.page.key === 'home' && v.page.built;
 
   const scripts = [
-    chromeScript(THEME_COLORS.light, THEME_COLORS.dark),
+    CHROME_SCRIPT,
     STARFIELD_SCRIPT,
     REVEAL_SCRIPT,
     ...(isHome ? [archiveDemoScript(demoConfig(v))] : []),
@@ -1145,9 +1154,9 @@ export function renderSitePage(v: SitePageView): string {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="${seo.robots}" />
-        <meta name="theme-color" content="${THEME_COLORS.dark}" />
+        <meta name="theme-color" content="${THEME_COLOR}" />
         <script nonce="${v.nonce}">
-          ${raw(themeBootScript(THEME_COLORS.light))};
+          ${raw(JS_BOOT_SCRIPT)};
         </script>
         <title>${seo.title}</title>
         <meta name="description" content="${seo.description}" />

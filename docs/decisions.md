@@ -13,6 +13,25 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-030 — Website copy & design rules: no em dashes, dark-only, 40 languages, ecosystem links
+
+**Status: IMPLEMENTED (CCB-S3-001 follow-ups, operator-directed).**
+**Decision.** Four operator rules amend the D-029 site: (1) the **em dash is banned** from all
+visible site copy in every language; sentences are restructured with commas, colons or periods,
+and `verify:site` enforces zero U+2014 on rendered pages. (2) **Dark is the only theme**: the
+light theme, the toggle and the `cn-theme` storage were removed entirely. (3) The site ships in
+**40 languages** (EN master + DE + 38 machine-translated locales, each marked
+"pending native-speaker review" in its `_meta.status`); the header switcher became a
+details-dropdown that scales to the full set, and hreflang/sitemap/JSON-LD expand automatically.
+(4) The footer gained an **Ecosystem** column linking simplex.chat and matrix.org, with restyled
+menu columns. Copy was also expanded ("a bit more text everywhere") and the hero portrait gained
+a hover effect; both are locale/CSS-level changes.
+**Rationale.** Operator style and product direction. Machine translations are acceptable for the
+shop-window stage (same forward-looking doctrine as D-029's copy note); the per-file review
+marker keeps the pending-quality state explicit until native review lands.
+
+---
+
 ### D-029 — Season 3 website: the operator's template is the design source, ported 1:1 to SSR
 
 **Status: IMPLEMENTED (CCB-S3-001).**

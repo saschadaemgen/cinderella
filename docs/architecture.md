@@ -259,9 +259,9 @@ nonce'd CSS/JS, `html`/`raw` escaping), NOT the Tailwind admin shell. Code lives
 `icons.ts`, `seo.ts`, `i18n.ts`, `pages.ts`) with settings in
 [`src/site/settings.ts`](../src/site/settings.ts).
 
-- **Design (D-029).** The operator's approved dark-neon template ported 1:1:
-  ink/cyan/magenta token system with dark as the default theme and an optional light
-  theme (`cn-theme` in localStorage, no-flash boot, `theme-color` sync), Source Sans 3 +
+- **Design (D-029, amended by D-030).** The operator's approved dark-neon template
+  ported 1:1: ink/cyan/magenta token system, **dark-only** (the light theme, its
+  toggle and the `cn-theme` storage were removed per operator), Source Sans 3 +
   JetBrains Mono **self-hosted** woff2 subsets (vendored in `assets/site/fonts/`, SIL
   OFL, copied to `public/assets/site/` by `scripts/copy-assets.mjs`), the brand avatar
   (`assets/site/cinderella-avatar.jpg`), and lucide icons **inlined server-side** from
@@ -289,9 +289,14 @@ nonce'd CSS/JS, `html`/`raw` escaping), NOT the Tailwind admin shell. Code lives
   from the sitemap until the final texts land). Placeholder fields (operator address,
   dates, legal-basis cites) render as accent-mono `[...]` marks.
 
-- **Routing + i18n (D-024).** Copy comes from `locales/<code>.json` (EN primary, DE
-  second), loaded by scanning the `locales/` directory at startup — adding a language
-  is a file, not code. URLs are per-language (`/en`, `/de`, `/en/<slug>`, plus explicit
+- **Routing + i18n (D-024, expanded by D-030).** Copy comes from `locales/<code>.json`
+  (EN master + DE + 38 machine-translated locales = **40 languages**, each translation
+  marked "pending native-speaker review" in `_meta.status`; ar/he/fa are RTL via
+  `_meta.dir`), loaded by scanning the `locales/` directory at startup — adding a language
+  is a file, not code. The header switcher is a details-dropdown (endonyms from
+  `_meta.name`) that scales to the full set. The **em dash is banned** from visible
+  copy in every language (operator rule, `verify:site` asserts zero U+2014 on rendered
+  pages). URLs are per-language (`/en`, `/de`, `/en/<slug>`, plus explicit
   `/{lang}/legal/<sub>` routes for the two-segment legal slugs), one static route per
   loaded locale so nothing shadows the admin paths. `GET /` 302-redirects by the
   persisted `cin-lang` cookie → `Accept-Language` → default. A header switcher and

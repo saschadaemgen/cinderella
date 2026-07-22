@@ -181,6 +181,12 @@ operator login remains a discreet header button to the unchanged, `noindex`, har
 
 - [x] Site scaffold + routing at `/`, per-language URLs, negotiation + switcher +
       `hreflang`; adding a language is a file, not code. **(CCB-S2-012)**
+- [x] **40 languages** — EN master + DE + 38 machine-translated locales (dropdown
+      switcher, RTL support for ar/he/fa); every file is marked "pending
+      native-speaker review" in `_meta.status`. **(CCB-S3-001 follow-up, D-030)**
+- [x] **Dark-only + copy rules** — light mode removed entirely; em dashes banned
+      from visible copy in all languages (enforced by `verify:site`); footer
+      Ecosystem column links simplex.chat / matrix.org. **(CCB-S3-001 follow-up, D-030)**
 - [x] Full per-page SEO — title/description/canonical/OG/Twitter + JSON-LD
       (Organization + WebSite + SoftwareApplication); site indexable, admin `noindex`;
       `robots.txt` + a marketing sitemap. **(CCB-S2-012)**

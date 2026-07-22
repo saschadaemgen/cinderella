@@ -18,7 +18,7 @@ The bot avatar is not a file reference — it is a base64 `data:` URI carried li
 
 The MIME type emitted is **`image/jpg`** (not `image/jpeg`), i.e. the literal prefix is `data:image/jpg;base64,` (`src/bot/avatar.ts:50`). Sharp is invoked with `.rotate()` to honour EXIF orientation and `.resize(px, px, { fit: 'cover', position: 'centre' })` for the square crop. JPEG is used deliberately — the file header comment (`src/bot/avatar.ts:19`) notes PNG "renders blurry."
 
-> Note: the outline says "~192px square JPEG." That is the *starting* size only. The code will step down to 160px or 128px, and reduce quality, if 192px does not fit `MAX_DATA_URI_CHARS`. If nothing fits, `buildAvatarDataUri` returns the smallest URI it produced anyway (`src/bot/avatar.ts:56`) and `loadAvatarDataUri` logs a warning that it may not propagate (`src/bot/avatar.ts:73-79`).
+> Note: the outline says "~192px square JPEG." That is the _starting_ size only. The code will step down to 160px or 128px, and reduce quality, if 192px does not fit `MAX_DATA_URI_CHARS`. If nothing fits, `buildAvatarDataUri` returns the smallest URI it produced anyway (`src/bot/avatar.ts:56`) and `loadAvatarDataUri` logs a warning that it may not propagate (`src/bot/avatar.ts:73-79`).
 
 > Note: the outline's "~15,610-byte profile message envelope" appears in the code only as an explanatory comment (`src/bot/avatar.ts:17`, `35`). The value actually enforced in code is the 12000-**character** URI budget, not a 15,610-byte check.
 
@@ -26,9 +26,9 @@ The MIME type emitted is **`image/jpg`** (not `image/jpeg`), i.e. the literal pr
 
 This is the single most important SimpleX wire-format fact for the avatar feature, and the code is built entirely around it.
 
-**bot.run reconciles the whole profile, image included.** The boot profile passed to `bot.run` carries the image inline (`src/bot/client.ts:80-107`). The SDK's `updateBotUserProfile` (`node_modules/simplex-chat/src/bot.ts:199-214`) deep-compares (`fast-deep-equal`) the config profile against the stored profile via `util.fromLocalProfile(user.profile)`, and when they differ **and** `updateProfile` is true, calls `apiUpdateProfile(userId, profile)` with the *full* profile — image included. So Cinderella sets the image on first run and self-heals it on any boot where the stored profile differs.
+**bot.run reconciles the whole profile, image included.** The boot profile passed to `bot.run` carries the image inline (`src/bot/client.ts:80-107`). The SDK's `updateBotUserProfile` (`node_modules/simplex-chat/src/bot.ts:199-214`) deep-compares (`fast-deep-equal`) the config profile against the stored profile via `util.fromLocalProfile(user.profile)`, and when they differ **and** `updateProfile` is true, calls `apiUpdateProfile(userId, profile)` with the _full_ profile — image included. So Cinderella sets the image on first run and self-heals it on any boot where the stored profile differs.
 
-- Critical subtlety encoded in `client.ts`: the boot profile only includes the `image` key when an avatar file was actually loaded (`...(image ? { image } : {})`, `src/bot/client.ts:86`), and `updateProfile` is set to `image !== undefined` (`src/bot/client.ts:103`). This is because a profile object *without* an image would deep-differ from a stored profile *with* one, causing the SDK to wipe the avatar on every avatar-less boot. The header comment (`src/bot/avatar.ts:8-11`) documents that an earlier `updateProfile:false` + separate re-apply approach "fought the SDK" and blanked the avatar every boot.
+- Critical subtlety encoded in `client.ts`: the boot profile only includes the `image` key when an avatar file was actually loaded (`...(image ? { image } : {})`, `src/bot/client.ts:86`), and `updateProfile` is set to `image !== undefined` (`src/bot/client.ts:103`). This is because a profile object _without_ an image would deep-differ from a stored profile _with_ one, causing the SDK to wipe the avatar on every avatar-less boot. The header comment (`src/bot/avatar.ts:8-11`) documents that an earlier `updateProfile:false` + separate re-apply approach "fought the SDK" and blanked the avatar every boot.
 
 **`apiUpdateProfile` only notifies direct CONTACTS.** The bot is a consent bot with no open contact address (`createAddress: false`, `src/bot/client.ts:92`) and therefore effectively zero direct contacts. So the profile update alone reaches nobody in the group.
 
@@ -58,7 +58,7 @@ Evidence:
 - A grep of `src/` finds no member-support scope, no `directRcv` handling, and no direct-contact message path (the only `src/` hit for any of these terms is `createAddress: false`). The only `contactConnected`/`contactDeletedByContact` handlers are the SDK's own log lines (`node_modules/simplex-chat/src/bot.ts:143-148`); the bot deliberately creates no contact address (`createAddress: false`, `src/bot/client.ts:92`).
 - The confirmation reply is sent with `apiSendTextReply(msg.raw, text)` (`src/consent/commands.ts:63`), where `msg.raw` is the original **group** chat item. So the `/publish` / `/unpublish` acknowledgements (`PUBLISH_REPLY`, `UNPUBLISH_REPLY`, `FAILURE_REPLY`; `src/consent/commands.ts:26`, `32`, `38`) are posted **into the group, visibly to everyone** — they are not private DMs.
 
-> Divergence, explicit: outline says a private per-member support channel is the mechanism; the code has **no private per-member channel at all**. Consent is entirely group-scoped, and even the consent confirmations are public group replies. Treat "member-support / private DM" as *planned / not yet implemented*.
+> Divergence, explicit: outline says a private per-member support channel is the mechanism; the code has **no private per-member channel at all**. Consent is entirely group-scoped, and even the consent confirmations are public group replies. Treat "member-support / private DM" as _planned / not yet implemented_.
 
 ## 5. SimpleX has no persistent user identity — consent is bound to a stable-but-not-durable member id
 
@@ -128,7 +128,7 @@ to (so hosts, crawlers, and later briefings can rely on it):
   operator's site uses, so the stream and site stay in sync. `data-theme` on `<html>`
   is the switch (default `dark`); a no-flash `<head>` script applies the stored value
   before paint (and honours `prefers-color-scheme` for `mode: auto`); `<meta
-  name="theme-color">` is `#050A12` (dark) / `#FAFBFD` (light), updated on toggle.
+name="theme-color">` is `#050A12` (dark) / `#FAFBFD` (light), updated on toggle.
 - **Live auto-update + infinite-scroll contract (CCB-S2-006/007).** An open page keeps
   itself current AND pages the archive without a manual refresh, via consent-gated
   endpoints keyed by the SAME query params as the page (so the filtered view stays
@@ -138,11 +138,11 @@ to (so hosts, crawlers, and later briefings can rely on it):
     (`data-next-cursor`, plus `data-has-more`, `data-at-top`, `data-window-cap`,
     `data-page-size`, `data-hash`, `data-poll`). A malformed cursor → `400`.
   - `GET /embed/:id/page?cursor=<c>&dir=older|newer` → `{ "html": "<li…>…", "nextCursor":
-    "<c>|null", "hasMore": <bool> }`. `html` is the bare card sequence (reuses the SSR
+"<c>|null", "hasMore": <bool> }`. `html` is the bare card sequence (reuses the SSR
     renderer). `older` pages down (strictly older); `newer` pages up (newest-first).
     `cache-control: no-store`.
   - `GET /embed/:id/state?cursor=<bottom>&top=<top>` → `{ "hash": "<16-hex>", "ids":
-    [<band ids>], "hasNewer": <bool> }` over the loaded band `[bottom, top]` inclusive.
+[<band ids>], "hasNewer": <bool> }` over the loaded band `[bottom, top]` inclusive.
     Ids + hash only (never bodies/media), `cache-control: public, max-age=5`. Without a
     cursor it falls back to the legacy page-1 window (empty-view use).
   - The client (`STREAM_SCRIPT`) auto-loads older on scroll (IntersectionObserver),
@@ -197,7 +197,7 @@ The domain root is a public SSR site ([`src/web/site/`](../src/web/site/)), sepa
 
 ## Appendix: related file-transfer wire behaviour (context)
 
-Not in the outline, but relevant to the same "what SimpleX actually puts on the wire" theme and verified in `src/bot/files.ts`: SimpleX media is **preview-only until downloaded**. An incoming image/video/file carries only metadata plus a base64 thumbnail inline; the real bytes move over XFTP and must be *received* per file (`files.ts:1-15`, `receive` at `files.ts:68`). Receipts are issued with `storeEncrypted: false` so the file lands readable for the media store, and `userApprovedRelays: true` (`files.ts:98`). XFTP relays expire files after ~48h, so late/failed receipts are surfaced rather than retried forever (`files.ts:8`). `rcvFileWarning` is treated as transient (the transfer continues), while `rcvFileError` is terminal (`files.ts:154-172`, and the subscription wiring at `src/bot/client.ts:116-120`).
+Not in the outline, but relevant to the same "what SimpleX actually puts on the wire" theme and verified in `src/bot/files.ts`: SimpleX media is **preview-only until downloaded**. An incoming image/video/file carries only metadata plus a base64 thumbnail inline; the real bytes move over XFTP and must be _received_ per file (`files.ts:1-15`, `receive` at `files.ts:68`). Receipts are issued with `storeEncrypted: false` so the file lands readable for the media store, and `userApprovedRelays: true` (`files.ts:98`). XFTP relays expire files after ~48h, so late/failed receipts are surfaced rather than retried forever (`files.ts:8`). `rcvFileWarning` is treated as transient (the transfer continues), while `rcvFileError` is terminal (`files.ts:154-172`, and the subscription wiring at `src/bot/client.ts:116-120`).
 
 ## Summary of divergences from the outline
 

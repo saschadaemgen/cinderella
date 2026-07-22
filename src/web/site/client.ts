@@ -6,27 +6,13 @@
  * the archive demo simply shows all sample rows.
  */
 
-/** No-flash theme boot (head): dark is default; 'light' persisted in `cn-theme`. */
-export function themeBootScript(lightColor: string): string {
-  return (
-    `(function(){document.documentElement.className='js';` +
-    `try{var t=localStorage.getItem('cn-theme');if(t==='light'){document.documentElement.setAttribute('data-theme','light');` +
-    `var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','${lightColor}');}}catch(e){}})();`
-  );
-}
+/** Head boot: mark JS availability for the reveal-fallback CSS (dark-only site,
+ * no theme storage). */
+export const JS_BOOT_SCRIPT = `document.documentElement.className='js';`;
 
-/** Header chrome: theme toggle + mobile burger menu. */
-export function chromeScript(lightColor: string, darkColor: string): string {
-  return `(function(){
-var tb=document.getElementById('cn-theme-toggle');
-if(tb)tb.addEventListener('click',function(){
-  var light=document.documentElement.getAttribute('data-theme')==='light';
-  if(light)document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme','light');
-  try{localStorage.setItem('cn-theme',light?'dark':'light');}catch(e){}
-  var m=document.querySelector('meta[name=theme-color]');
-  if(m)m.setAttribute('content',light?'${darkColor}':'${lightColor}');
-});
+/** Header chrome: mobile burger menu + closing the language dropdown on outside
+ * clicks (the details element handles opening natively, no JS required). */
+export const CHROME_SCRIPT = `(function(){
 var bg=document.getElementById('cn-burger'),mm=document.getElementById('cn-mobile-menu');
 if(bg&&mm)bg.addEventListener('click',function(){
   var open=!mm.hasAttribute('hidden');
@@ -34,8 +20,12 @@ if(bg&&mm)bg.addEventListener('click',function(){
   else{mm.removeAttribute('hidden');bg.classList.add('open');}
   bg.setAttribute('aria-expanded',open?'false':'true');
 });
+document.addEventListener('click',function(e){
+  document.querySelectorAll('details.lang-menu[open]').forEach(function(d){
+    if(!d.contains(e.target))d.removeAttribute('open');
+  });
+});
 })();`;
-}
 
 /** Twinkling multi-colour starfield (white / cyan / magenta), honors reduced motion. */
 export const STARFIELD_SCRIPT = `(function(){
