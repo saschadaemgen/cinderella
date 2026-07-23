@@ -331,7 +331,25 @@ export function registerNav(): void {
     { key: 'messages', href: '/messages', label: 'Messages', icon: icon('messages') },
     { key: 'consent', href: '/consent', label: 'Consent', icon: icon('consent') },
     { key: 'settings', href: '/settings', label: 'Settings', icon: icon('settings') },
-    { key: 'interaction', href: '/interaction', label: 'Interaction', icon: icon('interaction') },
+    {
+      key: 'interaction',
+      href: '/interaction/addressing',
+      label: 'Interaction',
+      icon: icon('interaction'),
+      // Sub-sections (CCB-S3-015 Stage 1), same submenu pattern as Plugins.
+      children: [
+        { key: 'interaction:addressing', href: '/interaction/addressing', label: 'Addressing', icon: icon('interaction') },
+        { key: 'interaction:guards', href: '/interaction/guards', label: 'Guards', icon: icon('interaction') },
+        { key: 'interaction:followup', href: '/interaction/followup', label: 'Follow-up', icon: icon('interaction') },
+        { key: 'interaction:language', href: '/interaction/language', label: 'Language', icon: icon('interaction') },
+        { key: 'interaction:replies', href: '/interaction/replies', label: 'Replies', icon: icon('interaction') },
+        { key: 'interaction:nicknames', href: '/interaction/nicknames', label: 'Nicknames', icon: icon('interaction') },
+        { key: 'interaction:consent', href: '/interaction/consent', label: 'Consent', icon: icon('interaction') },
+        { key: 'interaction:voice', href: '/interaction/voice', label: 'Voice', icon: icon('interaction') },
+        { key: 'interaction:archiving', href: '/interaction/archiving', label: 'Archiving', icon: icon('interaction') },
+        { key: 'interaction:diagnostics', href: '/interaction/diagnostics', label: 'Diagnostics', icon: icon('interaction') },
+      ],
+    },
     {
       key: 'plugins',
       href: '/plugins',

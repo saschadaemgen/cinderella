@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-014**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-015**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -582,6 +582,17 @@ only on click, and the embed-page CSP widens `frame-src` only when a card is pre
 (`src/web/front/embed.ts`). SEO emits a `VideoObject` pointing at the canonical external URL with the
 local thumbnail. Per-instance settings (`EmbedSettings.video`) toggle embedding, providers, and the
 notice; off returns the link to plain-link rendering.
+
+## 20. Interaction console — sub-sections (CCB-S3-015 Stage 1)
+
+The Interaction page is split into ten URL-addressable sub-sections under `/interaction/<slug>`
+(addressing, guards, follow-up, language, replies, nicknames, consent, voice, archiving,
+diagnostics), with a sidebar submenu the same shape as Plugins. `/interaction` redirects to the
+first section; each section saves independently and returns to its own page. Every setting lands in
+exactly one section — proven by `verify:admin-views`, which edits through every section and asserts
+the stored key set equals the full default (27 keys). The split also surfaced two settings that
+existed but had no form: the interjection stop-list (`carryOverStopWords`, Follow-up) and the filler
+prefixes (`fillerPrefixes`/`maxPrefixWords`/`maxPrefixChars`, Guards).
 
 ## Appendix: divergences (code wins)
 

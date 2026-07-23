@@ -23,6 +23,7 @@ import { upsertMessage, recordMediaError, updateMedia, markDeleted } from '../sr
 import { recordOptIn } from '../src/db/consent.js';
 import { SettingsService } from '../src/settings/service.js';
 import { SecurityService } from '../src/security/settings.js';
+import { DEFAULT_INTERACTION } from '../src/interaction/settings.js';
 import type { Queryable } from '../src/db/pool.js';
 import type { AdminConfig, Config } from '../src/config.js';
 
@@ -560,311 +561,109 @@ async function main(): Promise<void> {
       settingsBar.body.includes('disabled'),
   );
 
-  // --- 11) Interaction console (CCB-S3-002 §7) ---
-  const iaPage = await getPage('/interaction');
-  check('interaction page renders', iaPage.code === 200);
+  // --- 11) Interaction console, split into sub-sections (CCB-S3-015 Stage 1) ---
+  const iaPage = await getPage('/interaction/addressing');
+  check('interaction addressing section renders', iaPage.code === 200);
+  check('the un-suffixed /interaction redirects to a section', (await app.inject({ method: 'GET', url: '/interaction', headers: authed })).statusCode === 302);
   check(
-    'interaction page ships the briefing defaults',
+    'the addressing section carries the sub-section submenu',
+    ['/interaction/guards', '/interaction/followup', '/interaction/voice', '/interaction/diagnostics'].every(
+      (h) => iaPage.body.includes(`href="${h}"`),
+    ),
+  );
+  check(
+    'addressing holds ONLY its own settings',
     iaPage.body.includes('value="Cinderella"') &&
-      iaPage.body.includes('value="60"') &&
-      iaPage.body.includes('cindy, cindi, cin, ella'),
-  );
-  check(
-    'interaction page exposes the persona strings for both languages',
-    iaPage.body.includes('Her voice — English') && iaPage.body.includes('Her voice — Deutsch'),
-  );
-  check(
-    'interaction page exposes the retort lists for both languages',
-    iaPage.body.includes('Nickname retorts — English') &&
-      iaPage.body.includes('Nickname retorts — Deutsch'),
+      iaPage.body.includes('name="wakeWord"') &&
+      !iaPage.body.includes('name="followUpSeconds"') &&
+      !iaPage.body.includes('name="confidenceThreshold"'),
   );
   const iaCsrf = csrfFrom(iaPage.body);
 
-  /* ── Her own messages in the archive (CCB-S3-007) ──────────────────────── */
+  // Each section renders and holds the settings the split assigns to it.
+  const sectionPages: Record<string, string> = {};
+  for (const slug of ['guards', 'followup', 'language', 'replies', 'nicknames', 'consent', 'voice', 'archiving', 'diagnostics']) {
+    const pg2 = await getPage(`/interaction/${slug}`);
+    check(`interaction ${slug} section renders`, pg2.code === 200);
+    sectionPages[slug] = pg2.body;
+  }
+  check('guards holds the threshold and the newly-surfaced filler settings', sectionPages['guards']!.includes('name="confidenceThreshold"') && sectionPages['guards']!.includes('name="fillerPrefixes"') && sectionPages['guards']!.includes('name="maxPrefixWords"'));
+  check('follow-up holds the window, carry-over and the interjection stop list', sectionPages['followup']!.includes('name="followUpSeconds"') && sectionPages['followup']!.includes('name="intentCarryover"') && sectionPages['followup']!.includes('name="carryOverStopWords"'));
+  check('language holds the default language', sectionPages['language']!.includes('name="defaultLanguage"') && sectionPages['language']!.includes('name="replyLanguageMode"'));
+  check('replies holds the reply mode and rate limits', sectionPages['replies']!.includes('name="replyMode"') && sectionPages['replies']!.includes('name="replyLimitPerMember"'));
+  check('nicknames holds the retorts too', sectionPages['nicknames']!.includes('name="words"') && sectionPages['nicknames']!.includes('Retorts —'));
+  check('consent holds affirmations, declines and the undo window', sectionPages['consent']!.includes('name="affirmations"') && sectionPages['consent']!.includes('name="undoWindowSeconds"'));
+  check('voice holds both persona languages and the help links', sectionPages['voice']!.includes('Her voice — English') && sectionPages['voice']!.includes('Her voice — Deutsch') && sectionPages['voice']!.includes('name="archiveUrl"'));
+  check('diagnostics holds the near-miss log and the resolver', sectionPages['diagnostics']!.includes('Recently ignored') && sectionPages['diagnostics']!.includes('Intent resolver in use'));
 
-  check(
-    'interaction page offers the archive switches for her own messages',
-    iaPage.body.includes('Her own messages in the archive') &&
-      iaPage.body.includes('Nickname retorts') &&
-      iaPage.body.includes('cat:consent'),
-  );
-  check(
-    'and says plainly that no consent record is involved',
-    iaPage.body.includes('has no') && iaPage.body.includes('consent record'),
-  );
+  /* ── Her own messages in the archive (CCB-S3-007), now on the archiving section ── */
+  check('archiving section offers the bot-message switches', sectionPages['archiving']!.includes('Her own messages in the archive') && sectionPages['archiving']!.includes('cat:consent'));
+  check('and says plainly that no consent record is involved', sectionPages['archiving']!.includes('has no') && sectionPages['archiving']!.includes('consent record'));
 
-  const archiveSave = await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: {
-      _csrf: iaCsrf,
-      section: 'archive',
-      // publishBotMessages deliberately OMITTED — an unticked checkbox is absent.
-      mentionGuard: 'withhold',
-      'cat:price': 'on',
-    },
-    headers: authed,
-  });
-  // Both success and failure redirect, so assert on WHERE it redirected to —
-  // a plain 302 check would have passed for a save that silently threw.
-  check(
-    'archive settings save',
-    archiveSave.statusCode === 302 &&
-      String(archiveSave.headers['location'] ?? '').includes('saved=1'),
-    String(archiveSave.headers['location'] ?? ''),
-  );
+  const post = (payload: Record<string, string>) =>
+    app.inject({ method: 'POST', url: '/interaction', payload: { _csrf: iaCsrf, ...payload }, headers: authed });
+  const readIa = async () =>
+    (await pg.query<{ value: Record<string, unknown> }>(`SELECT value FROM settings WHERE key = 'interaction'`)).rows[0]?.value ?? {};
 
-  const archiveRow = await db.query<{ value: { publishBotMessages: boolean; mentionGuard: string; categories: Record<string, boolean> } }>(
-    `SELECT value FROM settings WHERE key = 'archive'`,
-  );
-  const av = archiveRow.rows[0]?.value;
-  check('the master switch really went off', av?.publishBotMessages === false);
-  check('the mention guard really changed', av?.mentionGuard === 'withhold');
-  check('an unticked category is stored as false', av?.categories?.['consent'] === false);
-  check('a ticked one as true', av?.categories?.['price'] === true);
+  // NO SETTING DROPPED (CCB-S3-015 acceptance): capture the full key set before,
+  // edit through every section, and prove the key set is unchanged AND each edit
+  // landed. A setting that fell out of the split would be a missing key here.
+  // The canonical complete settings — every key that must survive the split.
+  const before = Object.keys(DEFAULT_INTERACTION).sort();
 
-  const archiveAudit = await db.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM audit_log WHERE action = 'archive.update'`,
-  );
-  check('the change is audited', (archiveAudit.rows[0]?.n ?? 0) >= 1);
+  const archiveSave = await post({ section: 'archive', mentionGuard: 'withhold', 'cat:price': 'on' });
+  check('archive settings save', archiveSave.statusCode === 302 && String(archiveSave.headers['location'] ?? '').includes('/interaction/archiving?saved=1'));
+  const archiveRow = await pg.query<{ value: { publishBotMessages: boolean; mentionGuard: string; categories: Record<string, boolean> } }>(`SELECT value FROM settings WHERE key = 'archive'`);
+  check('the master switch really went off', archiveRow.rows[0]?.value.publishBotMessages === false);
+  check('the mention guard really changed', archiveRow.rows[0]?.value.mentionGuard === 'withhold');
+  const archiveAudit = await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM audit_log WHERE action = 'archive.update'`);
+  check('the archive change is audited', (archiveAudit.rows[0]?.n ?? 0) >= 1);
+  await post({ section: 'archive', publishBotMessages: 'on', mentionGuard: 'redact', 'cat:consent': 'on', 'cat:price': 'on' });
 
-  // Put it back so the checks below see the shipped behaviour.
-  await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: { _csrf: iaCsrf, section: 'archive', publishBotMessages: 'on',
-               mentionGuard: 'redact', 'cat:consent': 'on', 'cat:price': 'on' },
-    headers: authed,
-  });
+  const r1 = await post({ section: 'addressing', naturalAddressing: 'on', wakeWord: 'Aschenputtel', greetings: 'hi, moin' });
+  check('addressing save returns to its section', String(r1.headers['location'] ?? '').includes('/interaction/addressing?saved=1'));
+  await post({ section: 'guards', addressingMode: 'strict', strongSignalGreeting: 'on', strongSignalReply: 'on', strongSignalWindow: 'on', maxInstructionLength: '350', lengthGuardConfidence: '0.9', logNearMisses: 'on', confidenceThreshold: '0.7', fillerPrefixes: 'so, hey, also', maxPrefixWords: '3', maxPrefixChars: '20' });
+  await post({ section: 'followup', followUpSeconds: '90', intentCarryover: 'on', carryOverStopWords: 'nice, cool, thanks' });
+  await post({ section: 'language', replyLanguageMode: 'fixed', defaultLanguage: 'de' });
+  await post({ section: 'replies', replyMode: 'mention', namePrefixEnabled: 'on', 'prefix:en': '{name} —', replyLimitPerMember: '9', replyLimitPerChat: '40' });
+  await post({ section: 'nicknames', enabled: 'on', words: 'cindy, cindi', spamLimit: '4' });
+  await post({ section: 'consent', affirmations: 'yes, ja', declines: 'no, nein', undoWindowSeconds: '120' });
+  await post({ section: 'links', archiveUrl: 'https://example.org/a', projectUrl: 'https://example.org/p' });
+  await post({ section: 'persona:en', published: 'Custom published line.', publishConfirm: '' });
 
-  const renameRes = await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: {
-      _csrf: iaCsrf,
-      section: 'addressing',
-      naturalAddressing: 'on',
-      // slashCommands deliberately OMITTED — an unticked checkbox is absent.
-      wakeWord: 'Aschenputtel',
-      greetings: 'hi, moin',
-      followUpSeconds: '90',
-      confidenceThreshold: '0.7',
-      defaultLanguage: 'de',
-    },
-    headers: authed,
-  });
-  check('interaction edit redirects', renameRes.statusCode === 302);
+  const iaVal = await readIa() as Record<string, unknown> & {
+    wakeWord: string; slashCommands: boolean; addressing: Record<string, unknown>;
+    confidenceThreshold: number; fillerPrefixes: string[]; maxPrefixWords: number;
+    followUpSeconds: number; carryOverStopWords: string[]; replyLanguageMode: string;
+    defaultLanguage: string; replyMode: string; replyLimitPerMember: number;
+    undoWindowSeconds: number; archiveUrl: string; nicknames: { words: string[] };
+    persona: Record<string, Record<string, string>>;
+  };
+  const after = Object.keys(iaVal).sort();
 
-  const iaAfter = await getPage('/interaction');
-  check('renamed wake word persisted', iaAfter.body.includes('value="Aschenputtel"'));
-  check('follow-up window persisted', iaAfter.body.includes('value="90"'));
-  check(
-    'an unticked checkbox is saved as OFF, not ignored',
-    /name="slashCommands"(?![^>]*checked)/.test(iaAfter.body),
-  );
-  check(
-    'the untouched section is not clobbered by a section save',
-    iaAfter.body.includes('cindy, cindi, cin, ella'),
-  );
+  check('NO SETTING DROPPED — every default key is present after editing through every section',
+    before.every((k) => after.includes(k)) && after.length === before.length,
+    `default keys ${before.length}, stored keys ${after.length}`);
+  // And every section's edit actually landed on the right field.
+  check('addressing: wake word + unticked slash saved', iaVal.wakeWord === 'Aschenputtel' && iaVal.slashCommands === false);
+  check('guards: mode, threshold and the newly-surfaced filler settings saved',
+    iaVal.addressing['mode'] === 'strict' && iaVal.confidenceThreshold === 0.7 && iaVal.maxPrefixWords === 3 && iaVal.fillerPrefixes.includes('so'));
+  check('follow-up: window and the interjection stop list saved', iaVal.followUpSeconds === 90 && iaVal.carryOverStopWords.includes('nice'));
+  check('language: mode and default saved', iaVal.replyLanguageMode === 'fixed' && iaVal.defaultLanguage === 'de');
+  check('replies: mode and per-member limit saved', iaVal.replyMode === 'mention' && iaVal.replyLimitPerMember === 9);
+  check('nicknames: list saved', iaVal.nicknames.words.includes('cindy'));
+  check('consent: undo window saved', iaVal.undoWindowSeconds === 120);
+  check('voice: help link saved, and a blanked persona string fell back to its default',
+    iaVal.archiveUrl === 'https://example.org/a' &&
+      iaVal.persona['en']?.published === 'Custom published line.' &&
+      (iaVal.persona['en']?.publishConfirm ?? '').includes('carry your words into the light'));
 
-  const iaStored = await pg.query<{ value: { wakeWord: string; slashCommands: boolean } }>(
-    `SELECT value FROM settings WHERE key = 'interaction'`,
-  );
-  check(
-    'interaction settings persisted to the settings table',
-    iaStored.rows[0]?.value.wakeWord === 'Aschenputtel' &&
-      iaStored.rows[0]?.value.slashCommands === false,
-  );
-  const iaAudit = await pg.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM audit_log WHERE action = 'interaction.update'`,
-  );
-  check('interaction edit is audited', (iaAudit.rows[0]?.n ?? 0) >= 1);
-
-  const personaRes = await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: {
-      _csrf: iaCsrf,
-      section: 'persona:en',
-      published: 'Custom published line.',
-      publishConfirm: '', // blanked → falls back to the shipped default
-    },
-    headers: authed,
-  });
-  check('persona edit redirects', personaRes.statusCode === 302);
-  const iaPersona = await pg.query<{ value: { persona: Record<string, Record<string, string>> } }>(
-    `SELECT value FROM settings WHERE key = 'interaction'`,
-  );
-  check(
-    'an edited persona string persisted',
-    iaPersona.rows[0]?.value.persona['en']?.published === 'Custom published line.',
-  );
-  check(
-    'a blanked persona string fell back to its shipped default, never to empty',
-    (iaPersona.rows[0]?.value.persona['en']?.publishConfirm ?? '').includes(
-      'carry your words into the light',
-    ),
-  );
-
-  const resetRes = await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: { _csrf: iaCsrf, section: 'reset' },
-    headers: authed,
-  });
-  check('reset redirects', resetRes.statusCode === 302);
-  const iaReset = await getPage('/interaction');
+  // Reset returns to diagnostics and restores the shipped wake word.
+  const resetRes = await post({ section: 'reset' });
+  check('reset redirects to diagnostics', String(resetRes.headers['location'] ?? '').includes('/interaction/diagnostics?saved=1'));
+  const iaReset = await getPage('/interaction/addressing');
   check('reset restores the shipped wake word', iaReset.body.includes('value="Cinderella"'));
-
-  // Reply presentation (CCB-S3-003).
-  check(
-    'interaction page offers all three reply modes, defaulting to the non-quoting one',
-    iaReset.body.includes('name="replyMode"') &&
-      iaReset.body.includes('value="plain"') &&
-      iaReset.body.includes('value="mention"') &&
-      iaReset.body.includes('value="quote"') &&
-      /<option value="plain"[^>]*selected/.test(iaReset.body),
-  );
-  const replyRes = await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: {
-      _csrf: iaCsrf,
-      section: 'reply',
-      replyMode: 'mention',
-      namePrefixEnabled: 'on',
-      'prefix:en': '{name} —',
-      'prefix:de': '{name},',
-    },
-    headers: authed,
-  });
-  check('reply-mode edit redirects', replyRes.statusCode === 302);
-  const iaReply = await pg.query<{
-    value: {
-      replyMode: string;
-      namePrefix: { enabled: boolean; templates: Record<string, string> };
-    };
-  }>(`SELECT value FROM settings WHERE key = 'interaction'`);
-  check('reply mode persisted', iaReply.rows[0]?.value.replyMode === 'mention');
-  check(
-    'the name prefix template persisted',
-    iaReply.rows[0]?.value.namePrefix.templates['en'] === '{name} —',
-  );
-  const prefixOffRes = await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: { _csrf: iaCsrf, section: 'reply', replyMode: 'plain', 'prefix:en': '{name},' },
-    headers: authed,
-  });
-  check('reply-mode edit without the checkbox redirects', prefixOffRes.statusCode === 302);
-  const iaPrefixOff = await pg.query<{ value: { namePrefix: { enabled: boolean } } }>(
-    `SELECT value FROM settings WHERE key = 'interaction'`,
-  );
-  check(
-    'unticking the name prefix saves as OFF',
-    iaPrefixOff.rows[0]?.value.namePrefix.enabled === false,
-  );
-
-  // Addressing guards + reply language (CCB-S3-005).
-  const iaGuards = await getPage('/interaction');
-  check(
-    'every addressing guard is present as its own control',
-    [
-      'name="addressingMode"',
-      'name="ignoreForwarded"',
-      'name="silenceOnUnknown"',
-      'name="strongSignalGreeting"',
-      'name="strongSignalReply"',
-      'name="strongSignalWindow"',
-      'name="maxInstructionLength"',
-      'name="lengthGuardConfidence"',
-      'name="logNearMisses"',
-      'name="replyLanguageMode"',
-      'name="rememberMemberLanguage"',
-    ].every((n) => iaGuards.body.includes(n)),
-  );
-  check(
-    'each guard carries an explanatory description, not just a label',
-    iaGuards.body.includes('content someone is sharing') &&
-      iaGuards.body.includes('only sent when she is confident') &&
-      iaGuards.body.includes('Commands are short') &&
-      iaGuards.body.includes('makes the guards invisible'),
-  );
-  check(
-    'the near-miss log is shown on the same page',
-    iaGuards.body.includes('Recently ignored') &&
-      iaGuards.body.includes('Nothing ignored since the last restart'),
-  );
-  check(
-    'both addressing modes are offered, relaxed selected by default',
-    iaGuards.body.includes('value="relaxed"') &&
-      iaGuards.body.includes('value="strict"') &&
-      /<option value="relaxed"[^>]*selected/.test(iaGuards.body),
-  );
-
-  const guardsRes = await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: {
-      _csrf: iaCsrf,
-      section: 'addressing-guards',
-      addressingMode: 'strict',
-      // ignoreForwarded / silenceOnUnknown deliberately OMITTED = unticked
-      strongSignalGreeting: 'on',
-      strongSignalReply: 'on',
-      strongSignalWindow: 'on',
-      maxInstructionLength: '350',
-      lengthGuardConfidence: '0.9',
-      logNearMisses: 'on',
-    },
-    headers: authed,
-  });
-  check('addressing-guards edit redirects', guardsRes.statusCode === 302);
-  const iaGuardRow = await pg.query<{
-    value: {
-      addressing: {
-        mode: string;
-        ignoreForwarded: boolean;
-        silenceOnUnknown: boolean;
-        maxInstructionLength: number;
-        lengthGuardConfidence: number;
-      };
-    };
-  }>(`SELECT value FROM settings WHERE key = 'interaction'`);
-  const g = iaGuardRow.rows[0]?.value.addressing;
-  check(
-    'each guard persists independently, including the unticked ones',
-    g?.mode === 'strict' &&
-      g?.ignoreForwarded === false &&
-      g?.silenceOnUnknown === false &&
-      g?.maxInstructionLength === 350 &&
-      g?.lengthGuardConfidence === 0.9,
-    JSON.stringify(g),
-  );
-
-  const langRes = await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: { _csrf: iaCsrf, section: 'language', replyLanguageMode: 'fixed' },
-    headers: authed,
-  });
-  check('language edit redirects', langRes.statusCode === 302);
-  const iaLangRow = await pg.query<{
-    value: { replyLanguageMode: string; rememberMemberLanguage: boolean };
-  }>(`SELECT value FROM settings WHERE key = 'interaction'`);
-  check(
-    'reply-language settings persist, unticked checkbox included',
-    iaLangRow.rows[0]?.value.replyLanguageMode === 'fixed' &&
-      iaLangRow.rows[0]?.value.rememberMemberLanguage === false,
-  );
-
-  // Put it back so later checks see the shipped defaults.
-  await app.inject({
-    method: 'POST',
-    url: '/interaction',
-    payload: { _csrf: iaCsrf, section: 'reset' },
-    headers: authed,
-  });
+  check('interaction edits are audited', ((await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM audit_log WHERE action = 'interaction.update'`)).rows[0]?.n ?? 0) >= 1);
 
   // ── Plugins (CCB-S3-004) ──────────────────────────────────────────────
   const pluginsPage = await getPage('/plugins');

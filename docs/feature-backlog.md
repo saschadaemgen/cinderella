@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-014**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-015**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -300,6 +300,10 @@ The history below records the pre-CCB-S2-003 state.
       PeerTube/Vimeo is a matcher away.
 - [ ] **Video providers beyond YouTube.** The registry is ready; PeerTube, Vimeo and a direct video
       file are each one matcher. Not built.
+- [~] **Admin console restyle (CCB-S3-015).** Stage 1 (split Interaction into sub-sections + submenu
+      + deep links) DONE. Stage 2 (two-column tile layout, per-tile save, sized inputs, collapsible
+      help) and Stage 3 (dark-neon restyle reusing the website design system, cyan accent) still to
+      build.
 - [ ] **More assets and a second provider** — only HEX, BTC, ETH, USD and EUR ship. Adding an
       asset is a registry line in the admin, no code change; adding a second provider is an
       implementation of the `PriceProvider` interface. A fallback chain across providers is

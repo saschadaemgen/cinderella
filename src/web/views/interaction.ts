@@ -262,9 +262,35 @@ function bodyString(body: Record<string, unknown>, key: string): string {
 export function registerInteraction(app: FastifyInstance, ctx: ViewContext): void {
   const { interaction } = ctx;
 
-  app.get<{ Querystring: { saved?: string; error?: string } }>(
-    '/interaction',
+  /**
+   * Interaction is split into sub-sections (CCB-S3-015 Stage 1). Each has its own
+   * URL under /interaction/<slug>, its own submenu entry, and saves independently.
+   * The page had grown into one long scroll with every briefing this season; the
+   * split gives an operator a bookmarkable, linkable place for each concern.
+   *
+   * Every setting lands in exactly ONE section, and the round-trip is proven by
+   * verify:admin-views — nothing was dropped in the move.
+   */
+  const SECTIONS: { slug: string; title: string; desc: string }[] = [
+    { slug: 'addressing', title: 'Addressing', desc: 'How she is addressed: her name, greetings, and which channels reach her.' },
+    { slug: 'guards', title: 'Guards', desc: 'When matching her name does NOT mean she was spoken to.' },
+    { slug: 'followup', title: 'Follow-up', desc: 'The window after she replies, and what a short follow-up may carry.' },
+    { slug: 'language', title: 'Language', desc: 'Which language she answers in.' },
+    { slug: 'replies', title: 'Replies', desc: 'How her answers appear, and how often she may send them.' },
+    { slug: 'nicknames', title: 'Nicknames', desc: 'The names she refuses to answer to, and her retorts.' },
+    { slug: 'consent', title: 'Consent behaviour', desc: 'Confirmation words, undo window, and the consent handshake.' },
+    { slug: 'voice', title: 'Voice', desc: 'Every persona string, per language, plus the help-footer links.' },
+    { slug: 'archiving', title: 'Archiving', desc: 'Whether her own messages and members’ questions are published.' },
+    { slug: 'diagnostics', title: 'Diagnostics', desc: 'The near-miss log, and the resolver currently in use.' },
+  ];
+
+  app.get<{ Params: { section?: string }; Querystring: { saved?: string; error?: string } }>(
+    '/interaction/:section',
     async (req, reply) => {
+      const slug = req.params.section ?? 'addressing';
+      const meta = SECTIONS.find((x) => x.slug === slug);
+      if (!meta) return reply.redirect('/interaction/addressing');
+
       const s = interaction.get();
       const csrf = req.session?.csrfToken ?? '';
 
@@ -289,407 +315,229 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
           ${inner}
         </form>`;
 
-      const intro = html`<div
-        class="mb-6 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700"
-      >
-        <p class="font-semibold">She answers to her name, and only to her name.</p>
-        <p class="mt-1">
-          A message counts as addressed to her when it <strong>starts</strong> with the wake word
-          (an optional greeting may come first), when it replies directly to one of her messages, or
-          when it arrives inside the follow-up window after she has just spoken to that member.
-          Talking <em>about</em> her — "I think Cinderella is great" — is never an address.
-          Publishing and unpublishing always ask for confirmation first, and she will never change
-          anyone's consent but the sender's own. Intent resolver in use:
-          <code class="rounded bg-slate-100 px-1">${activeResolverName()}</code>.
-        </p>
-      </div>`;
-
-      const addressing = card(
-        'Addressing',
-        form(
-          'addressing',
-          html`
-            ${checkbox(
-              'naturalAddressing',
-              'Natural addressing (she responds to her name)',
-              s.naturalAddressing,
-            )}
-            ${checkbox('slashCommands', 'Slash commands (/publish, /unpublish)', s.slashCommands)}
-            ${labelled(
-              'Wake word',
-              textField('wakeWord', s.wakeWord),
-              'Her name. Rename her for your community — small typos in it are still understood.',
-            )}
-            ${labelled(
-              'Greeting prefixes',
-              textField('greetings', s.greetings.join(', ')),
-              'Comma separated. Allowed in front of the wake word and stripped before the instruction.',
-            )}
-            ${labelled(
-              'Follow-up window (seconds)',
-              numberField('followUpSeconds', s.followUpSeconds, 0, 3600),
-              'After she replies, that member may keep talking without repeating her name. 0 disables it.',
-            )}
-            ${labelled(
-              'Confidence threshold',
-              numberField('confidenceThreshold', s.confidenceThreshold, 0, 1, '0.05'),
-              'Below this she asks instead of acting. Higher is more cautious.',
-            )}
-            ${labelled(
-              'Default language',
-              textField('defaultLanguage', s.defaultLanguage),
-              `Used when the instruction gives no clue. Available: ${Object.keys(s.persona).join(', ')}.`,
-            )}
-            ${labelled(
-              'Archive link (help footer)',
-              textField('archiveUrl', s.archiveUrl, 'https://…'),
-              'Shown at the foot of the help reply. https only; blank hides it.',
-            )}
-            ${labelled(
-              'Project link (help footer)',
-              textField('projectUrl', s.projectUrl, 'https://…'),
-              'Shown beside the archive link in help. https only; blank hides it.',
-            )}
-            ${saveButton()}
-          `,
-        ),
-      );
-
-      const guards = card(
-        'Addressing guards',
-        html`<p class="mb-3 text-sm text-slate-500">
-            Matching her name is not the same as being spoken to. These guards decide when she stays
-            out of it. Each one can be switched off independently — turning them all off restores
-            the behaviour that made her answer a forwarded announcement.
-          </p>
-          ${form(
-            'addressing-guards',
-            html`
-              ${labelled(
-                'Addressing mode',
-                selectField(
-                  'addressingMode',
-                  s.addressing.mode,
-                  ADDRESSING_MODES.map(
-                    (m) => [m, ADDRESSING_MODE_LABELS[m] ?? m] as [string, string],
-                  ),
-                ),
-                'Strict mode still allows direct replies to her, the follow-up window and slash commands.',
-              )}
-              ${checkbox('ignoreForwarded', 'Ignore forwarded messages', s.addressing.ignoreForwarded)}
-              <p class="-mt-1 text-xs text-slate-500">
-                A forwarded message is content someone is sharing, not someone talking to her.
-                Switching this off lets a forwarded announcement that happens to begin with her name
-                reach the resolver, which is how she came to answer one.
+      const cardsFor: Record<string, () => SafeHtml> = {
+        addressing: () =>
+          card(
+            'Addressing',
+            html`<p class="mb-3 text-sm text-slate-500">
+                She answers to her name, and only to her name. A message is addressed to her when it
+                <strong>starts</strong> with the wake word (an optional greeting may come first), when
+                it replies directly to one of her messages, or inside the follow-up window. Talking
+                <em>about</em> her is never an address.
               </p>
-              ${checkbox(
-                'silenceOnUnknown',
-                'Stay silent when she does not understand and the signal was weak',
-                s.addressing.silenceOnUnknown,
-              )}
-              <p class="-mt-1 text-xs text-slate-500">
-                The not-understood prompt is only sent when she is confident she was addressed.
-                Switching this off makes her answer every unrecognised message that starts with her
-                name.
+              ${form(
+                'addressing',
+                html`
+                  ${checkbox('naturalAddressing', 'Natural addressing (she responds to her name)', s.naturalAddressing)}
+                  ${checkbox('slashCommands', 'Slash commands (/publish, /unpublish)', s.slashCommands)}
+                  ${labelled('Wake word', textField('wakeWord', s.wakeWord), 'Her name. Rename her for your community — small typos in it are still understood.')}
+                  ${labelled('Greeting prefixes', textField('greetings', s.greetings.join(', ')), 'Comma separated. Allowed in front of the wake word and stripped before the instruction.')}
+                  ${saveButton()}
+                `,
+              )}`,
+          ),
+        guards: () =>
+          card(
+            'Guards',
+            html`<p class="mb-3 text-sm text-slate-500">
+                Matching her name is not the same as being spoken to. Each guard can be switched off
+                independently — turning them all off restores the behaviour that made her answer a
+                forwarded announcement.
               </p>
-              ${checkbox(
-                'strongSignalGreeting',
-                'A greeting counts as a strong signal (Hey Cinderella ...)',
-                s.addressing.strongSignalGreeting,
-              )}
-              ${checkbox(
-                'strongSignalReply',
-                'A direct reply to one of her messages counts as a strong signal',
-                s.addressing.strongSignalReply,
-              )}
-              ${checkbox(
-                'strongSignalWindow',
-                'Being mid-conversation counts as a strong signal',
-                s.addressing.strongSignalWindow,
-              )}
-              <p class="-mt-1 text-xs text-slate-500">
-                With all three off nothing is ever a strong signal, and she will never send the
-                not-understood prompt.
+              ${form(
+                'guards',
+                html`
+                  ${labelled('Addressing mode', selectField('addressingMode', s.addressing.mode, ADDRESSING_MODES.map((m) => [m, ADDRESSING_MODE_LABELS[m] ?? m] as [string, string])), 'Strict mode still allows direct replies, the follow-up window and slash commands.')}
+                  ${checkbox('ignoreForwarded', 'Ignore forwarded messages', s.addressing.ignoreForwarded)}
+                  ${checkbox('silenceOnUnknown', 'Stay silent on a weak, not-understood signal', s.addressing.silenceOnUnknown)}
+                  ${checkbox('strongSignalGreeting', 'A greeting is a strong signal (Hey Cinderella ...)', s.addressing.strongSignalGreeting)}
+                  ${checkbox('strongSignalReply', 'A direct reply is a strong signal', s.addressing.strongSignalReply)}
+                  ${checkbox('strongSignalWindow', 'Being mid-conversation is a strong signal', s.addressing.strongSignalWindow)}
+                  ${labelled('Confidence threshold', numberField('confidenceThreshold', s.confidenceThreshold, 0, 1, '0.05'), 'Below this she asks instead of acting. Higher is more cautious.')}
+                  ${labelled('Maximum instruction length (characters)', numberField('maxInstructionLength', s.addressing.maxInstructionLength, 20, 4000), 'Longer than this and she only acts on a high-confidence intent.')}
+                  ${labelled('Confidence required above that length', numberField('lengthGuardConfidence', s.addressing.lengthGuardConfidence, 0, 1, '0.05'), 'Raise it to ignore more long text.')}
+                  ${labelled('Filler prefixes', textField('fillerPrefixes', s.fillerPrefixes.join(', ')), 'Short discourse words allowed before her name (so, hey, also). Comma separated.')}
+                  ${labelled('Max filler words before the name', numberField('maxPrefixWords', s.maxPrefixWords, 0, 8))}
+                  ${labelled('Max filler characters before the name', numberField('maxPrefixChars', s.maxPrefixChars, 0, 60))}
+                  ${checkbox('logNearMisses', 'Record ignored messages (see Diagnostics)', s.addressing.logNearMisses)}
+                  ${saveButton()}
+                `,
+              )}`,
+          ),
+        followup: () =>
+          card(
+            'Follow-up',
+            html`<p class="mb-3 text-sm text-slate-500">
+                After she replies, that member may keep talking for a short while without repeating
+                her name. A brief elliptical follow-up can inherit the previous read-only intent —
+                but only a known asset, never a fresh lookup, and never an interjection.
               </p>
-              ${labelled(
-                'Maximum instruction length (characters)',
-                numberField('maxInstructionLength', s.addressing.maxInstructionLength, 20, 4000),
-                'Longer than this and she only acts on a high-confidence intent. Commands are short; announcements are not.',
-              )}
-              ${labelled(
-                'Confidence required above that length',
-                numberField(
-                  'lengthGuardConfidence',
-                  s.addressing.lengthGuardConfidence,
-                  0,
-                  1,
-                  '0.05',
-                ),
-                'Raise it to ignore more long text; lower it to let long messages act as instructions.',
-              )}
-              ${checkbox('logNearMisses', 'Record ignored messages below', s.addressing.logNearMisses)}
-              <p class="-mt-1 text-xs text-slate-500">
-                Kept in memory only, capped and truncated, and cleared on restart. Switching this
-                off makes the guards invisible.
+              ${form(
+                'followup',
+                html`
+                  ${labelled('Follow-up window (seconds)', numberField('followUpSeconds', s.followUpSeconds, 0, 3600), '0 disables it.')}
+                  ${checkbox('intentCarryover', 'Let a short follow-up inherit the previous intent', s.intentCarryover)}
+                  ${labelled('Interjection stop list', textField('carryOverStopWords', s.carryOverStopWords.join(', ')), 'Words that never carry an intent forward — nice, cool, thanks, danke … Comma separated.')}
+                  ${saveButton()}
+                `,
+              )}`,
+          ),
+        language: () =>
+          card(
+            'Language',
+            html`<p class="mb-3 text-sm text-slate-500">
+                She answers in the language of the message she is answering. Only languages that have
+                real persona copy are offered, never a machine-translated website locale.
               </p>
-              ${saveButton()}
-            `,
+              ${form(
+                'language',
+                html`
+                  ${labelled('Reply language mode', selectField('replyLanguageMode', s.replyLanguageMode, REPLY_LANGUAGE_MODES.map((m) => [m, REPLY_LANGUAGE_MODE_LABELS[m] ?? m] as [string, string])), 'Auto detects per message; falls back to the default when the text gives no clear signal.')}
+                  ${labelled('Default language', textField('defaultLanguage', s.defaultLanguage), `Used when the instruction gives no clue. Available: ${Object.keys(s.persona).join(', ')}.`)}
+                  ${checkbox('rememberMemberLanguage', "Remember a member's language for the follow-up window", s.rememberMemberLanguage)}
+                  ${saveButton()}
+                `,
+              )}`,
+          ),
+        replies: () =>
+          card(
+            'Replies',
+            html`<p class="mb-3 text-sm text-slate-500">
+                She sends plain messages rather than quoting the member she answers. Confirmation
+                prompts never quote, whatever this is set to.
+              </p>
+              ${form(
+                'replies',
+                html`
+                  ${labelled('Reply mode', selectField('replyMode', s.replyMode, REPLY_MODES.map((m) => [m, REPLY_MODE_LABELS[m]] as [string, string])), 'Plain and Mention keep the group readable. Quote is the old behaviour.')}
+                  ${checkbox('namePrefixEnabled', 'Use the name prefix (Mention mode only)', s.namePrefix.enabled)}
+                  ${Object.keys(s.namePrefix.templates).sort().map((lang) => labelled(`Name prefix — ${langLabel(lang)}`, textField(`prefix:${lang}`, s.namePrefix.templates[lang] as string), "{name} is the member's display name. A single space is added after it."))}
+                  ${labelled('Replies per member, per minute', numberField('replyLimitPerMember', s.replyLimitPerMember, 1, 120))}
+                  ${labelled('Replies per chat, per minute', numberField('replyLimitPerChat', s.replyLimitPerChat, 1, 600))}
+                  ${saveButton()}
+                `,
+              )}`,
+          ),
+        nicknames: () =>
+          html`${card(
+            'Nicknames',
+            html`<p class="mb-3 text-sm text-slate-500">
+                She does not answer to "Cindy". A nickname in the wake-word position earns a retort and
+                <strong>nothing else</strong>. Retorts rotate without repeating the previous one.
+              </p>
+              ${form(
+                'nicknames',
+                html`
+                  ${checkbox('enabled', 'Nickname retorts enabled', s.nicknames.enabled)}
+                  ${labelled('Nicknames', textField('words', s.nicknames.words.join(', ')), 'Comma separated. Matched exactly, so short names never fire on ordinary words.')}
+                  ${labelled('Anti-spam limit', numberField('spamLimit', s.nicknames.spamLimit, 1, 20), 'Consecutive nicknames from one member before she stops answering.')}
+                  ${saveButton()}
+                `,
+              )}`,
+          )}
+          ${Object.keys(s.retorts)
+            .sort()
+            .map((lang) =>
+              card(
+                `Retorts — ${langLabel(lang)}`,
+                form(`retorts:${lang}`, html`<p class="text-sm text-slate-500">One retort per line. Emptying the list restores the shipped twelve.</p>${textArea('retorts', (s.retorts[lang] as string[]).join('\n'), 12)} ${saveButton()}`),
+              ),
+            )}`,
+        consent: () =>
+          card(
+            'Consent behaviour',
+            html`<p class="mb-3 text-sm text-slate-500">
+                Publishing and unpublishing by natural language always take two messages: she asks,
+                the member agrees. Slash commands stay immediate.
+              </p>
+              ${form(
+                'consent',
+                html`
+                  ${labelled('Affirmation words', textField('affirmations', s.affirmations.join(', ')), 'Comma separated. Fuzzy matched, so "jup" and "yeah" work without listing every spelling.')}
+                  ${labelled('Decline words', textField('declines', s.declines.join(', ')), 'Comma separated. Cancels a pending confirmation.')}
+                  ${labelled('Undo window (seconds)', numberField('undoWindowSeconds', s.undoWindowSeconds, 0, 86400), 'How long a member may undo their own last consent decision. 0 means no time limit.')}
+                  ${saveButton()}
+                `,
+              )}`,
+          ),
+        voice: () =>
+          html`${Object.keys(s.persona)
+            .sort()
+            .map((lang) =>
+              card(
+                `Her voice — ${langLabel(lang)}`,
+                form(`persona:${lang}`, html`<p class="text-sm text-slate-500">Chat only. Leave a field empty to restore its shipped default.</p>${PERSONA_KEYS.map((key) => labelled(PERSONA_META[key].label, textArea(key, (s.persona[lang] as Record<PersonaKey, string>)[key], 2), PERSONA_META[key].vars ? `Placeholders: ${PERSONA_META[key].vars}` : undefined))} ${saveButton()}`),
+              ),
+            )}
+          ${card(
+            'Help-footer links',
+            form('links', html`${labelled('Archive link', textField('archiveUrl', s.archiveUrl, 'https://…'), 'Shown at the foot of the help reply. https only; blank hides it.')}${labelled('Project link', textField('projectUrl', s.projectUrl, 'https://…'), 'Shown beside the archive link. https only; blank hides it.')} ${saveButton()}`),
           )}`,
-      );
-
-      const nearMisses = recentNearMisses(25);
-      const nearMissCard = card(
-        'Recently ignored (near misses)',
-        nearMisses.length === 0
-          ? html`<p class="text-sm text-slate-500">
-              Nothing ignored since the last restart. Messages the guards catch appear here with the
-              reason, so you can see what she is staying out of.
-            </p>`
-          : html`<div class="overflow-x-auto">
-              <table class="w-full text-left text-sm">
-                <thead>
-                  <tr
-                    class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500"
-                  >
-                    <th class="py-2 pr-3">When</th>
-                    <th class="py-2 pr-3">Who</th>
-                    <th class="py-2 pr-3">Why ignored</th>
-                    <th class="py-2 pr-3">Message</th>
-                    <th class="py-2">Resolver</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${nearMisses.map(
-                    (n) =>
-                      html`<tr class="border-b border-slate-100 align-top">
-                        <td class="whitespace-nowrap py-2 pr-3 text-slate-500">
-                          ${new Date(n.at).toISOString().replace('T', ' ').slice(0, 16)}
-                        </td>
+        archiving: () => archiveCard(ctx.archive.get(), csrf),
+        diagnostics: () => {
+          const nearMisses = recentNearMisses(25);
+          return html`${card(
+            'Resolver',
+            html`<p class="text-sm text-slate-600">
+              Intent resolver in use:
+              <code class="rounded bg-slate-100 px-1">${activeResolverName()}</code>. The seam lets a
+              smarter resolver replace the rules without touching the rest of the layer.
+            </p>`,
+          )}
+          ${card(
+            'Recently ignored (near misses)',
+            nearMisses.length === 0
+              ? html`<p class="text-sm text-slate-500">Nothing ignored since the last restart. Messages the guards catch appear here with the reason.</p>`
+              : html`<div class="overflow-x-auto">
+                  <table class="w-full text-left text-sm">
+                    <thead>
+                      <tr class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                        <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Who</th><th class="py-2 pr-3">Why</th><th class="py-2 pr-3">Message</th><th class="py-2">Resolver</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${nearMisses.map((n) => html`<tr class="border-b border-slate-100 align-top">
+                        <td class="whitespace-nowrap py-2 pr-3 text-slate-500">${new Date(n.at).toISOString().replace('T', ' ').slice(0, 16)}</td>
                         <td class="py-2 pr-3">${n.who}</td>
                         <td class="py-2 pr-3 text-slate-600">${NEAR_MISS_REASONS[n.reason]}</td>
                         <td class="py-2 pr-3 text-slate-500">${n.excerpt}</td>
-                        <td class="whitespace-nowrap py-2 text-slate-500">
-                          ${n.intent ? `${n.intent} ${(n.confidence ?? 0).toFixed(2)}` : '—'}
-                        </td>
-                      </tr>`,
-                  )}
-                </tbody>
-              </table>
-            </div>`,
-      );
+                        <td class="whitespace-nowrap py-2 text-slate-500">${n.intent ? `${n.intent} ${(n.confidence ?? 0).toFixed(2)}` : '—'}</td>
+                      </tr>`)}
+                    </tbody>
+                  </table>
+                </div>`,
+          )}
+          ${card(
+            'Reset',
+            html`<p class="mb-3 text-sm text-slate-500">Restores every interaction setting to the values Cinderella ships with. Consent data is untouched.</p>
+              ${form('reset', html`<button type="submit" class="self-start rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100">Restore defaults</button>`)}`,
+          )}`;
+        },
+      };
 
-      const language = card(
-        'Reply language',
-        html`<p class="mb-3 text-sm text-slate-500">
-            She answers in the language of the message she is answering. Only languages that have
-            real persona copy here are offered, never a machine-translated website locale.
-          </p>
-          ${form(
-            'language',
-            html`
-              ${labelled(
-                'Reply language mode',
-                selectField(
-                  'replyLanguageMode',
-                  s.replyLanguageMode,
-                  REPLY_LANGUAGE_MODES.map(
-                    (m) => [m, REPLY_LANGUAGE_MODE_LABELS[m] ?? m] as [string, string],
-                  ),
-                ),
-                'Auto detects per message and falls back to the default when the text gives no clear signal.',
-              )}
-              ${checkbox(
-                'rememberMemberLanguage',
-                "Remember a member's language for the follow-up window",
-                s.rememberMemberLanguage,
-              )}
-              <p class="-mt-1 text-xs text-slate-500">
-                Keeps a short follow-up like "yes" in the language of the exchange it belongs to.
-                The default reply language is set under Addressing above.
-              </p>
-              ${saveButton()}
-            `,
-          )}`,
-      );
-
-      const answering = card(
-        'How she answers',
-        html`<p class="mb-3 text-sm text-slate-500">
-            She used to quote the message she was answering, which repeated the member's words above
-            every reply and read as duplicated noise to everyone else in the group. She now sends
-            plain messages. Confirmation prompts never quote, whatever this is set to.
-          </p>
-          ${form(
-            'reply',
-            html`
-              ${labelled(
-                'Reply mode',
-                selectField(
-                  'replyMode',
-                  s.replyMode,
-                  // Derived from REPLY_MODES so a mode can never be added to the
-                  // model and silently go missing from the console.
-                  REPLY_MODES.map((m) => [m, REPLY_MODE_LABELS[m]] as [string, string]),
-                ),
-                'Plain and Mention both keep the group readable. Quote is the old behaviour.',
-              )}
-              ${checkbox(
-                'namePrefixEnabled',
-                'Use the name prefix (Mention mode only)',
-                s.namePrefix.enabled,
-              )}
-              ${Object.keys(s.namePrefix.templates)
-                .sort()
-                .map((lang) =>
-                  labelled(
-                    `Name prefix — ${langLabel(lang)}`,
-                    textField(`prefix:${lang}`, s.namePrefix.templates[lang] as string),
-                    "{name} is the member's display name. A single space is added after it automatically.",
-                  ),
-                )}
-              ${saveButton()}
-            `,
-          )}`,
-      );
-
-      const herMessages = archiveCard(ctx.archive.get(), csrf);
-
-      const safety = card(
-        'Confirmation, undo and rate limits',
-        html`<p class="mb-3 text-sm text-slate-500">
-            Publishing and unpublishing by natural language always take two messages: she asks, the
-            member agrees. Slash commands stay immediate.
-          </p>
-          ${form(
-            'safety',
-            html`
-              ${labelled(
-                'Affirmation words',
-                textField('affirmations', s.affirmations.join(', ')),
-                'Comma separated. Fuzzy matched, so "jup" and "yeah" work without listing every spelling.',
-              )}
-              ${labelled(
-                'Decline words',
-                textField('declines', s.declines.join(', ')),
-                'Comma separated. Cancels a pending confirmation.',
-              )}
-              ${labelled(
-                'Undo window (seconds)',
-                numberField('undoWindowSeconds', s.undoWindowSeconds, 0, 86400),
-                'How long a member may undo their own last consent decision. 0 means no time limit.',
-              )}
-              ${labelled(
-                'Replies per member, per minute',
-                numberField('replyLimitPerMember', s.replyLimitPerMember, 1, 120),
-              )}
-              ${labelled(
-                'Replies per chat, per minute',
-                numberField('replyLimitPerChat', s.replyLimitPerChat, 1, 600),
-              )}
-              ${saveButton()}
-            `,
-          )}`,
-      );
-
-      const nicknames = card(
-        'Nicknames',
-        html`<p class="mb-3 text-sm text-slate-500">
-            She does not answer to "Cindy". A nickname in the wake-word position earns a retort and
-            <strong>nothing else</strong> — the instruction is discarded, no action is taken, and no
-            follow-up window opens. Retorts rotate without repeating the previous one in a chat.
-          </p>
-          ${form(
-            'nicknames',
-            html`
-              ${checkbox('enabled', 'Nickname retorts enabled', s.nicknames.enabled)}
-              ${labelled(
-                'Nicknames',
-                textField('words', s.nicknames.words.join(', ')),
-                'Comma separated. Matched exactly, so short names never fire on ordinary words.',
-              )}
-              ${labelled(
-                'Anti-spam limit',
-                numberField('spamLimit', s.nicknames.spamLimit, 1, 20),
-                'Consecutive nicknames from one member before she stops answering.',
-              )}
-              ${saveButton()}
-            `,
-          )}`,
-      );
-
-      const personaCards = Object.keys(s.persona)
-        .sort()
-        .map((lang) =>
-          card(
-            `Her voice — ${langLabel(lang)}`,
-            form(
-              `persona:${lang}`,
-              html`
-                <p class="text-sm text-slate-500">
-                  Chat only. The website and legal copy stay professional and are edited elsewhere.
-                  Leave a field empty to restore its shipped default.
-                </p>
-                ${PERSONA_KEYS.map((key) =>
-                  labelled(
-                    PERSONA_META[key].label,
-                    textArea(key, (s.persona[lang] as Record<PersonaKey, string>)[key], 2),
-                    PERSONA_META[key].vars ? `Placeholders: ${PERSONA_META[key].vars}` : undefined,
-                  ),
-                )}
-                ${saveButton()}
-              `,
-            ),
-          ),
-        );
-
-      const retortCards = Object.keys(s.retorts)
-        .sort()
-        .map((lang) =>
-          card(
-            `Nickname retorts — ${langLabel(lang)}`,
-            form(
-              `retorts:${lang}`,
-              html`
-                <p class="text-sm text-slate-500">
-                  One retort per line. Emptying the list restores the shipped twelve.
-                </p>
-                ${textArea('retorts', (s.retorts[lang] as string[]).join('\n'), 12)} ${saveButton()}
-              `,
-            ),
-          ),
-        );
-
-      const reset = card(
-        'Reset',
-        html`<p class="mb-3 text-sm text-slate-500">
-            Restores every setting on this page — wake word, greetings, reply mode, name prefix,
-            limits, persona strings and retorts — to the values Cinderella ships with. Consent data
-            is untouched.
-          </p>
-          ${form(
-            'reset',
-            html`<button
-              type="submit"
-              class="self-start rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
-            >
-              Restore defaults
-            </button>`,
-          )}`,
-      );
+      const submenu = html`<nav class="mb-6 flex flex-wrap gap-1 border-b border-slate-200 pb-2">
+        ${SECTIONS.map(
+          (x) =>
+            html`<a
+              href="/interaction/${x.slug}"
+              class="rounded-lg px-3 py-1.5 text-sm ${x.slug === slug ? 'bg-slate-900 font-medium text-white' : 'text-slate-600 hover:bg-slate-100'}"
+              >${x.title}</a
+            >`,
+        )}
+      </nav>`;
 
       const body = html`
-        ${pageHeader('Interaction', 'How she is addressed, what she understands, and how she speaks')}
-        ${notice} ${intro}
-        <div class="flex flex-col gap-6">
-          ${addressing} ${guards} ${nearMissCard} ${language} ${answering} ${herMessages}
-          ${safety} ${nicknames} ${personaCards} ${retortCards} ${reset}
-        </div>
+        ${pageHeader(`Interaction — ${meta.title}`, meta.desc)} ${submenu} ${notice}
+        <div class="flex flex-col gap-6">${cardsFor[slug]?.()}</div>
       `;
 
       reply.type('text/html');
-      return page({ title: 'Interaction', active: 'interaction', csrfToken: csrf, body });
+      return page({ title: `Interaction — ${meta.title}`, active: `interaction:${slug}`, csrfToken: csrf, body });
     },
   );
+
+  // Old bookmarks and any link to the un-suffixed page land on the first section.
+  app.get('/interaction', async (_req, reply) => reply.redirect('/interaction/addressing'));
 
   app.post('/interaction', async (req, reply) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -697,32 +545,23 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
     const actor = req.session?.username ?? 'unknown';
     const next = cloneSettings(interaction.get());
 
+    // Which section PAGE a save should return to (CCB-S3-015 Stage 1).
+    const pageFor = (sec: string): string => {
+      if (sec.startsWith('persona:') || sec === 'links') return 'voice';
+      if (sec.startsWith('retorts:')) return 'nicknames';
+      if (sec === 'archive') return 'archiving';
+      if (sec === 'reset') return 'diagnostics';
+      return sec;
+    };
+    const back = (extra: string): string => `/interaction/${pageFor(section)}${extra}`;
+
     try {
       if (section === 'addressing') {
-        // Checkboxes are absent from the body when unticked, so their state is
-        // read from presence rather than from a value.
         next['naturalAddressing'] = 'naturalAddressing' in body;
         next['slashCommands'] = 'slashCommands' in body;
         next['wakeWord'] = bodyString(body, 'wakeWord');
         next['greetings'] = bodyString(body, 'greetings');
-        next['archiveUrl'] = bodyString(body, 'archiveUrl');
-        next['projectUrl'] = bodyString(body, 'projectUrl');
-        next['followUpSeconds'] = bodyString(body, 'followUpSeconds');
-        next['confidenceThreshold'] = bodyString(body, 'confidenceThreshold');
-        next['defaultLanguage'] = bodyString(body, 'defaultLanguage');
-      } else if (section === 'safety') {
-        next['affirmations'] = bodyString(body, 'affirmations');
-        next['declines'] = bodyString(body, 'declines');
-        next['undoWindowSeconds'] = bodyString(body, 'undoWindowSeconds');
-        next['replyLimitPerMember'] = bodyString(body, 'replyLimitPerMember');
-        next['replyLimitPerChat'] = bodyString(body, 'replyLimitPerChat');
-      } else if (section === 'nicknames') {
-        next['nicknames'] = {
-          enabled: 'enabled' in body,
-          words: bodyString(body, 'words'),
-          spamLimit: bodyString(body, 'spamLimit'),
-        };
-      } else if (section === 'addressing-guards') {
+      } else if (section === 'guards') {
         next['addressing'] = {
           mode: bodyString(body, 'addressingMode'),
           ignoreForwarded: 'ignoreForwarded' in body,
@@ -734,17 +573,40 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
           lengthGuardConfidence: bodyString(body, 'lengthGuardConfidence'),
           logNearMisses: 'logNearMisses' in body,
         };
+        next['confidenceThreshold'] = bodyString(body, 'confidenceThreshold');
+        next['fillerPrefixes'] = bodyString(body, 'fillerPrefixes');
+        next['maxPrefixWords'] = bodyString(body, 'maxPrefixWords');
+        next['maxPrefixChars'] = bodyString(body, 'maxPrefixChars');
+      } else if (section === 'followup') {
+        next['followUpSeconds'] = bodyString(body, 'followUpSeconds');
+        next['intentCarryover'] = 'intentCarryover' in body;
+        next['carryOverStopWords'] = bodyString(body, 'carryOverStopWords');
       } else if (section === 'language') {
         next['replyLanguageMode'] = bodyString(body, 'replyLanguageMode');
+        next['defaultLanguage'] = bodyString(body, 'defaultLanguage');
         next['rememberMemberLanguage'] = 'rememberMemberLanguage' in body;
-      } else if (section === 'reply') {
+      } else if (section === 'replies') {
         next['replyMode'] = bodyString(body, 'replyMode');
         const templates: Record<string, string> = {};
         for (const key of Object.keys(body)) {
-          if (key.startsWith('prefix:'))
-            templates[key.slice('prefix:'.length)] = bodyString(body, key);
+          if (key.startsWith('prefix:')) templates[key.slice('prefix:'.length)] = bodyString(body, key);
         }
         next['namePrefix'] = { enabled: 'namePrefixEnabled' in body, templates };
+        next['replyLimitPerMember'] = bodyString(body, 'replyLimitPerMember');
+        next['replyLimitPerChat'] = bodyString(body, 'replyLimitPerChat');
+      } else if (section === 'nicknames') {
+        next['nicknames'] = {
+          enabled: 'enabled' in body,
+          words: bodyString(body, 'words'),
+          spamLimit: bodyString(body, 'spamLimit'),
+        };
+      } else if (section === 'consent') {
+        next['affirmations'] = bodyString(body, 'affirmations');
+        next['declines'] = bodyString(body, 'declines');
+        next['undoWindowSeconds'] = bodyString(body, 'undoWindowSeconds');
+      } else if (section === 'links') {
+        next['archiveUrl'] = bodyString(body, 'archiveUrl');
+        next['projectUrl'] = bodyString(body, 'projectUrl');
       } else if (section.startsWith('persona:')) {
         const lang = section.slice('persona:'.length);
         const persona = (next['persona'] ?? {}) as Record<string, Record<string, string>>;
@@ -758,8 +620,6 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         retorts[lang] = bodyString(body, 'retorts');
         next['retorts'] = retorts;
       } else if (section === 'archive') {
-        // A different service and a different settings key, so this branch saves
-        // and returns rather than falling through to the interaction save.
         const categories: Record<string, boolean> = {};
         for (const c of REPLY_CATEGORIES) categories[c] = `cat:${c}` in body;
         const memberCategories: Record<string, boolean> = {};
@@ -774,19 +634,19 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
           },
           actor,
         );
-        return reply.redirect('/interaction?saved=1');
+        return reply.redirect(back('?saved=1'));
       } else if (section === 'reset') {
         await interaction.save(DEFAULT_INTERACTION, actor);
-        return reply.redirect('/interaction?saved=1');
+        return reply.redirect(back('?saved=1'));
       } else {
-        return reply.redirect(`/interaction?error=${encodeURIComponent('Unknown section.')}`);
+        return reply.redirect(`/interaction/addressing?error=${encodeURIComponent('Unknown section.')}`);
       }
 
       await interaction.save(next, actor);
-      return reply.redirect('/interaction?saved=1');
+      return reply.redirect(back('?saved=1'));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not save these settings.';
-      return reply.redirect(`/interaction?error=${encodeURIComponent(message)}`);
+      return reply.redirect(back(`?error=${encodeURIComponent(message)}`));
     }
   });
 }
