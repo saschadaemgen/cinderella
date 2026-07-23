@@ -13,7 +13,7 @@ import { log } from '../log.js';
 import type { BotHandle } from '../bot/client.js';
 import type { ReceivedFile } from '../bot/files.js';
 import { parseConsentCommand, type ConsentCommand } from '../consent/commands.js';
-import { parseGroupMessage, type CapturedMessage } from './message.js';
+import { isPublicGroupChat, parseGroupMessage, type CapturedMessage } from './message.js';
 
 export interface CaptureHooks {
   /** Called for every captured group message (before any file is received). */
@@ -251,7 +251,9 @@ export function registerCapture(
     const byGroup = new Map<number, number[]>();
     for (const deletion of ev.chatItemDeletions) {
       const aci = deletion.deletedChatItem;
-      if (aci.chatInfo.type !== 'group') continue;
+      // CCB-S3-019: same gate as capture — a private support-scope deletion must
+      // not be routed into archive bookkeeping (it never had a public row anyway).
+      if (!isPublicGroupChat(aci.chatInfo)) continue;
       const groupInfo = aci.chatInfo.groupInfo;
       const ids = byGroup.get(groupInfo.groupId) ?? [];
       ids.push(aci.chatItem.meta.itemId);

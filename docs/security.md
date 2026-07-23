@@ -633,6 +633,37 @@ connect-src 'self'
 thumbnail were served from a CDN it would need a third-party img-src, and that absence is the proof
 it is local. `script-src` gains nothing: the player runs in its own iframe context.
 
+## 9h. Private support-scope messages are never captured (CCB-S3-019)
+
+A group member can open a private "Chat with admins" thread — a **member-support scope**. The
+SimpleX core delivers those items on the **same `newChatItems` event** as ordinary group messages,
+distinguished only by `ChatInfo.Group.groupChatScope` (present = private; absent = public;
+types.d.ts:978). The CCB-S3-016 audit flagged that the capture pipeline had no check for this: if a
+member who had opted in used that thread, their private conversation would have been captured and
+published — the one guarantee a private channel exists to give, and unrecoverable once read
+(revocation cannot unpublish what people have already seen).
+
+**The gate is a whitelist, not a blacklist.** `isPublicGroupChat(chatInfo)` in
+`src/capture/message.ts` returns true only when the item is POSITIVELY a public group chat —
+`type === 'group'` **and** `groupChatScope === undefined`. Everything else is excluded: a direct
+chat (which also satisfies CCB-S3-017 §2's direct-message exclusion), a support-scope item, and — by
+construction — any future scope this predicate does not recognise as public. **Fail closed:** a
+missing archive row is recoverable; a leaked private message is not.
+
+**It sits at the single unavoidable point.** `parseGroupMessage` is the one function every incoming
+item passes through (the `newChatItems` capture path and `chatItemUpdated` edits), and it calls the
+gate before persistence, before consent evaluation, before anything. The in-group deletion handler
+uses the same predicate. A new message type or plugin cannot route around it without going through
+`parseGroupMessage`, and the harness fails if it tries.
+
+**Enforcement is proven, not asserted.** `verify:support-scope` drives the real migrations, the real
+handler and the real publication view against PGlite: a support-scope item (from an opted-in member,
+so consent is not what excludes it) never reaches persistence, never lands in `messages`, and never
+appears in `published_messages`, while an ordinary message does. Removing the gate makes six of its
+checks fail. `scripts/scan-support-scope.ts` inspects stored `raw_json` for the discriminator to
+find (and `--remove` to delete) any item captured before the gate existed — reporting counts and
+ids, never the private content.
+
 ## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
 
 The `/embed/<id>` front is the one deliberately public surface. Its security rests on

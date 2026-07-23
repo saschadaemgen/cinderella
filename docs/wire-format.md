@@ -561,9 +561,12 @@ The command-menu surprise (§3f) came from exactly this gap, so it is called out
    overturns §4's "no private channel at all." Private onboarding, private status, and private
    moderation notices move from "impossible" to "possible pending one live test" (can a moderator
    *initiate*, or only reply?).
-2. **The capture pipeline is one check away from leaking support-scope messages.** Because they ride
-   the same `newChatItems` event, the `chatInfo.groupChatScope` exclusion (8a) is a prerequisite for
-   any support-scope work and a latent risk the moment a member opens "Chat with admins."
+2. **The capture pipeline was one check away from leaking support-scope messages — now closed
+   (CCB-S3-019).** Because they ride the same `newChatItems` event, an opted-in member's private
+   "Chat with admins" thread would have been captured and published. The `chatInfo.groupChatScope`
+   exclusion is now enforced by `isPublicGroupChat` in `parseGroupMessage` (the single capture gate),
+   fail-closed as a whitelist — see security.md §9h / D-059. It remains the prerequisite that makes
+   any *deliberate* support-scope work safe to build on.
 3. **Real moderation and membership tooling is already exposed** — accept/reject pending members,
    remove, role changes, block-for-all, and reading the roster with join times and pending status.
    The console currently exposes none of it; a moderation queue is a build, not a research problem.

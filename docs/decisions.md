@@ -13,6 +13,29 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-059 — Capture is a whitelist: only a public group message is ever archived
+
+**Status: IMPLEMENTED (CCB-S3-019, urgent security fix).**
+**Decision.** An incoming chat item is captured only when it is POSITIVELY a public group message —
+`chatInfo.type === 'group'` **and** `chatInfo.groupChatScope === undefined`. The gate,
+`isPublicGroupChat`, lives in `src/capture/message.ts` and is called by `parseGroupMessage`, the one
+function every incoming item passes through, before persistence and before consent. A member's
+private "Chat with admins" thread (member-support scope) arrives on the same `newChatItems` event as
+ordinary messages and is now excluded there; so is a direct chat (CCB-S3-017 §2), and so is any
+future scope the predicate does not recognise as public.
+**Rationale.** The CCB-S3-016 audit found the pipeline had no scope check, so a private conversation
+by an opted-in member would have been captured and published — the exact thing a private channel
+exists to prevent, and unrecoverable once read. A whitelist that fails closed is the durable rule: a
+missing archive row is a small, recoverable loss; a leaked private message is not. A blacklist of
+known-bad scopes would have to be extended for every new scope; a whitelist excludes the unknown by
+construction.
+**Evidence.** `src/capture/message.ts` (`isPublicGroupChat`, `parseGroupMessage`);
+`src/capture/handler.ts` (deletion path uses the same predicate); `scripts/verify-support-scope.ts`
+(fails if the gate is removed); `scripts/scan-support-scope.ts` (existing-data remediation);
+`docs/security.md` §9h.
+
+---
+
 ### D-037 — Symbols are resolved once, pinned in the database, and never silently re-resolved
 
 **Status: IMPLEMENTED (CCB-S3-004).**

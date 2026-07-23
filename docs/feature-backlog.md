@@ -311,10 +311,11 @@ The history below records the pre-CCB-S2-003 state.
       direct-contact surface), which is not in the repo. Keep the pairing fallback documented for the
       directMessages-off case. Stale-member rule recorded in wire-format section 8f. See D-058.
 - [ ] **Private per-member channel via the support scope (unblocked by the CCB-S3-016 audit).** The
-      SDK exposes it (wire-format §8a). Prerequisite before any build: capture must exclude
-      `chatInfo.groupChatScope` messages so nothing private is archived. Open question needing a
-      live test: can a moderator INITIATE, or only reply? Would enable private onboarding, private
-      status replies, and private moderation notices.
+      SDK exposes it (wire-format §8a). ~~Prerequisite before any build: capture must exclude
+      `chatInfo.groupChatScope` messages~~ — **done (CCB-S3-019):** capture is now a public-group-only
+      whitelist (`isPublicGroupChat`, security.md §9h / D-059), so nothing private is archived.
+      Remaining open question needing a live test: can a moderator INITIATE, or only reply? Would
+      enable private onboarding, private status replies, and private moderation notices.
 - [ ] **Moderation & membership console (exposed, unused).** accept/reject pending members, remove,
       role changes, block-for-all, a live roster — all in the SDK per §8b, none surfaced in the
       admin yet.

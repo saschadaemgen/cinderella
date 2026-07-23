@@ -128,11 +128,37 @@ function buildLinkPreview(msgContent: T.MsgContent): LinkPreview | undefined {
 }
 
 /**
+ * SECURITY GATE (CCB-S3-019): is this incoming chat item a PUBLIC group message —
+ * the only thing Cinderella is ever allowed to capture?
+ *
+ * A group chat item can arrive on a private per-member SUPPORT scope (the member's
+ * "Chat with admins" thread), delivered on the very same `newChatItems` event as
+ * ordinary group messages (CCB-S3-016 §8a). Capturing one would publish a private
+ * conversation to the public archive — the one thing a private channel exists to
+ * prevent, and unrecoverable once read. The reliable discriminator is
+ * `ChatInfo.Group.groupChatScope`: absent on a public group message, present (a
+ * `memberSupport` scope) on the private thread (types.d.ts:978).
+ *
+ * The durable rule — which also satisfies CCB-S3-017 §2's direct-chat exclusion —
+ * is a WHITELIST, not a blacklist: capture only when the item is POSITIVELY a
+ * plain public group chat. Direct/local/contact chats are not `group`; a scoped
+ * group item carries `groupChatScope`. Anything else, or anything ambiguous, is
+ * out. Fail CLOSED: a missing archive row is recoverable; a leaked private message
+ * is not. A future message type or scope that this predicate does not recognise as
+ * public is therefore excluded by construction, not by being added to a list.
+ */
+export function isPublicGroupChat(chatInfo: T.ChatInfo): chatInfo is T.ChatInfo.Group {
+  return chatInfo.type === 'group' && chatInfo.groupChatScope === undefined;
+}
+
+/**
  * Parses an incoming chat item into a CapturedMessage, or returns `null` if it
  * is not a capturable group message.
  *
- * Only *received group messages* are captured:
- *   - group chats (not direct/local),
+ * Only *received PUBLIC group messages* are captured:
+ *   - public group chats — NOT direct/local, and NOT a member-support scope
+ *     (CCB-S3-019); {@link isPublicGroupChat} is the single gate every incoming
+ *     item passes through (also used by the in-group deletion handler),
  *   - the `groupRcv` direction (a real member's message — never the bot's own
  *     sends, and never system events like "member joined"),
  *   - actual message content (`rcvMsgContent`), not group-event content.
@@ -140,7 +166,8 @@ function buildLinkPreview(msgContent: T.MsgContent): LinkPreview | undefined {
 export function parseGroupMessage(aChatItem: T.AChatItem): CapturedMessage | null {
   const { chatInfo, chatItem } = aChatItem;
 
-  if (chatInfo.type !== 'group') return null;
+  // CCB-S3-019: the private-scope gate, before persistence, consent, or anything.
+  if (!isPublicGroupChat(chatInfo)) return null;
   const groupInfo = chatInfo.groupInfo;
 
   const dir = chatItem.chatDir;
