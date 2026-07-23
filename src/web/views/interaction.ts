@@ -209,6 +209,10 @@ const PERSONA_META: Record<PersonaKey, { label: string; vars: string }> = {
   notUnderstood: { label: 'Not understood', vars: '' },
   undo: { label: 'Undo — done', vars: '' },
   undoNothing: { label: 'Undo — nothing to undo', vars: '' },
+  undoNotRevocation: {
+    label: 'Undo — a revocation cannot be undone',
+    vars: 'Shown when a member asks to undo taking their words back.',
+  },
   cancelled: { label: 'Confirmation declined', vars: '' },
   help: { label: 'Help', vars: '{wake}' },
   price: { label: 'Price answer', vars: '{amount} {base} {value} {quote}' },

@@ -30,7 +30,11 @@ import { status } from '../web/status.js';
 import type { Queryable } from '../db/pool.js';
 import { countPublishedMatching } from '../db/public-archive.js';
 import { memberArchiveCounts } from '../db/member-stats.js';
-import { undoLastConsentAction } from '../db/consent-actions.js';
+import {
+  lastUndoableAction,
+  undoLastConsentAction,
+  undoReducesExposure,
+} from '../db/consent-actions.js';
 import { applyConsentChange } from '../consent/apply.js';
 import type { CapturedMessage } from '../capture/message.js';
 import { detectAddress } from './addressing.js';
@@ -940,6 +944,20 @@ export class InteractionEngine {
       s.undoWindowSeconds > 0
         ? new Date(new Date(msg.sentAt).getTime() - s.undoWindowSeconds * 1000).toISOString()
         : null;
+
+    // A revocation is not undoable (CCB-S3-010 Addendum A). She says so rather
+    // than silently doing nothing — "nothing happened" and "that is the one thing
+    // I will not do" are very different things to a member who just changed their
+    // mind about something irreversible.
+    try {
+      const pending = await lastUndoableAction(this.deps.db, msg.senderMemberId, notBefore);
+      if (pending && !undoReducesExposure(pending.action)) {
+        await this.reply(msg, s, lang, 'undoNotRevocation', {}, { bypassLimit: true });
+        return true;
+      }
+    } catch {
+      // Fall through to the ordinary path; it cannot republish anything either.
+    }
 
     let undone = null;
     try {

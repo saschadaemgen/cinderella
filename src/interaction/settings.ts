@@ -45,6 +45,7 @@ export const PERSONA_KEYS = [
   'notUnderstood', // briefing §5
   'undo', // briefing §5
   'undoNothing', // nothing within the undo window
+  'undoNotRevocation', // CCB-S3-010 A — a revocation is not undoable, and why
   'cancelled', // confirmation declined
   'help', // HELP intent — {wake}
   'price', // PRICE — {amount} {base} {value} {quote}
@@ -77,6 +78,7 @@ export const PERSONA_CATEGORY: Record<PersonaKey, ReplyCategory> = {
   cancelled: 'consent',
   undo: 'consent',
   undoNothing: 'consent',
+  undoNotRevocation: 'consent',
   status: 'status',
   searchResult: 'search',
   notUnderstood: 'notUnderstood',
@@ -254,6 +256,10 @@ const PERSONA_EN: PersonaStrings = {
     'of yours?',
   undo: '↩️ Undone. It is as if I never heard it.',
   undoNothing: '↩️ There is nothing recent of yours for me to undo.',
+  undoNotRevocation:
+    '🌙 Taking your words back is the one thing I cannot undo. What is out of the light stays ' +
+    'out of it. Say *publish* whenever you want to begin again — from that moment on, never ' +
+    'from before.',
   cancelled: '🕯️ Then nothing is done. I shall wait until you are certain.',
   help:
     '🕯️ Say "{wake}, publish me" and your words join the public archive. Say ' +
@@ -303,6 +309,10 @@ const PERSONA_DE: PersonaStrings = {
     'was ich von dir bewahre?',
   undo: '↩️ Rückgängig. Es ist, als hätte ich es nie gehört.',
   undoNothing: '↩️ Da ist nichts Jüngeres von dir, was ich rückgängig machen könnte.',
+  undoNotRevocation:
+    '🌙 Das Zurücknehmen ist das Einzige, was ich nicht rückgängig machen kann. Was aus dem ' +
+    'Licht ist, bleibt draußen. Sag *publish*, wenn du neu beginnen willst — ab diesem Moment, ' +
+    'nie von vorher.',
   cancelled: '🕯️ Dann bleibt alles, wie es ist. Ich warte, bis du dir sicher bist.',
   help:
     '🕯️ Sag "{wake}, veröffentliche mich", und deine Worte kommen ins öffentliche Archiv. Sag ' +

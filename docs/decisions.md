@@ -1,6 +1,6 @@
 # Cinderella — Decision Log
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-011**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-010**._
 
 Standing record of the architectural and operational decisions taken across
 Seasons 1–2, newest first. Each entry states the decision, a one-line rationale, and
@@ -53,6 +53,30 @@ import — no change to the sidebar, the resolver, or the settings framework.
 `src/interaction/intent.ts` (`setActiveIntents`, `isActiveIntent`);
 `src/interaction/resolver.ts`; `src/interaction/rules.ts`; `src/web/views/plugins.ts`;
 `scripts/verify-price.ts` §1.
+
+---
+
+### D-053 — Undo may only reduce exposure, never increase it
+
+**Status: IMPLEMENTED (CCB-S3-010 Addendum A).**
+**Decision.** A consent action is undoable only if undoing it takes content OUT of public view.
+Expressed as a rule — `undoReducesExposure(action)` — rather than as a special case for one
+action, so any consent operation added later inherits it instead of being reasoned about again.
+Undoing an opt-in still works. Undoing a revocation is refused, and she says why rather than
+silently doing nothing.
+**Rationale.** `undoLastConsentAction` restored the prior `revoked_at`, so undoing a revocation
+cleared it and republished everything the member had just taken back, for the length of the undo
+window. That made "revocation is final" false — and it is precisely the sentence a member has to
+be able to rely on before they confirm something irreversible.
+**Why it costs nothing.** The undo window on a revocation protected a member from their own
+mistake using a hidden five-minute timer. CCB-S3-011 Part 2 replaces it with HIDE: a deliberate
+choice, reversible for as long as they like, and visible to them. Keeping both would have forced
+the copy to explain two overlapping safety nets, one of which nobody can see.
+**Evidence.** `src/db/consent-actions.ts` (`undoReducesExposure`, and the guard in
+`undoLastConsentAction`); `src/interaction/engine.ts` (the `undoNotRevocation` branch);
+`scripts/verify-consent.ts` — asserts that undoing an opt-in still works, that undoing a
+revocation is refused, that `revoked_at` is never cleared, and that nothing of that member's is
+published afterwards.
 
 ---
 

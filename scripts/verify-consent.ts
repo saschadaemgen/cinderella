@@ -161,13 +161,71 @@ async function main(): Promise<void> {
       parseConsentCommand('hello') === null,
   );
 
+  /* ── CCB-S3-010 Addendum A — undo may only reduce exposure ──────────── */
+
+  {
+    const { journalConsentAction, undoLastConsentAction, undoReducesExposure } = await import(
+      '../src/db/consent-actions.js'
+    );
+    const M = 'member-undo';
+
+    // THE PRINCIPLE, stated as a rule rather than as a case.
+    check('undo of an opt_in reduces exposure', undoReducesExposure('opt_in'));
+    check('undo of an opt_out would INCREASE it, and is refused', !undoReducesExposure('opt_out'));
+
+    // Opt in, then undo it: allowed, and it takes content OUT of public view.
+    await journalConsentAction(db, {
+      memberId: M,
+      action: 'opt_in',
+      source: 'natural',
+      at: '2026-01-01T10:00:00Z',
+      prior: { existed: false, optedInAt: null, revokedAt: null },
+    });
+    await recordOptIn(db, M, '2026-01-01T10:00:00Z');
+    const undoneIn = await undoLastConsentAction(db, M, '2026-01-01T10:01:00Z', null);
+    check('undoing an opt-in still works', undoneIn !== null);
+    const { rows: after } = await db.query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM consent WHERE member_id = $1 AND revoked_at IS NULL',
+      [M],
+    );
+    check('and leaves the member NOT publishing', after[0]?.n === 0);
+
+    // Opt in, revoke, then try to undo the revocation: refused.
+    await recordOptIn(db, M, '2026-01-01T11:00:00Z');
+    await journalConsentAction(db, {
+      memberId: M,
+      action: 'opt_out',
+      source: 'natural',
+      at: '2026-01-01T12:00:00Z',
+      prior: { existed: true, optedInAt: '2026-01-01T11:00:00Z', revokedAt: null },
+    });
+    await recordOptOut(db, M, '2026-01-01T12:00:00Z');
+
+    const undoneOut = await undoLastConsentAction(db, M, '2026-01-01T12:00:30Z', null);
+    check('undoing a REVOCATION is refused', undoneOut === null);
+    const { rows: still } = await db.query<{ revoked: string | null }>(
+      'SELECT revoked_at::text AS revoked FROM consent WHERE member_id = $1',
+      [M],
+    );
+    check(
+      'and revoked_at is NOT cleared — nothing returns to public view',
+      still[0]?.revoked !== null && still[0]?.revoked !== undefined,
+      String(still[0]?.revoked),
+    );
+    const { rows: pubAfter } = await db.query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM published_messages WHERE sender_member_id = $1',
+      [M],
+    );
+    check('no message of theirs is published after the refused undo', pubAfter[0]?.n === 0);
+  }
+
   await pg.close();
 
   console.log('');
   if (failures === 0) {
     console.log('ALL CHECKS PASSED ✓');
   } else {
-    console.log(`${failures} CHECK(S) FAILED ✗`);
+  console.log(`${failures} CHECK(S) FAILED ✗`);
     process.exit(1);
   }
 }

@@ -103,8 +103,39 @@ export async function journalConsentAction(
 }
 
 /**
+ * THE UNDO PRINCIPLE (CCB-S3-010 Addendum A).
+ *
+ * **Undo may only ever REDUCE exposure, never increase it.**
+ *
+ * Stated as a rule rather than as a special case for one action, so that any
+ * consent operation added later inherits it instead of being reasoned about
+ * again. Everything below asks this function; nothing decides for itself.
+ *
+ *   opt_in  → undoing it takes content OUT of public view. Safe. Allowed.
+ *   opt_out → undoing it puts content BACK into public view. Not allowed.
+ *
+ * The second case is why this exists. `undoLastConsentAction` restored the prior
+ * `revoked_at`, so undoing a revocation cleared it and republished everything a
+ * member had just taken back — for the length of the undo window. It made
+ * "revocation is final" false, and it is exactly the sentence a member needs to
+ * be able to rely on.
+ *
+ * Nothing is lost by removing it. The protection an undo window offered on a
+ * revocation is a five-minute hidden timer; CCB-S3-011 Part 2 replaces it with
+ * HIDE — a deliberate choice, reversible for as long as the member likes, and
+ * visible to them.
+ */
+export function undoReducesExposure(action: ConsentAction): boolean {
+  return action === 'opt_in';
+}
+
+/**
  * The member's most recent decision that has not already been reverted, or null.
  * `notBefore` bounds it to the undo window; pass null for no bound.
+ *
+ * Actions whose undo would INCREASE exposure are not returned at all — they are
+ * not "nothing to undo", they are not undoable, and the caller says so in her
+ * own words rather than silently doing nothing.
  */
 export async function lastUndoableAction(
   db: Queryable,
@@ -143,6 +174,10 @@ export async function undoLastConsentAction(
 ): Promise<ConsentActionRow | null> {
   const action = await lastUndoableAction(db, memberId, notBefore);
   if (!action) return null;
+  // The principle, enforced at the one place that writes. A caller that wants to
+  // know WHY nothing happened asks `lastUndoableAction` and tests the action
+  // itself — see `undoReducesExposure`.
+  if (!undoReducesExposure(action.action)) return null;
 
   if (action.prevExisted) {
     await db.query(`UPDATE consent SET opted_in_at = $2, revoked_at = $3 WHERE member_id = $1`, [
