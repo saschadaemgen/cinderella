@@ -272,6 +272,8 @@ Evidence:
 
 > Divergence, explicit: outline says a private per-member support channel is the mechanism; the code has **no private per-member channel at all**. Consent is entirely group-scoped, and even the consent confirmations are public group replies. Treat "member-support / private DM" as _planned / not yet implemented_.
 
+> **Updated by CCB-S3-016 (see §8a).** "No private channel" is true of the CODE, not the SDK: the member support scope IS exposed by `simplex-chat` 6.5.4 and is reachable by a group-only bot. It is still not *built*, but it is available — the capability audit in §8 is the corrective.
+
 **CCB-S3-002 inherits this constraint.** The briefing asks for personal answers (`STATUS`,
 undo detail) to be kept out of the public group "where a private channel exists". None does,
 so the rule's fallback applies: those answers are kept **short**. `STATUS` is a single line
@@ -414,6 +416,164 @@ The domain root is a public SSR site ([`src/web/site/`](../src/web/site/)), sepa
   (localStorage), injects the operator's analytics `<script src>`; the analytics origin is
   added to `script-src`/`connect-src`. With the banner off, nothing loads. Social share is
   script-free `<a>` links to each network's share endpoint (title + canonical URL params).
+
+## 8. SDK capability inventory (CCB-S3-016)
+
+Verified against **`simplex-chat` 6.5.4** and **`@simplex-chat/types` 0.8.0** — the versions in
+`package.json` and `node_modules`, read directly, not from memory or external docs. Each row is
+one of three states: **usable** (exposed by the TS SDK and reachable from Cinderella's group-only,
+`createAddress: false` posture), **core-only** (present in the chat core / command protocol but not
+surfaced by the TS wrapper — the class of gap that produced the command-menu surprise), or
+**absent**. "Enables" is what it would buy Cinderella, for planning — nothing here is built.
+
+Evidence paths are inside `node_modules/@simplex-chat/types/dist/` (`t/…` = `types.d.ts`,
+`e/…` = `events.d.ts`, `tj/…` = `types.js`) and `node_modules/simplex-chat/dist/` (`a/…` =
+`api.d.ts`, `aj/…` = `api.js`).
+
+### 8a. Priority answer — the member support scope IS reachable (contradicts §4's framing)
+
+**The member support scope ("Chat with admins", GC­S­Member­Support, ≥6.4.1) is exposed by the TS
+SDK at 6.5.4 and is a real private per-member channel.** §4 above says "there is no private
+per-member channel"; that is true of the *code as built* but not of the *SDK*, and this section is
+the correction. Cinderella can reach it without any contact address.
+
+Established, with evidence:
+
+- **Send into a member's support scope — USABLE.** `ChatRef` carries `chatScope?: GroupChatScope`
+  (`t:1032-1035`), and `GroupChatScope.MemberSupport` carries `groupMemberId_?` (`t:1659-1662`).
+  `apiSendMessages` / `apiSendTextMessage` accept a `ChatRef` (`a:198,203`) and pass it straight
+  through (`aj apiSendMessages`: `"chatType" in chat ? chat : …`). `ChatRef.cmdString` appends the
+  scope (`tj:66`), and for member support that serialises to **`(_support:<groupMemberId>)`**
+  (`tj:146`). So a send to `{ chatType:'group', chatId:G, chatScope:{ type:'memberSupport',
+  groupMemberId_:M } }` targets member M's private support chat. A send with no `groupMemberId_`
+  targets the moderators' shared support view.
+- **Receive from it — USABLE, via the ordinary stream.** A received item's `chatInfo` is
+  `ChatInfo.Group` which carries `groupChatScope?: GroupChatScopeInfo` (`t:977-978`), and
+  `GroupChatScopeInfo.MemberSupport` carries `groupMember_?` (`t:1672-1673`). There is **no
+  dedicated support event** — support messages arrive on the same `newChatItems` event as group
+  messages, distinguished only by `chatInfo.groupChatScope` being present.
+- **How capture tells them apart, and how to exclude them — CONCRETE.** `parseGroupMessage`
+  (`src/capture/message.ts`) today reads `chatInfo.groupInfo` and does **not** inspect
+  `groupChatScope`. So a support-scope message would today be captured and treated as an ordinary
+  group message — and could be published. The exclusion point is exact: **if
+  `aChatItem.chatInfo.type === 'group' && chatInfo.groupChatScope` is present, the item is
+  support-scoped and must never be archived or published.** This must be added before anything is
+  built on the scope.
+- **Which role — moderator is very likely sufficient, unverified at the boundary.** SimpleX shows
+  member support chats to admins/moderators; Cinderella is already a moderator. The TS types do not
+  encode the required role (role checks are core-enforced), so the exact minimum is a live-test
+  question, but nothing in the surface blocks a moderator.
+- **Initiate vs reply-only — UNRESOLVED, needs a live test.** The SDK lets you *construct* a send
+  to a specific member's support scope (`groupMemberId_`), so the wrapper does not restrict
+  initiation. Whether the **core** delivers a moderator-initiated *first* message to a member who
+  has not opened "Chat with admins" is not determinable from the TS types and must be tested live.
+  **This is the single most consequential open question in the audit**, because it decides whether
+  private *onboarding* is possible or whether the private channel is reply-only.
+- **Enumerating open support chats — USABLE.** `GroupMember.supportChat?: GroupSupportChat`
+  (`t:1805`) carries `unread`, `memberAttention`, `mentions`, `lastMsgFromMemberTs` (`t:1917-1923`).
+  Reading the member list (`apiListMembers`, `a:278`) tells you which members have an open support
+  chat and which are waiting, with no dedicated command.
+
+**Consequences.** If initiation works: private onboarding (a consent walk-through in DM), private
+`STATUS` replies (a member's counts kept out of the public group), and private moderation notices
+("your message was removed, here is why") all become possible — and CCB-S3-002's "keep personal
+answers short because everything is public" constraint could be relaxed *for opted-in members who
+have a support chat*. If it is reply-only, all of that is still possible but only after the member
+opens the support chat first. Either way, the capture-side exclusion above is a prerequisite so
+nothing private ever reaches the public archive.
+
+### 8b. Capability table
+
+| Capability | Status | Evidence | Enables |
+|---|---|---|---|
+| **Messaging** | | | |
+| Send text / image / video / voice / file / link | usable | `apiSendMessages` + `ComposedMessage{msgContent,fileSource}` (`a:198`, `t ComposedMessage`) | already used for her replies |
+| Formatting (single-delimiter markup, colour map) | usable | documented §3b, §3d | already used |
+| Edit her own message | usable | `apiUpdateChatItem` (`a:213`) | correct a wrong price/answer in place instead of re-sending |
+| Delete her own message | usable | `apiDeleteChatItems` with `CIDeleteMode` (`a:218`) | retract a mistaken reply |
+| Reply / quote | usable | `apiSendTextMessage(…, inReplyTo)` (`a:203`); already used | pairing answers to questions in-chat |
+| Forward | **core-only** | no `apiForward*` in the SDK; the core knows forwarding (error `invalidForward`, `t:890`) — reachable only by a raw `sendChatCmd` string | re-post an archived item; low priority |
+| **Reactions** | | | |
+| Add / remove an emoji reaction | usable | `apiChatItemReaction(chatType,chatId,itemId,add,reaction)` (`a:228`) | 👍 a member's message; a lightweight "seen/heard" ack |
+| Read reactions others add | usable, **not subscribed** | `chatItemReaction` event (`e ChatItemReaction{added,reaction}`) — Cinderella does not listen for it | react-to-react; sentiment/among-members signal |
+| Emoji set constrained? | core-enforced | `MsgReaction.Emoji{emoji:string}` (`t`) is an *unvalidated string* in the SDK; the core restricts to its known set and returns `MsgReaction.Unknown` otherwise | must send only known emoji; the SDK will not catch a bad one |
+| **Moderation** | | | |
+| Delete another member's message (for everyone) | usable | `apiDeleteMemberChatItem(groupId,itemIds)` (`a:223`) — already the moderation-takedown primitive | remove illegal/abuse content |
+| Delete for self vs for everyone | usable | `CIDeleteMode`: `broadcast` (everyone) vs `internal` (self) (`t:334`) | choose visibility of a takedown |
+| Delete several / all-from-one-member | usable | `apiDeleteChatItems` takes an id array; `apiRemoveMembers(…, withMessages:true)` (`a:268`) removes a member AND their messages | bulk cleanup; ban-and-purge |
+| **Member management** | | | |
+| Read member list, roles, join times | usable | `apiListMembers` → `GroupMember{memberRole,memberStatus,createdAt,supportChat}` (`a:278`) | a real member roster; detect who is pending |
+| Remove a member | usable | `apiRemoveMembers(groupId,ids,withMessages?)` (`a:268`) | eject a spammer |
+| Change a member's role | usable | `apiSetMembersRole(groupId,ids,role)` (`a:258`); roles: relay/observer/author/member/moderator/admin/owner (`t GroupMemberRole`) | promote a trusted member; demote |
+| Block a member for all (= mute) | usable | `apiBlockMembersForAll(groupId,ids,blocked)` (`a:263`) | silence without ejecting |
+| **Member admission (knocking)** | | | |
+| See pending members | usable | `apiListMembers` + status `pending_approval` / `pending_review` (`t GroupMemberStatus`) | a moderation queue |
+| Accept a pending member | usable | `apiAcceptMember(groupId,memberId,role)` (`a:253`) | admit after a check |
+| Reject a pending member | usable (via remove) | `apiRemoveMembers`; status `rejected` exists; no dedicated `apiRejectMember` in the SDK | decline an applicant |
+| Interact before admission | **core-only / untested** | a pending member surfaces as `newMemberPendingReview` (an in-band group event, `t:2505`); talking to them before admission would use the support scope — see 8a | private vetting before letting someone in |
+| Set knocking review criteria | usable (owner) | `GroupProfile.memberAdmission?: GroupMemberAdmission{review}` via `apiUpdateGroupProfile` (`a:288`) | require review to join |
+| **Group management** | | | |
+| Read / change group profile, description, welcome, preferences | usable (owner) | `apiUpdateGroupProfile(groupId,GroupProfile)` (`a:288`); `GroupProfile{description,groupPreferences,memberAdmission,publicGroup}` (`t`) | edit the welcome; set the command menu (§3f) via `groupPreferences.commands` |
+| Create / revoke a join link, set its role | usable (admin) | `apiCreateGroupLink` / `apiSetGroupLinkMemberRole` / `apiDeleteGroupLink` (`a:293,298,303`) | issue and rotate invite links |
+| Add a member by contact | usable but N/A | `apiAddMember(groupId,contactId,role)` (`a:243`) needs a *contact*; Cinderella has none (`createAddress:false`) | not useful without a contact surface |
+| **Profile** | | | |
+| Display name, image; propagation | usable | `apiUpdateProfile` (`a:414`); updates reach groups on the next group send (§2) | already used for the avatar |
+| Bot profile flag / command menu | usable, **not applicable** | `peerType:'bot'` + `preferences.commands`; direct-chat only — see §3f | dead surface for a group bot |
+| **Files** | | | |
+| Receive (download) a file | usable | `apiReceiveFile(fileId)` (`a:233`); XFTP behaviour per §Appendix; already used | media capture |
+| Send (upload) a file | usable | `ComposedMessage.fileSource` on `apiSendMessages` (`t`) | send a generated image/report |
+| Cancel a transfer | usable | `apiCancelFile(fileId)` (`a:238`) | abort a stuck receipt |
+
+### 8c. Events — the full set, and what she ignores
+
+The SDK can deliver every event in `ChatEvent` (`events.d.ts:2`). Cinderella subscribes to
+`newChatItems`, `chatItemUpdated`, `chatItemsDeleted`, `groupChatItemsDeleted`, `groupUpdated`,
+`userJoinedGroup`, and the file events (`rcvFileComplete/Error/Warning`). Notable events she does
+**not** listen to, and what each would enable:
+
+- `chatItemReaction` — a member reacted; enables reading reactions (8b).
+- `groupMemberUpdated`, `memberRole`, `memberBlockedForAll` — a member's profile/role/block
+  changed; enables keeping a live roster and reacting to moderation by others.
+- `deletedMember`, `leftMember` — someone left or was removed; enables tidy "member left" handling
+  and consent cleanup (their id is now gone — see §5).
+- `chatItemsStatusesUpdated` — delivery/read receipts; enables knowing a reply was seen.
+- `receivedGroupInvitation`, `sentGroupInvitation`, `groupLinkConnecting`, `joinedGroupMember` —
+  the join lifecycle; enables onboarding hooks.
+- `hostConnected` / `hostDisconnected` / `subscriptionStatus` — transport health; enables a real
+  connectivity indicator on the dashboard instead of inferring it.
+
+### 8d. Gaps: present in the core, not surfaced by the TS SDK
+
+The command-menu surprise (§3f) came from exactly this gap, so it is called out separately:
+
+- **Native command menu** — in the SDK types but a direct-chat affordance, unreachable for a
+  group-only bot (§3f). *Available-but-not-applicable.*
+- **Forwarding** — the core supports it (the `invalidForward` error exists) but there is no
+  `apiForwardChatItems` wrapper. Reachable only by composing a raw command string through
+  `sendChatCmd`. *Core-only.*
+- **Reject-a-member** as a first-class op — only remove/`rejected`-status; no `apiRejectMember`.
+- **Reaction emoji validation** — the allowed set lives in the core, not the SDK, so the wrapper
+  will happily send an emoji the core then rejects.
+
+### 8e. The findings that most change what Cinderella could become
+
+1. **A private per-member channel exists and is reachable** (8a). This is the headline, and it
+   overturns §4's "no private channel at all." Private onboarding, private status, and private
+   moderation notices move from "impossible" to "possible pending one live test" (can a moderator
+   *initiate*, or only reply?).
+2. **The capture pipeline is one check away from leaking support-scope messages.** Because they ride
+   the same `newChatItems` event, the `chatInfo.groupChatScope` exclusion (8a) is a prerequisite for
+   any support-scope work and a latent risk the moment a member opens "Chat with admins."
+3. **Real moderation and membership tooling is already exposed** — accept/reject pending members,
+   remove, role changes, block-for-all, and reading the roster with join times and pending status.
+   The console currently exposes none of it; a moderation queue is a build, not a research problem.
+4. **Reactions are a free, low-noise interaction primitive** she does not use — both sending
+   (a lightweight ack) and receiving (a `chatItemReaction` event she doesn't subscribe to).
+
+**Doc assumptions this audit contradicts:** §4's title and its line "the code has **no private
+per-member channel at all**" — correct about the code, wrong as a statement about what is possible;
+the member support scope is available in the SDK at the running version. §4 now carries a forward
+pointer to this section.
 
 ## Appendix: related file-transfer wire behaviour (context)
 

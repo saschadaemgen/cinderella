@@ -304,6 +304,16 @@ The history below records the pre-CCB-S2-003 state.
       + deep links) DONE. Stage 2 (two-column tile layout, per-tile save, sized inputs, collapsible
       help) and Stage 3 (dark-neon restyle reusing the website design system, cyan accent) still to
       build.
+- [ ] **Private per-member channel via the support scope (unblocked by the CCB-S3-016 audit).** The
+      SDK exposes it (wire-format §8a). Prerequisite before any build: capture must exclude
+      `chatInfo.groupChatScope` messages so nothing private is archived. Open question needing a
+      live test: can a moderator INITIATE, or only reply? Would enable private onboarding, private
+      status replies, and private moderation notices.
+- [ ] **Moderation & membership console (exposed, unused).** accept/reject pending members, remove,
+      role changes, block-for-all, a live roster — all in the SDK per §8b, none surfaced in the
+      admin yet.
+- [ ] **Reactions (exposed, unused).** Send an emoji ack; subscribe to the `chatItemReaction`
+      event to read reactions. §8b.
 - [ ] **More assets and a second provider** — only HEX, BTC, ETH, USD and EUR ship. Adding an
       asset is a registry line in the admin, no code change; adding a second provider is an
       implementation of the `PriceProvider` interface. A fallback chain across providers is

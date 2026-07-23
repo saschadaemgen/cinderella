@@ -56,6 +56,31 @@ import — no change to the sidebar, the resolver, or the settings framework.
 
 ---
 
+### D-057 — The member support scope is available in the SDK; initiation is the one open question
+
+**Status: FINDING (CCB-S3-016, research only — nothing built).**
+**Finding.** An evidence-based audit of `simplex-chat` 6.5.4 / `@simplex-chat/types` 0.8.0
+(`docs/wire-format.md` §8) establishes that the member support scope ("Chat with admins") IS
+exposed by the TS SDK and is reachable by Cinderella's group-only, `createAddress:false` bot: a
+send targets `#<group>(_support:<memberId>)` via `ChatRef.chatScope`, and a received support
+message arrives on the ordinary `newChatItems` event distinguished by `chatInfo.groupChatScope`.
+This corrects the earlier doc claim (§4) that there is "no private per-member channel at all" —
+true of the code, not of the SDK.
+**The open question.** Whether a moderator can INITIATE a support conversation, or only reply to
+one a member starts, is not determinable from the types and needs a live test. It decides whether
+private onboarding is possible or whether the channel is reply-only.
+**The prerequisite.** Support-scope messages ride the same event as group messages, so capture
+must exclude them (`chatInfo.groupChatScope` present) before anything is built, or a private
+message could reach the public archive. Not yet implemented.
+**Also found:** real moderation/membership tooling is already exposed (accept/reject/remove
+members, role changes, block-for-all, roster with join times and pending status), and reactions
+(send and the unsubscribed `chatItemReaction` event) are a free interaction primitive. Forwarding
+and the command menu are core-only / not-applicable gaps.
+**Evidence.** `docs/wire-format.md` §8 (full table, citations to the SDK sources at the running
+version).
+
+---
+
 ### D-056 — Video links are click-to-play, and their thumbnails are ours
 
 **Status: IMPLEMENTED (CCB-S3-014).**
