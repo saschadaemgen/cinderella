@@ -5,7 +5,7 @@
 # pull → install → build → migrate → restart → poll /healthz until it answers.
 # Prints exactly one result line (DEPLOY OK / DEPLOY FAILED) and exits non-zero on
 # failure, so it is safe to chain or run from a hook. The health check is a RETRY
-# LOOP with a deadline, not a fixed sleep — a fixed wait is a guess that is wrong on
+# LOOP with a deadline, not a fixed sleep - a fixed wait is a guess that is wrong on
 # a slow boot (the embedded SimpleX core binds the port a few seconds after start).
 #
 # Run as root on the VPS (systemctl + the 0600 env file need it):
@@ -43,7 +43,7 @@ echo "→ health: polling ${HEALTH_URL} for up to ${HEALTH_TIMEOUT}s"
 deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
 until body="$(curl -fsS --max-time 3 "$HEALTH_URL" 2>/dev/null)"; do
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "DEPLOY FAILED — ${SERVICE} did not answer ${HEALTH_URL} within ${HEALTH_TIMEOUT}s (rev ${rev})."
+    echo "DEPLOY FAILED - ${SERVICE} did not answer ${HEALTH_URL} within ${HEALTH_TIMEOUT}s (rev ${rev})."
     echo "--- last 25 log lines ---"
     journalctl -u "$SERVICE" -n 25 --no-pager || true
     exit 1
@@ -51,4 +51,4 @@ until body="$(curl -fsS --max-time 3 "$HEALTH_URL" 2>/dev/null)"; do
   sleep 2
 done
 
-echo "DEPLOY OK — ${SERVICE} live at rev ${rev}: ${body}"
+echo "DEPLOY OK - ${SERVICE} live at rev ${rev}: ${body}"
