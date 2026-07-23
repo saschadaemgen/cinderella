@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-009**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-010**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -586,6 +586,20 @@ her text, this handles the exchange as a unit.
 The consent mechanics themselves — `/publish`, bare `yes` confirmations, disambiguation answers —
 are captured but excluded by default, so the operator's switch has something real behind it
 rather than the messages being dropped at the door.
+
+## 9f. Undo may only reduce exposure (CCB-S3-010 Addendum A)
+
+Undo exists so a member can take back a mistake. It must never be able to take back a
+*protection*.
+
+`undoLastConsentAction` used to restore the exact prior consent state, which meant undoing a
+revocation cleared `revoked_at` and returned everything to public view for the length of the
+undo window. The rule is now explicit and lives in one predicate: an action is undoable only if
+undoing it REDUCES exposure. Opt-in qualifies; revocation does not.
+
+No path can now return revoked content to public view. Re-opting in is forward-only and restores
+nothing from before, and the refused undo leaves `revoked_at` untouched — both asserted in
+`verify:consent`.
 
 ## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
 
