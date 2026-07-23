@@ -301,9 +301,16 @@ The history below records the pre-CCB-S2-003 state.
 - [ ] **Video providers beyond YouTube.** The registry is ready; PeerTube, Vimeo and a direct video
       file are each one matcher. Not built.
 - [~] **Admin console restyle (CCB-S3-015).** Stage 1 (split Interaction into sub-sections + submenu
-      + deep links) DONE. Stage 2 (two-column tile layout, per-tile save, sized inputs, collapsible
-      help) and Stage 3 (dark-neon restyle reusing the website design system, cyan accent) still to
-      build.
+      + deep links) and Stage 3 (dark-neon restyle reusing the website design system, cyan accent;
+      D-060) DONE. Stage 2 (two-column tile layout, per-tile save, sized inputs, collapsible help)
+      still to build.
+- [~] **Durable job queue (CCB-S3-022).** Foundation DONE: Postgres-backed `jobs` table (migration
+      017), `SKIP LOCKED` claim, backoff + dead-letter, permanent-vs-transient, priority lanes +
+      concurrency limits + pausable bulk, idempotency, the worker, a placeholder analysis job, and
+      `verify:queue` (D-062, architecture §21). Phase 2 still to build: move media-derivative
+      generation and video-thumbnail fetching onto it (verify the archive still renders after each),
+      a resumable rate-limited backfill command, and the admin observability page (depth, throughput,
+      wait, dead letters + retry/cancel, stuck-job indicator, bulk pause toggle).
 - [ ] **Direct contact - member binding (CCB-S3-017 Addendum A) - investigated, not built, blocked.**
       The structural link EXISTS (`Contact.contactGroupMemberId`, `apiCreateMemberContact`) so the
       pairing-code protocol is unnecessary in the normal case - but it is gated on the group's

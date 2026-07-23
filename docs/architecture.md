@@ -594,6 +594,43 @@ the stored key set equals the full default (27 keys). The split also surfaced tw
 existed but had no form: the interjection stop-list (`carryOverStopWords`, Follow-up) and the filler
 prefixes (`fillerPrefixes`/`maxPrefixWords`/`maxPrefixChars`, Guards).
 
+## 21. Background jobs — the durable queue (CCB-S3-022)
+
+The foundation for categorisation and the media gallery, and the durable replacement for the ad-hoc
+background work that failed invisibly all season. **Implemented (this briefing): the queue engine,
+the worker, the placeholder analysis job, and the harness.** Planned next (same briefing, phase 2):
+moving media-derivative generation and video-thumbnail fetching onto it, a backfill command, and the
+admin observability page.
+
+**Schema (`migrations/017_jobs.sql`).** One `jobs` table: `type`, `payload` (jsonb), `state`
+(`queued`/`running`/`succeeded`/`dead`/`cancelled`), `lane` (`interactive`/`bulk`), `priority`,
+`attempts`/`max_attempts`, `run_at` (next scheduled time), `idempotency_key`, `last_error`,
+`locked_at`/`locked_by`, timestamps. A partial unique index on `(type, idempotency_key) WHERE state
+IN ('queued','running')` gives idempotency; a partial claim index on `(lane, priority DESC, run_at,
+id) WHERE state='queued'` keeps claiming cheap at any backlog depth.
+
+**Claiming (`src/queue/store.ts`).** `UPDATE jobs SET state='running', … WHERE id = (SELECT id …
+ORDER BY lane, priority DESC, run_at, id FOR UPDATE SKIP LOCKED LIMIT 1)`. `SKIP LOCKED` makes
+concurrent claims safe (no double-run, no blocking); the `lane` enum sorts `interactive` before
+`bulk`, so a member's reply is never delayed by a bulk backlog (measured: interactive claim latency
+is flat, ~1ms, with 2000 bulk jobs queued). `type = ANY($types)` lets the worker exclude types at
+their concurrency limit; a `bulkAllowed` flag pauses the bulk lane.
+
+**Failure handling.** A transient failure requeues with bounded exponential backoff; the last
+attempt, or a `PermanentJobError` (a file that is gone, an unusable payload), dead-letters
+immediately — kept for the operator, never deleted, never retried forever. The permanent-vs-transient
+distinction is reusable by CCB-S3-018 for expired file receipts.
+
+**Worker (`src/queue/worker.ts`).** One worker in the shared process (bot + web + queue). In-memory
+in-flight counts enforce exact per-type and global concurrency limits, so a backlog cannot exhaust
+CPU/memory/DB connections and take the whole process down. On start it requeues anything left running
+by the previous process (crash recovery); a periodic sweep requeues stale-locked jobs, which is also
+the stuck-job signal. A job that keeps crashing re-increments attempts and so eventually dead-letters.
+
+**Idempotency.** Enqueuing the same `(type, key)` while a live job exists returns that job rather than
+creating a second. Handlers are required to be idempotent so a repeat run (crash, restart, manual
+retry) produces the same result. Proven end to end in `verify:queue`.
+
 ## Appendix: divergences (code wins)
 
 Each divergence below is also noted inline at the relevant section. In every case the **code is treated as ground truth** and the conflicting outline/comment is flagged as stale.

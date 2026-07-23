@@ -65,15 +65,17 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   `interaction/`
   (wake word, intent resolver, dialogue engine, persona, help), `plugins/` (plugin
   registry + the Crypto Prices plugin: providers, pinning, cache), `price/`
-  (amount parsing + number formatting), `settings/`, `db/`,
-  `web/` (server, auth, session, views), `index.ts`.
+  (amount parsing + number formatting), `settings/`,
+  `queue/` (durable Postgres-backed background jobs: store, worker, registry, handlers),
+  `db/`, `web/` (server, auth, session, views), `index.ts`.
 - `migrations/` — 001 messages/links · 002 consent+views · 003 admin · 004
   moderation gate · 005 deletion provenance · 006 webauthn + TOTP · 007 admin
   sessions (persisted across restarts) · 008 content reports · 009 consent action
   journal (provenance + undo) · 010 asset mappings (pinned symbol→asset) · 011
   seeded major assets (locked pins) · 012 correct pins that predate the seed · 013
   her own messages (bot rows, mentions, the second publication branch) · 014
-  stripped media derivatives · 015 member instructions + exchange pairing · 016 video links.
+  stripped media derivatives · 015 member instructions + exchange pairing · 016 video links · 017 durable job queue
+  (state machine, `FOR UPDATE SKIP LOCKED` claim, backoff/dead-letter, idempotency).
   Runner: `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.

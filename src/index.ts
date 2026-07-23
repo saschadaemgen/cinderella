@@ -38,6 +38,7 @@ import { CRYPTO_PRICES_ID } from './plugins/crypto-prices/plugin.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
 import { registerAdminViews } from './web/views/index.js';
+import { startQueue, stopQueue } from './queue/index.js';
 
 function runConfigCheck(cfg: Config): void {
   log.info('Configuration loaded:', redactConfig(cfg));
@@ -311,6 +312,18 @@ async function runApp(cfg: Config): Promise<void> {
   });
 
   const botHandle = await startCaptureWorker(cfg, settings, interaction, plugins);
+
+  // The durable background-job worker (CCB-S3-022). Runs in this same process; a
+  // failure to start is logged and surfaced but must not take the archive, the
+  // admin console, or the bot down with it.
+  try {
+    await startQueue({ db: getPool() });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    status.error(`Job queue failed to start: ${message}`);
+    log.error(`Job queue failed to start: ${message}`);
+  }
+
   log.info('Cinderella is capturing to PostgreSQL (consent-gated). Press Ctrl+C to stop.');
 
   await new Promise<void>((resolve) => {
@@ -320,6 +333,7 @@ async function runApp(cfg: Config): Promise<void> {
       shuttingDown = true;
       log.info(`Received ${signal}, shutting down…`);
       void (async () => {
+        await stopQueue().catch(() => undefined);
         await adminServer.close().catch(() => undefined);
         if (botHandle) await botHandle.close().catch(() => undefined);
         await closePool().catch(() => undefined);

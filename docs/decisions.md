@@ -13,6 +13,31 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-062 — Background work runs on ONE durable Postgres-backed queue
+
+**Status: IMPLEMENTED (CCB-S3-022 foundation; media migration + backfill + admin page are the
+planned phase 2 of the same briefing).**
+**Decision.** All background work moves onto a single durable job queue (`migrations/017_jobs.sql`,
+`src/queue/`) instead of each piece inventing its own approach. Jobs live in Postgres, survive
+restarts, are claimed with `FOR UPDATE SKIP LOCKED`, retry with bounded exponential backoff, and
+dead-letter (kept, not deleted, not looped) on the final attempt or a `PermanentJobError`. Priority
+lanes (interactive before bulk), per-type and global concurrency limits, and a pausable bulk lane
+keep a backlog from starving a member's reply or taking the shared process down. Idempotency keys
+dedupe enqueues; handlers must be idempotent.
+**Rationale.** Every silent failure this season came from ad-hoc background work failing where nobody
+could see it: derivatives that could not be written, a remediation script run as root, in-memory logs
+that lost their evidence on restart. Categorisation and the gallery will be far heavier; building them
+on ad-hoc work would repeat every failure at scale. The queue is deliberately boring: one process,
+one database, no broker. `SKIP LOCKED` still lets a second process pull safely if it is ever needed.
+**Evidence.** `migrations/017_jobs.sql`; `src/queue/{types,store,registry,worker,index}.ts`,
+`src/queue/jobs/analysis.ts`; `scripts/verify-queue.ts` (durability, no-double-claim, backoff +
+dead-letter, permanent fail-fast, starvation with a 2000-job backlog, concurrency + pause,
+idempotency, observability); `docs/architecture.md` §21.
+**Not built here (deliberately).** No categorisation and no AI integration; the analysis job is a
+placeholder that records "no provider configured". The analysis interface waits for the AI briefing.
+
+---
+
 ### D-061 — No em-dashes in member-facing output, enforced; help reads as blocks
 
 **Status: IMPLEMENTED (CCB-S3-021).**
