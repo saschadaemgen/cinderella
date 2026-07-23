@@ -171,8 +171,9 @@ form.filters input[type=search]{flex:1;min-width:160px}
 form.filters button{padding:8px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
 form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .items{display:${layout === 'grid' ? 'grid' : 'flex'};${layout === 'grid' ? 'grid-template-columns:repeat(auto-fill,minmax(240px,1fr));' : 'flex-direction:column;'}gap:14px;list-style:none;padding:0;margin:0}
-.item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow-wrap:anywhere;transition:var(--tr)}
-.item .meta{display:flex;gap:8px;align-items:baseline;font-size:.8rem;color:var(--muted);margin-bottom:6px}
+.item{position:relative;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow-wrap:anywhere;transition:var(--tr)}
+/* Reserve the top-right corner for the always-visible red Report control. */
+.item .meta{display:flex;gap:8px;align-items:baseline;font-size:.8rem;color:var(--muted);margin-bottom:6px;padding-right:72px}
 .item .who{font-weight:600;color:var(--text-bright)}
 /* Hers, marked quietly (CCB-S3-007 §4): a reader should be able to tell whose
    voice a line is in without the archive turning into two visual systems. */
@@ -201,11 +202,14 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .item .video-notice{color:var(--muted);font-size:.8rem}
 .item .video-open{color:var(--accent);font-weight:600;text-decoration:none;font-size:.85rem;margin-left:auto}
 .item .video-open:hover{color:var(--accent-bright)}
-.item details.report{margin-top:8px}
-.item details.report>summary{cursor:pointer;list-style:none;color:var(--muted);font-size:.85rem}
+/* Always-visible red Report control, pinned top-right of every card (CCB-S3-014
+   Addendum B follow-up). The form opens as a dropdown panel beneath the pill so it
+   never pushes the card's content. No-JS <details>, so it works under the strict CSP. */
+.item details.report{position:absolute;top:12px;right:12px;margin:0;z-index:3}
+.item details.report>summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:4px;color:#fff;background:#dc2626;font-size:.72rem;font-weight:600;line-height:1;padding:4px 10px;border-radius:999px;opacity:.9;transition:var(--tr)}
+.item details.report>summary:hover,.item details.report[open]>summary{opacity:1;background:#b91c1c}
 .item details.report>summary::-webkit-details-marker{display:none}
-.item details.report[open]{padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card)}
-.item details.report form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.item details.report form{position:absolute;top:calc(100% + 6px);right:0;width:min(280px,78vw);display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);box-shadow:0 10px 30px rgba(0,0,0,.3)}
 .item details.report .rlabel{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted)}
 .item details.report select,.item details.report textarea{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-dark);color:var(--fg);font:inherit;font-size:.85rem}
 .item details.report button{align-self:flex-start;padding:6px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:.85rem}
@@ -684,7 +688,7 @@ export function renderEmbedPage(ctx: RenderContext): string {
  * then is the nocookie iframe written, with autoplay (user-initiated) and
  * fullscreen. It is the only place a third-party URL becomes live.
  */
-const VIDEO_SCRIPT = `(function(){document.addEventListener('click',function(e){var t=e.target;if(!t||!t.closest)return;var btn=t.closest('.video-play');if(!btn)return;var card=btn.closest('.video-card');if(!card)return;var src=card.getAttribute('data-embed');if(!src)return;e.preventDefault();var sep=src.indexOf('?')<0?'?':'&';var f=document.createElement('iframe');f.className='video-frame';f.src=src+sep+'autoplay=1';f.title=card.getAttribute('data-title')||'Video';f.setAttribute('allow','autoplay; fullscreen; encrypted-media; picture-in-picture');f.setAttribute('allowfullscreen','');f.setAttribute('referrerpolicy','no-referrer');btn.parentNode.replaceChild(f,btn);try{f.focus();}catch(_){}});})();`;
+const VIDEO_SCRIPT = `(function(){document.addEventListener('click',function(e){var t=e.target;if(!t||!t.closest)return;var btn=t.closest('.video-play');if(!btn)return;var card=btn.closest('.video-card');if(!card)return;var src=card.getAttribute('data-embed');if(!src)return;e.preventDefault();var sep=src.indexOf('?')<0?'?':'&';var f=document.createElement('iframe');f.className='video-frame';f.src=src+sep+'autoplay=1';f.title=card.getAttribute('data-title')||'Video';f.setAttribute('allow','autoplay; fullscreen; encrypted-media; picture-in-picture');f.setAttribute('allowfullscreen','');f.setAttribute('referrerpolicy','strict-origin-when-cross-origin');btn.parentNode.replaceChild(f,btn);try{f.focus();}catch(_){}});})();`;
 
 const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);document.addEventListener('loadedmetadata',h,true);document.addEventListener('fullscreenchange',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h();if(document.documentElement.classList.contains('embedded')){setTimeout(function(){if(document.documentElement.scrollHeight>window.innerHeight+4)document.documentElement.style.overflowY='auto';},1500);}})();`;
 

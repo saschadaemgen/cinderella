@@ -633,6 +633,17 @@ connect-src 'self'
 thumbnail were served from a CDN it would need a third-party img-src, and that absence is the proof
 it is local. `script-src` gains nothing: the player runs in its own iframe context.
 
+**The player needs the origin to validate (CCB-S3-014 Addendum B).** The embed page sends
+`Referrer-Policy: no-referrer`, and the player iframe originally carried `referrerpolicy="no-referrer"`
+too — so the nocookie player received nothing to validate the embedding page against and failed with
+**error 153**. The fix sets the iframe element's own policy to
+`referrerpolicy="strict-origin-when-cross-origin"`: the element-level policy overrides the document's
+for that one request, so the player gets the **origin only** (`https://cinderella.simplego.dev`),
+never the path. This does not weaken the privacy property — the iframe (and therefore the referrer)
+exists only after the click, which is the consent moment; the page's `no-referrer` default is
+unchanged for everything else. Verified in a browser: a video page makes zero third-party requests
+until the click, then the iframe is created with the corrected policy.
+
 ## 9h. Private support-scope messages are never captured (CCB-S3-019)
 
 A group member can open a private "Chat with admins" thread — a **member-support scope**. The
