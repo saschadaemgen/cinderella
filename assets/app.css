@@ -1,3 +1,124 @@
 /* Tailwind v4 entrypoint — compiled to public/assets/app.css by `npm run assets`.
-   Class detection scans the repo sources (git-ignored paths are excluded). */
+   Class detection scans the repo sources (git-ignored paths are excluded).
+
+   CCB-S3-015 Stage 3 — the admin console adopts the website's dark-neon design
+   system (cyan accent). Only the admin links this file (the public archive front
+   and the marketing site inline their own CSS), so re-theming here cannot touch a
+   public surface. The token values below MIRROR src/web/site/css.ts (ink/cyan/
+   slate) — keep them in sync with that source of truth. No inline styles and no
+   CSP change: the sheet is same-origin ('self') and the fonts are the site's own
+   self-hosted woff2 under default-src 'self'.
+
+   Tailwind v4 places its utilities in @layer; the un-layered rules below therefore
+   win the cascade over the numbered color utilities they remap, dark-theming every
+   existing view centrally without rewriting each one. */
 @import 'tailwindcss';
+
+/* ── Fonts (the site's self-hosted subsets; latin + latin-ext) ─────────────── */
+@font-face{font-family:'Source Sans 3';font-style:normal;font-weight:400 700;font-display:swap;src:url('/assets/site/fonts/source-sans-3-latin.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+2000-206F,U+2122,U+2212}
+@font-face{font-family:'Source Sans 3';font-style:normal;font-weight:400 700;font-display:swap;src:url('/assets/site/fonts/source-sans-3-latin-ext.woff2') format('woff2');unicode-range:U+0100-024F,U+1E00-1EFF,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400 500;font-display:swap;src:url('/assets/site/fonts/jetbrains-mono-latin.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+2000-206F,U+2122,U+2212}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400 500;font-display:swap;src:url('/assets/site/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');unicode-range:U+0100-024F,U+1E00-1EFF}
+
+/* ── Design tokens (mirror src/web/site/css.ts; cyan accent) ───────────────── */
+:root{
+  --ink-950:#050A12;--ink-900:#080D18;--ink-850:#0B1220;--ink-800:#0E1626;--ink-700:#131D31;--ink-600:#1A2740;
+  --cyan-200:#B5EBF2;--cyan-300:#8FE1EC;--cyan-400:#6DD0DF;--cyan-500:#45BDD1;--cyan-600:#2E9DB0;--cyan-700:#1F7A8A;
+  --slate-50:#E8EDF4;--slate-200:#CBD5E1;--slate-400:#94A3B8;--slate-500:#64748B;--slate-600:#475569;
+  --green-400:#4ADE9E;--amber-400:#E0B454;--red-400:#E5646E;
+
+  --text-body:var(--slate-200);--text-bright:var(--slate-50);--text-muted:var(--slate-400);--text-faint:var(--slate-500);
+  --text-accent:var(--cyan-300);--text-link:var(--cyan-300);--text-on-accent:#04121A;
+  --surface-page:var(--ink-950);--surface-raised:var(--ink-900);--surface-card:var(--ink-850);
+  --surface-field:rgba(5,10,18,.55);--surface-hover:rgba(203,213,225,.06);--surface-accent-weak:rgba(69,189,209,.10);
+  --border-hairline:rgba(69,189,209,.12);--border-strong:rgba(69,189,209,.30);--border-neutral:rgba(203,213,225,.10);
+  --primary:var(--cyan-500);--primary-hover:var(--cyan-400);--accent:var(--cyan-500);
+  --success:var(--green-400);--success-surface:rgba(74,222,158,.10);
+  --warning:var(--amber-400);--warning-surface:rgba(224,180,84,.10);
+  --danger:var(--red-400);--danger-surface:rgba(229,100,110,.10);
+  --info:var(--cyan-400);--info-surface:rgba(69,189,209,.10);
+  --focus-ring:0 0 0 3px rgba(69,189,209,.30);
+  --font-sans:'Source Sans 3',-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',monospace;
+  --radius-sm:8px;
+  color-scheme:dark;
+}
+
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+body{background:var(--surface-page);color:var(--text-body);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{color:var(--text-bright)}
+a{color:var(--text-link)}
+a:hover{color:var(--primary-hover)}
+code,kbd,pre,samp{font-family:var(--font-mono)}
+::selection{background:rgba(69,189,209,.3);color:var(--text-bright)}
+:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ── Surfaces ──────────────────────────────────────────────────────────────── */
+.bg-white{background-color:var(--surface-card)}
+.bg-slate-50{background-color:var(--surface-raised)}
+.bg-slate-100{background-color:var(--surface-page)}
+.bg-slate-200{background-color:var(--surface-hover)}
+.bg-slate-700{background-color:var(--ink-700)}
+.hover\:bg-slate-100:hover,.hover\:bg-slate-200:hover{background-color:var(--surface-hover)}
+
+/* Status tints (bg-50/100) → translucent token surfaces */
+.bg-red-50,.bg-red-100{background-color:var(--danger-surface)}
+.bg-emerald-50,.bg-emerald-100{background-color:var(--success-surface)}
+.bg-amber-50,.bg-amber-100{background-color:var(--warning-surface)}
+.bg-sky-100{background-color:var(--info-surface)}
+.hover\:bg-red-100:hover{background-color:rgba(229,100,110,.18)}
+.hover\:bg-emerald-100:hover{background-color:rgba(74,222,158,.18)}
+
+/* ── Text ──────────────────────────────────────────────────────────────────── */
+.text-white,.text-slate-900,.text-slate-800{color:var(--text-bright)}
+.text-slate-700,.text-slate-600{color:var(--text-body)}
+.text-slate-500{color:var(--text-muted)}
+.text-slate-400,.text-slate-300{color:var(--text-faint)}
+.text-red-800,.text-red-700,.text-red-600{color:var(--danger)}
+.text-emerald-800,.text-emerald-700,.text-emerald-600{color:var(--success)}
+.text-amber-900,.text-amber-800,.text-amber-700,.text-amber-500{color:var(--warning)}
+.text-sky-800,.text-sky-700{color:var(--info)}
+
+/* ── Borders ───────────────────────────────────────────────────────────────── */
+.border-slate-100{border-color:var(--border-hairline)}
+.border-slate-200,.border-slate-300{border-color:var(--border-neutral)}
+.border-slate-500,.border-slate-900{border-color:var(--border-strong)}
+.border-red-200,.border-red-300{border-color:rgba(229,100,110,.35)}
+.border-emerald-200,.border-emerald-300{border-color:rgba(74,222,158,.30)}
+.border-amber-200,.border-amber-300{border-color:rgba(224,180,84,.32)}
+.divide-slate-100>*+*,.divide-slate-200>*+*{border-color:var(--border-neutral)}
+
+/* Card/tile shadows read heavier on a light bg; soften on dark. */
+.shadow-sm{box-shadow:inset 0 1px 0 rgba(141,225,236,.05),0 1px 2px rgba(0,0,0,.4)}
+
+/* ── Form controls ─────────────────────────────────────────────────────────── */
+input:not([type=checkbox]):not([type=radio]):not([type=submit]),select,textarea{
+  background-color:var(--surface-field);color:var(--text-bright);border-color:var(--border-neutral)
+}
+input::placeholder,textarea::placeholder{color:var(--text-faint)}
+input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{
+  outline:none;border-color:var(--accent);box-shadow:var(--focus-ring)
+}
+select option{background:var(--ink-850);color:var(--text-bright)}
+input[type=checkbox],input[type=radio]{accent-color:var(--primary)}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+/* Primary action buttons carry `bg-slate-900 text-white` → cyan primary. */
+button.bg-slate-900,a.bg-slate-900[role=button]{
+  background-color:var(--primary);color:var(--text-on-accent);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 0 20px rgba(69,189,209,.18)
+}
+button.bg-slate-900:hover,button.bg-slate-900.text-white:hover{background-color:var(--primary-hover);color:var(--text-on-accent)}
+button.bg-slate-900,button.bg-slate-900 *{color:var(--text-on-accent)}
+
+/* The active nav link also uses `bg-slate-900 text-white` → accent-weak w/ a cyan bar. */
+aside a.bg-slate-900,header a.bg-slate-900{
+  background-color:var(--surface-accent-weak);color:var(--text-accent);
+  box-shadow:inset 2px 0 0 var(--accent)
+}
+
+/* Sidebar + mobile header chrome. */
+aside,header.border-b{background-color:var(--surface-raised)}

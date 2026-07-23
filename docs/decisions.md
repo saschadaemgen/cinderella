@@ -13,6 +13,30 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-060 — The admin console shares the website's dark-neon design system
+
+**Status: IMPLEMENTED (CCB-S3-015 Stage 3).**
+**Decision.** The admin console adopts the marketing site's dark-neon design system (cyan accent) by
+extending `assets/app.css`: the site design tokens (mirrored from `src/web/site/css.ts`), the site's
+self-hosted Source Sans 3 / JetBrains Mono woff2, a dark base, and un-layered CSS that remaps the
+light Tailwind color utilities (`bg-white`, `text-slate-*`, `bg-red-50`, …) to the dark palette. Only
+the admin links `app.css` — the public archive front and the marketing site inline their own CSS — so
+this cannot touch a public surface, and no per-view rewrite was needed. Primary actions render cyan,
+the active nav gets a cyan bar, form fields are dark with a cyan focus ring.
+**Rationale.** Tailwind v4 places its utilities in `@layer`, so plain un-layered overrides win the
+cascade over the numbered utilities without `!important` or editing every view — the smallest change
+that re-themes the whole console. Reusing the site tokens keeps one visual language across the
+product. No inline styles and no CSP change: the sheet is same-origin (`style-src 'self'`) and the
+fonts load under `default-src 'self'`.
+**Verified.** Browser computed-style checks on the login, dashboard, and settings pages: dark
+surfaces, cyan accent/active-nav/buttons, dark form fields, and ZERO light-background elements on a
+form-heavy page; `verify:admin` / `verify:admin-views` still green (function unchanged).
+**Evidence.** `assets/app.css`; `docs/architecture.md` §7.
+**Follow-up.** Stage 2 (two-column tiles + per-tile save) is next; the token system this establishes
+is what those tiles are built on.
+
+---
+
 ### D-059 — Capture is a whitelist: only a public group message is ever archived
 
 **Status: IMPLEMENTED (CCB-S3-019, urgent security fix).**
