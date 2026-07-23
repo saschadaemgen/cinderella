@@ -575,6 +575,66 @@ per-member channel at all**" — correct about the code, wrong as a statement ab
 the member support scope is available in the SDK at the running version. §4 now carries a forward
 pointer to this section.
 
+### 8f. Direct contact - group member: the structural link (CCB-S3-017 Addendum A)
+
+Question asked: to act on consent PRIVATELY, a direct contact must be tied to a specific group
+member without letting anyone impersonate anyone. Is there a structural link that does this, so no
+pairing-code protocol is needed? **Answer: yes, the link exists and is trustworthy - but it is
+CONDITIONAL, and nothing can be built on it until the direct-contact surface (CCB-S3-017 section 3,
+not in this repo) exists.**
+
+**The link, both directions, core-delivered:**
+- `GroupMember.memberContactId?: number` (`t:1799`) - the `contactId` of a direct contact created
+  from this member; present only when such a contact exists. `memberContactProfileId` (`t:1800`) is
+  always present and is NOT a "we have a channel" signal - it names a profile, not a contact.
+- `Contact.contactGroupMemberId?: number` (`t:1303`) - the back-pointer from a contact to the
+  `groupMemberId` it was minted from. `Contact.groupDirectInv` (`t:1305`) additionally records
+  `fromGroupId_` / `fromGroupMemberId_` / `fromGroupMemberConnId_` (`t:1678-1684`) - the originating
+  group, member, and the **member connection** the invite rode.
+- `newMemberContactReceivedInv` (`e:31`) delivers `{ contact, member, groupInfo }` TOGETHER at
+  creation - the core hands over the contact and its authenticated member record in one payload.
+
+**The bot can initiate it, without a public address.** `apiCreateMemberContact(groupId,
+groupMemberId)` (`a:425`) and `apiSendMemberContactInvitation(contactId, message?)` (`a:431`) let
+the bot open a direct contact to a member it already knows from the roster; `newMemberContactReceivedInv`
+is the inbound (member-initiated) path. Both ride the member's existing authenticated group
+connection (`fromGroupMemberConnId_`), so `createAddress:false` does not block it. Trust: the
+binding is set by our own core over that authenticated connection, not asserted by the remote party
+- a contact cannot claim to be a member it is not.
+
+**Why it is NOT unconditionally safe (adversarial finding).** The whole mechanism is gated on the
+group's `directMessages` preference (`FullGroupPreferences.directMessages`, `t:1626`). If a group
+has direct messages OFF - a legitimate posture for a public archive/announce group, which is the
+kind Cinderella runs - `apiCreateMemberContact` returns `directMessagesProhibited` (`t:909-913`) and
+the member-contact link never forms in either direction. In that configuration the structural link
+is unavailable, and the pairing-code fallback (issue privately, redeem publicly - CCB-S3-017
+Addendum A) OR the support scope (section 8a) would be the only private route. **So keep the pairing
+fallback documented; do not delete it on the strength of the types alone.**
+
+**Open questions that need a LIVE test before relying on this for consent:**
+1. `apiCreateMemberContact` in a `directMessages`-off group (expect a throw) - is there any other
+   link?
+2. Behaviour when the target member's `activeConn` is absent (no established connection).
+3. Whether a LATER inbound direct message reliably carries a populated `contactGroupMemberId` (not
+   only at the `newMemberContactReceivedInv` moment).
+4. Whether the member's client auto-accepts or requires manual acceptance of a bot-initiated invite.
+5. That the core authenticates member identity from the connection, not a remote-asserted id.
+
+**Binding lifecycle (as it would be, on top of section 3):** a "binding" is largely the SDK's own
+contact-member record; the only stored state needed is the resolution and its provenance. The
+STALE-MEMBER case is the sharp edge: `contactGroupMemberId` is the NUMERIC `groupMemberId`, while
+consent is keyed to the stable `memberId` string (section 5), and a member who leaves and rejoins
+returns with a NEW member record. So resolve numeric `groupMemberId` -> `memberId` at USE time,
+never cache it across a rejoin, and treat the binding as VOID when the member record is gone (do not
+carry a consent action against a member who no longer exists). Per-group is inherent (a member is
+group-scoped). Unbinding = delete the contact / operator revoke; audit both.
+
+**Blocked on CCB-S3-017 section 3.** None of this can be built now: there is no inbound direct path,
+no contact-lifecycle subscriptions, no `directRcv` parser (or its exclusion from the archive), no
+direct reply transport, and `applyConsentChange` is keyed by group `memberId` with no way to name a
+target from a contact identity (`src/consent/apply.ts`, `src/consent/commands.ts`). CCB-S3-017
+itself is not in this repo. The audit answers the design question; the build waits on section 3.
+
 ## Appendix: related file-transfer wire behaviour (context)
 
 Not in the outline, but relevant to the same "what SimpleX actually puts on the wire" theme and verified in `src/bot/files.ts`: SimpleX media is **preview-only until downloaded**. An incoming image/video/file carries only metadata plus a base64 thumbnail inline; the real bytes move over XFTP and must be _received_ per file (`files.ts:1-15`, `receive` at `files.ts:68`). Receipts are issued with `storeEncrypted: false` so the file lands readable for the media store, and `userApprovedRelays: true` (`files.ts:98`). XFTP relays expire files after ~48h, so late/failed receipts are surfaced rather than retried forever (`files.ts:8`). `rcvFileWarning` is treated as transient (the transfer continues), while `rcvFileError` is terminal (`files.ts:154-172`, and the subscription wiring at `src/bot/client.ts:116-120`).

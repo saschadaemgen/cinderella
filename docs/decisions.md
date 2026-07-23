@@ -56,6 +56,31 @@ import — no change to the sidebar, the resolver, or the settings framework.
 
 ---
 
+### D-058 - The contact-member structural link exists; the pairing protocol is the conditional fallback
+
+**Status: FINDING (CCB-S3-017 Addendum A, research only - nothing built; blocked on CCB-S3-017 section 3).**
+**Finding.** A direct contact created from a group member carries a trustworthy, core-set link back
+to that member - `Contact.contactGroupMemberId` <-> `GroupMember.memberContactId`, delivered together
+in `newMemberContactReceivedInv`, and openable by the bot itself via `apiCreateMemberContact`
+without a public address (wire-format section 8f). So per the Addendum's first instruction, the
+pairing-code protocol is UNNECESSARY in the normal case, and I built nothing.
+**The caveat that keeps the fallback alive.** Adversarial verification found the whole mechanism is
+gated on the group's `directMessages` preference; with direct messages OFF (a legitimate posture for
+a public archive group) the link never forms and `apiCreateMemberContact` is prohibited. In that
+configuration the pairing-code fallback or the support scope (section 8a) is the only private route
+- so the fallback is documented, not deleted, pending a live test.
+**Blocked.** The Addendum cannot be built: CCB-S3-017 section 3 (the direct-contact surface - inbound
+contact channel, lifecycle events, a directRcv parser + its archive exclusion, a direct reply
+transport, contact-member resolution) does not exist, and CCB-S3-017 itself is not in the repo. The
+consent write-path can record a first-person decision but nothing can deliver a private one to it.
+**Stale-member rule (recorded for the eventual build).** Resolve numeric `groupMemberId` -> stable
+`memberId` at use time, never cache across a rejoin, and void the binding when the member record is
+gone.
+**Evidence.** `docs/wire-format.md` section 8f (citations to the SDK sources at the running version);
+`src/consent/apply.ts`, `src/consent/commands.ts` (the group-keyed write path).
+
+---
+
 ### D-057 — The member support scope is available in the SDK; initiation is the one open question
 
 **Status: FINDING (CCB-S3-016, research only — nothing built).**

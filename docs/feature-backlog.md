@@ -304,6 +304,12 @@ The history below records the pre-CCB-S2-003 state.
       + deep links) DONE. Stage 2 (two-column tile layout, per-tile save, sized inputs, collapsible
       help) and Stage 3 (dark-neon restyle reusing the website design system, cyan accent) still to
       build.
+- [ ] **Direct contact - member binding (CCB-S3-017 Addendum A) - investigated, not built, blocked.**
+      The structural link EXISTS (`Contact.contactGroupMemberId`, `apiCreateMemberContact`) so the
+      pairing-code protocol is unnecessary in the normal case - but it is gated on the group's
+      `directMessages` preference, and the whole thing is blocked on CCB-S3-017 section 3 (the
+      direct-contact surface), which is not in the repo. Keep the pairing fallback documented for the
+      directMessages-off case. Stale-member rule recorded in wire-format section 8f. See D-058.
 - [ ] **Private per-member channel via the support scope (unblocked by the CCB-S3-016 audit).** The
       SDK exposes it (wire-format §8a). Prerequisite before any build: capture must exclude
       `chatInfo.groupChatScope` messages so nothing private is archived. Open question needing a
