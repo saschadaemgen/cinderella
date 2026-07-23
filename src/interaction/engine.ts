@@ -61,6 +61,8 @@ import type { PriceOutcome } from '../plugins/crypto-prices/service.js';
 import { formatAmount, formatValue, describeAge } from '../price/format.js';
 import { candidateMetric } from '../plugins/crypto-prices/service.js';
 import { formatOutbound, type OutboundReply } from './reply.js';
+import { activeIntentList } from './intent.js';
+import { buildHelpReply, buildHelpTopic, parseHelpTopic, type HelpLang } from './help.js';
 
 export interface InteractionDeps {
   db: Queryable;
@@ -264,6 +266,21 @@ export class InteractionEngine {
     // commands OFF — a toggle that silently only half-applies is worse than no
     // toggle. Addressing her by name (`Cinderella /publish`) is unaffected: such
     // a message does not start with the slash.
+    // `/help` is the one exception (CCB-S3-010 §2a): it is not a consent command,
+    // it has no slash handler, and a slash is itself an explicit address — so it
+    // is answered here rather than swallowed by the guard below. The wake word is
+    // not required, exactly as it is not for `/publish`. Matched as its own word
+    // so `/helpdesk` is not caught.
+    if (/^\/help(?:\s+\S.*)?$/i.test(msg.text.trim())) {
+      this.handledCategory = 'help';
+      await this.answerHelp(
+        msg,
+        s,
+        this.replyLanguage(msg, s, msg.text, undefined, this.now()),
+        msg.text.trim(),
+      );
+      return true;
+    }
     if (msg.text.trimStart().startsWith('/')) return false;
 
     const now = this.now();
@@ -476,6 +493,15 @@ export class InteractionEngine {
       this.state.clearPending(msg.groupId, msg.senderMemberId);
     }
 
+    // A message that literally begins with "help"/"hilfe" is a help request
+    // (CCB-S3-010 §2a). It has to be forced here because "help consent" and
+    // "help prices" otherwise resolve to PRICE — "help" reads as an asset and the
+    // two-word shape scores above HELP. Only when she was explicitly addressed,
+    // so a follow-up fragment is never hijacked.
+    if (explicit && result.intent !== 'HELP' && /^(?:help|hilfe)\b/i.test(instruction.trim())) {
+      result = { intent: 'HELP', confidence: 1, slots: {}, lang };
+    }
+
     // ONE place decides what kind of message this was for the archive
     // (CCB-S3-009), keyed off the settled intent so a new intent has to be
     // classified here rather than defaulting into a category by accident.
@@ -542,7 +568,7 @@ export class InteractionEngine {
       }
 
       case 'HELP':
-        await this.reply(msg, s, lang, 'help', { wake: s.wakeWord });
+        await this.answerHelp(msg, s, lang, instruction);
         return true;
 
       case 'UNDO':
@@ -893,6 +919,57 @@ export class InteractionEngine {
     }
     // Answer the original question now that the ambiguity is settled.
     return this.answerPrice(msg, s, lang, { base: choice.symbol }, now);
+  }
+
+  /**
+   * The help reply (CCB-S3-010 Part 2). Generated from the ACTIVE intent catalog
+   * so it lists only what is enabled, plus optional `help <topic>` detail. It is
+   * built rather than templated, so it cannot go through {@link reply}'s persona
+   * lookup — {@link replyBody} sends the finished text with the `help` category.
+   */
+  private async answerHelp(
+    msg: CapturedMessage,
+    s: InteractionSettings,
+    lang: string,
+    instruction?: string,
+  ): Promise<void> {
+    const helpLang: HelpLang = lang === 'de' ? 'de' : 'en';
+    const topic = instruction ? parseHelpTopic(instruction) : null;
+    const body = topic
+      ? buildHelpTopic(topic, s.wakeWord, helpLang)
+      : buildHelpReply({
+          intents: activeIntentList(),
+          wake: s.wakeWord,
+          lang: helpLang,
+          links: [s.archiveUrl, s.projectUrl].filter((u) => u),
+        });
+    await this.replyBody(msg, s, body);
+  }
+
+  /**
+   * Sends an ALREADY-BUILT body (no persona lookup), archived as `help`. Mirrors
+   * {@link reply}'s send, minus the templating, for replies assembled in code.
+   */
+  private async replyBody(
+    msg: CapturedMessage,
+    s: InteractionSettings,
+    body: string,
+  ): Promise<void> {
+    const out = formatOutbound(body, {
+      mode: s.replyMode,
+      prefixTemplate: this.prefixTemplate(s, this.replyLanguage(msg, s, msg.text, undefined, this.now())),
+      displayName: msg.senderDisplayName,
+      allowQuote: true,
+    });
+    const mentions: ReplyMention[] = out.prefixName
+      ? [{ displayName: out.prefixName, memberId: msg.senderMemberId }]
+      : [];
+    await this.sendReply(msg, s, out, {}, {
+      category: 'help',
+      lang: this.replyLanguage(msg, s, msg.text, undefined, this.now()),
+      mentions,
+      replyTo: { groupId: msg.groupId, itemId: msg.itemId },
+    });
   }
 
   /* ── Actions ───────────────────────────────────────────────────────────── */

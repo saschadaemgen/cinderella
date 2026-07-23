@@ -1,6 +1,6 @@
 # Cinderella — Feature Backlog
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-009**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-010**._
 
 Cinderella's living record of what is built, what is scoped for Season 2, and what is
 waiting on the operator. **The code is the source of truth.** Every "Done" item below
@@ -288,6 +288,13 @@ The history below records the pre-CCB-S2-003 state.
 - [ ] **Existing exchanges cannot be repaired.** The questions asked before this shipped were
       never captured, so the answers already in the archive stay unpaired. Nothing can recover a
       message that was never stored.
+- [x] **Help and consent explanation (CCB-S3-010)** — full help generated from the active catalog,
+      `help <topic>` detail, extended vocabulary, `/help`; consent prompts, welcome and help state
+      the three properties (forward-only, public-until-revoked, final) in EN and DE.
+- [ ] **Native command menu (CCB-S3-010 §2c) — investigated, not adopted.** The SDK exposes it, but
+      it renders only in a 1:1 chat with the bot, and Cinderella has no contact address. A
+      `buildCommandMenu` producer over the active catalog is ready if she is ever given a direct
+      surface. See `docs/wire-format.md` §3f.
 - [ ] **More assets and a second provider** — only HEX, BTC, ETH, USD and EUR ship. Adding an
       asset is a registry line in the admin, no code change; adding a second provider is an
       implementation of the `PriceProvider` interface. A fallback chain across providers is

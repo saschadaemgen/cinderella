@@ -702,7 +702,7 @@ async function main(): Promise<void> {
   check(
     'a blanked persona string fell back to its shipped default, never to empty',
     (iaPersona.rows[0]?.value.persona['en']?.publishConfirm ?? '').includes(
-      'carried into the light',
+      'carry your words into the light',
     ),
   );
 

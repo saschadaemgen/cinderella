@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-009**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-010**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -554,6 +554,20 @@ the answer on the next read.
 
 The public front marks the pairing explicitly with an "in reply" link rather than leaving a
 reader to infer it from timestamps.
+
+## 18. Help and consent copy (CCB-S3-010)
+
+The help reply (`src/interaction/help.ts`) is generated from `activeIntentList()`, so the
+capability list reflects what is enabled, with `help <topic>` detail for consent and prices. `/help`
+is answered directly (a slash is an explicit address), and an instruction beginning with "help"
+is forced to HELP because it otherwise loses to a PRICE reading.
+
+The consent prompts, welcome message and help all state the three properties — forward-only,
+public-until-revoked, revocation-final — in EN and DE. They are written to today's behaviour; a
+later briefing that adds hide/delete will revise the finality wording.
+
+The native SimpleX command menu was investigated (see `docs/wire-format.md` §3f): present in the
+SDK, but a direct-conversation feature that does not apply to a group bot with no contact address.
 
 ## Appendix: divergences (code wins)
 

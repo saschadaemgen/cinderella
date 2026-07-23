@@ -56,6 +56,42 @@ import — no change to the sidebar, the resolver, or the settings framework.
 
 ---
 
+### D-054 — Help is generated from the active catalog; the command menu is not applicable
+
+**Status: IMPLEMENTED (CCB-S3-010 Part 2).**
+**Decision.** The help reply is built from `activeIntentList()`, so it lists only enabled
+capabilities: a disabled plugin stops advertising itself and a new one appears with no copy
+change. `help consent` and `help prices` give topic detail. The native SimpleX command menu was
+investigated and NOT adopted — it is a direct-conversation affordance and Cinderella has no
+contact address, so the menu would render on a surface no member reaches. A `buildCommandMenu`
+producer exists over the same catalog, ready if a direct surface is ever added.
+**Rationale.** Help is the first thing anyone tries and the one message that must be true about
+what she can do now. A static list drifts the moment anything is toggled. An instruction that
+begins with "help"/"hilfe" is forced to HELP in the engine, because "help consent" otherwise
+resolves to a PRICE lookup ("help" reads as an asset) and beats HELP on score.
+**Evidence.** `src/interaction/help.ts`; `src/interaction/engine.ts` (the help-lead override,
+`/help` slash, `answerHelp`); `scripts/verify-interaction.ts` §19 — every listed phrasing, the
+catalog-driven list, and the disabled-plugin case; `docs/wire-format.md` §3f for the menu finding.
+
+---
+
+### D-055 — Consent copy states forward-only, public-until-revoked, and final, before confirming
+
+**Status: IMPLEMENTED (CCB-S3-010 Part 1, and Addendum A).**
+**Decision.** The publish prompt states all three properties before the member says yes; the
+unpublish prompt warns it cannot be undone; the welcome message carries the same three; help
+repeats them. All in EN and DE, admin-editable, single-delimiter markup. Written to TODAY's
+truth — revocation is final — deliberately NOT mentioning hide or restore, which a later briefing
+introduces and which would make the copy false now.
+**Rationale.** §1a established that publication is derived and revocation was made final by
+Addendum A (undo may only reduce exposure). Property 3 is the one members do not expect and can
+regret, so it is stated before they confirm, not after. The suggested wording was corrected
+against the verified behaviour rather than copied.
+**Evidence.** `src/interaction/settings.ts` (`publishConfirm`, `unpublishConfirm`, `published`,
+EN+DE); `src/consent/commands.ts` (`WELCOME_MESSAGE`); `scripts/verify-interaction.ts` §19.
+
+---
+
 ### D-053 — Undo may only reduce exposure, never increase it
 
 **Status: IMPLEMENTED (CCB-S3-010 Addendum A).**

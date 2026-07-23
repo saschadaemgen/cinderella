@@ -194,6 +194,13 @@ export interface InteractionSettings {
   slashCommands: boolean;
   /** The wake word — her name. Renaming her is a supported deployment choice. */
   wakeWord: string;
+  /**
+   * "Learn more" links shown at the foot of the help reply (CCB-S3-010 §2b):
+   * the public archive and the project. Empty strings are omitted, so the line
+   * appears only when there is somewhere to point.
+   */
+  archiveUrl: string;
+  projectUrl: string;
   /** Optional greeting prefixes stripped before the wake word. */
   greetings: string[];
   /**
@@ -233,13 +240,16 @@ export interface InteractionSettings {
 
 const PERSONA_EN: PersonaStrings = {
   publishConfirm:
-    '🕯️ You would like your words carried into the light? Say *yes* and it is done. ' +
-    'Only what you speak from this moment on, and you may take it back whenever you wish.',
+    '🕯️ Shall I carry your words into the light? Say *yes* and it is done. Only what you say ' +
+    'from this moment on, never anything from before. It stays public until you take it back — ' +
+    'and taking it back is final, there is no bringing it back after.',
   published:
-    '✨ Done. Your words now shine in the public archive. Say the word and I will hide them again.',
+    '✨ Done. From now on your words shine in the public archive. Say *{wake}, unpublish me* ' +
+    'whenever you want to take them back.',
   unpublishConfirm:
-    '🌙 You would like your words to step back into the dark? Say *yes* and they leave the ' +
-    'archive at once.',
+    '🌙 This takes back everything you have published, all at once, and it cannot be undone. ' +
+    'Opting in again later starts fresh from that moment — it will not bring the old words back. ' +
+    'Say *yes* to confirm.',
   unpublished:
     '🌙 Back into the dark they go. Your words are out of the archive, and nothing new will ' +
     'follow them there.',
@@ -284,14 +294,16 @@ const PERSONA_EN: PersonaStrings = {
 
 const PERSONA_DE: PersonaStrings = {
   publishConfirm:
-    '🕯️ Du möchtest, dass ich deine Worte ans Licht trage? Sag *ja*, und es ist getan. ' +
-    'Nur das, was du ab jetzt sprichst, und du kannst es jederzeit zurücknehmen.',
+    '🕯️ Soll ich deine Worte ans Licht tragen? Sag *ja*, und es ist getan. Nur das, was du ab ' +
+    'jetzt sagst, nie etwas von vorher. Es bleibt öffentlich, bis du es zurücknimmst — und das ' +
+    'Zurücknehmen ist endgültig, danach gibt es kein Zurückholen.',
   published:
-    '✨ Erledigt. Deine Worte leuchten nun im öffentlichen Archiv. Ein Wort von dir, und ich ' +
-    'verberge sie wieder.',
+    '✨ Erledigt. Von nun an leuchten deine Worte im öffentlichen Archiv. Sag *{wake}, widerrufe ' +
+    'das*, wann immer du sie zurücknehmen willst.',
   unpublishConfirm:
-    '🌙 Du möchtest, dass deine Worte zurück ins Dunkel treten? Sag *ja*, und sie verlassen ' +
-    'das Archiv sofort.',
+    '🌙 Das nimmt alles zurück, was du veröffentlicht hast, auf einmal, und es lässt sich nicht ' +
+    'rückgängig machen. Ein späteres erneutes Opt-in beginnt von diesem Moment an neu — es holt ' +
+    'die alten Worte nicht zurück. Sag *ja* zum Bestätigen.',
   unpublished:
     '🌙 Zurück ins Dunkel damit. Deine Worte sind aus dem Archiv, und nichts Neues folgt ihnen ' +
     'dorthin.',
@@ -394,6 +406,8 @@ export const DEFAULT_INTERACTION: InteractionSettings = {
   naturalAddressing: true,
   slashCommands: true,
   wakeWord: 'Cinderella',
+  archiveUrl: '',
+  projectUrl: '',
   greetings: [
     'hi',
     'hey',
@@ -504,6 +518,17 @@ function num(v: unknown, min: number, max: number, d: number): number {
   const n = parseNumeric(v, (s) => Number.parseFloat(s));
   if (!Number.isFinite(n)) return d;
   return Math.min(max, Math.max(min, n));
+}
+
+/** An https URL, trimmed, or '' — the help footer never renders a bad link. */
+function httpsOrEmpty(v: string): string {
+  const t = v.trim();
+  if (!t) return '';
+  try {
+    return new URL(t).protocol === 'https:' ? t : '';
+  } catch {
+    return '';
+  }
 }
 
 function str(v: unknown, d: string, maxLen: number): string {
@@ -685,6 +710,8 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
     naturalAddressing: bool(o['naturalAddressing'], d.naturalAddressing),
     slashCommands: bool(o['slashCommands'], d.slashCommands),
     wakeWord,
+    archiveUrl: httpsOrEmpty(str(o['archiveUrl'], d.archiveUrl, 200)),
+    projectUrl: httpsOrEmpty(str(o['projectUrl'], d.projectUrl, 200)),
     greetings:
       'greetings' in o ? parseList(o['greetings'], { max: 60, maxLen: 40 }) : [...d.greetings],
     fillerPrefixes:

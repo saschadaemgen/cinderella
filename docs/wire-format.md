@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-007**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-010**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -221,6 +221,34 @@ are traceable the same way everyone else's are, and an in-group deletion of one 
 messages reaches it through the ordinary deletion events, which are not direction-filtered.
 
 A send returns an ARRAY, and capture iterates it: each item is its own `group_msg_id`.
+
+## 3f. Native bot command menu — available in the SDK, not applicable to a group bot (CCB-S3-010 §2c)
+
+`simplex-chat` 6.5.4 DOES expose the command-menu capability the Rust bot uses. Verified in the
+type and SDK sources, not assumed:
+
+- `T.ChatBotCommand` = `Command { keyword, label, params? }` | `Menu { label, commands[] }` — a flat
+  command or a submenu, exactly the Rust shape.
+- It is registered as a PROFILE PREFERENCE: `bot.run({ options: { commands } })` writes
+  `profile.preferences.commands` and marks the profile `peerType: "bot"` (`bot.js` `mkBotProfile`).
+  Cinderella already runs `useBotProfile: true` with `commands: []`, so it is one option away.
+- Reception is plain text: `util.ciBotCommand` matches `/keyword params` with a regex. The menu is a
+  CLIENT-SIDE compose affordance — a client reading a bot contact's `preferences.commands` renders a
+  menu and sends `/keyword` as ordinary text.
+
+**Why it is not in use.** The menu is a DIRECT-CONVERSATION feature: it renders in the compose bar of
+a 1:1 chat with the bot. Cinderella runs `createAddress: false` — she has no contact address, and
+members interact with her only IN THE GROUP, where there is no per-bot compose menu. Registering
+commands on her profile would set a menu no member could reach. `commands` also exists on
+`GroupPreferences`, but that is set by the group owner via `apiUpdateGroupProfile`; Cinderella is a
+member, and changing a neighbour-owned group's profile is exactly the additive-only line the deploy
+rules draw.
+
+**What was built instead.** `buildCommandMenu()` in `src/interaction/help.ts` produces
+`ChatBotCommand[]` from the SAME active catalog as the text help. It is not wired to a live surface,
+but if Cinderella is ever given a direct-chat surface, enabling the menu is one line —
+`options.commands: buildCommandMenu(activeIntentList())` — and it already reflects exactly what is
+enabled. The text help is the surface members actually have.
 
 ## 4. There is no private per-member channel — consent is group-only, and confirmations are public
 

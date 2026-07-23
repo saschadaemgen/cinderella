@@ -56,7 +56,7 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   `archive/` (whether her own messages publish, and name redaction),
   `media/` (metadata detection and stripping),
   `interaction/`
-  (wake word, intent resolver, dialogue engine, persona), `plugins/` (plugin
+  (wake word, intent resolver, dialogue engine, persona, help), `plugins/` (plugin
   registry + the Crypto Prices plugin: providers, pinning, cache), `price/`
   (amount parsing + number formatting), `settings/`, `db/`,
   `web/` (server, auth, session, views), `index.ts`.

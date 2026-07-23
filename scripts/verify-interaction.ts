@@ -25,6 +25,7 @@ import type { Config } from '../src/config.js';
 import type { BotHandle } from '../src/bot/client.js';
 import type { Queryable } from '../src/db/pool.js';
 import { InteractionEngine } from '../src/interaction/engine.js';
+import { setActiveIntents } from '../src/interaction/intent.js';
 import { detectAddress } from '../src/interaction/addressing.js';
 import {
   resolveIntent,
@@ -546,7 +547,10 @@ async function main(): Promise<void> {
 
   coolDown();
   const help = await say('Cinderella what can you do');
-  check('help names the wake word', help.replies[0]?.includes('Cinderella, publish me') === true);
+  check(
+    'help names her and lists a capability',
+    help.replies[0]?.includes('Cinderella') === true && /publish/i.test(help.replies[0] ?? ''),
+  );
 
   coolDown();
   // CCB-S3-005: a GREETED message is a strong address signal, so an
@@ -669,7 +673,7 @@ async function main(): Promise<void> {
   const germanConfirm = await say('ja');
   check(
     '"ja" confirms and she answers in German',
-    germanConfirm.replies[0]?.includes('leuchten nun im öffentlichen Archiv') === true,
+    germanConfirm.replies[0]?.includes('im öffentlichen Archiv') === true,
   );
   check('the opt-in is recorded', (await consentRow(ALICE)).optedIn === true);
 
@@ -1187,7 +1191,7 @@ async function main(): Promise<void> {
   const deConfirm = await say('yes');
   check(
     'and an English-looking "yes" does NOT switch the answer to English mid-handshake',
-    deConfirm.replies[0]?.includes('leuchten nun im öffentlichen Archiv') === true,
+    deConfirm.replies[0]?.includes('im öffentlichen Archiv') === true,
     deConfirm.replies[0]?.slice(0, 40),
   );
 
@@ -1502,6 +1506,92 @@ async function main(): Promise<void> {
     'and the command does not sneak in as natural language — it is archived as ordinary text',
     persisted.includes('/publish'),
   );
+
+  /* -- 19. CCB-S3-010 -- help, and the promises stated before consent ---- */
+
+  section('19. CCB-S3-010 -- help from the active catalog, and true prompt copy');
+
+  settings = normalizeInteraction({});
+  coolDown();
+
+  for (const phrasing of [
+    'Cinderella help',
+    'Cinderella what can you do',
+    'Cinderella can you help me',
+    'Cinderella what do you do',
+    'Cinderella who are you',
+    'Cinderella how does this work',
+    'Cinderella commands',
+    'Cinderella was kannst du',
+    'Cinderella kannst du mir helfen',
+    'Cinderella wie funktioniert das',
+    'Cinderella wer bist du',
+  ]) {
+    coolDown();
+    const r = await say(phrasing);
+    check(
+      `"${phrasing}" is understood as help`,
+      r.handled && /Cinderella|archive|Archiv/.test(r.replies[0] ?? ''),
+    );
+  }
+
+  coolDown();
+  const slashHelp = await say('/help');
+  check(
+    'the bare /help slash is answered',
+    slashHelp.handled && (slashHelp.replies[0]?.length ?? 0) > 100,
+  );
+
+  coolDown();
+  const helpText = (await say('Cinderella help')).replies[0] ?? '';
+  check('help states forward-only', /forward only/i.test(helpText));
+  check('help states public-until-revoked', /public until/i.test(helpText));
+  check('help states revocation is final', /final/i.test(helpText) && /does not bring/i.test(helpText));
+  check('help lists PRICE while the plugin is enabled here', /price/i.test(helpText));
+
+  setActiveIntents([]);
+  coolDown();
+  const helpNoPrice = (await say('Cinderella help')).replies[0] ?? '';
+  check('a disabled plugin drops out of the help text', !/price of/i.test(helpNoPrice));
+  check(
+    'and the core capabilities remain',
+    /publish/i.test(helpNoPrice) && /unpublish/i.test(helpNoPrice),
+  );
+  setActiveIntents(['PRICE']);
+
+  coolDown();
+  const topicHelp = (await say('Cinderella help consent')).replies[0] ?? '';
+  check(
+    'help consent gives the fuller consent explanation',
+    /Publishing, in full|one thing I cannot undo/i.test(topicHelp),
+  );
+
+  coolDown();
+  const pubPrompt = (await say('Cinderella publish me')).replies[0] ?? '';
+  check(
+    'the publish prompt states forward-only',
+    /from this moment on|never anything from before/i.test(pubPrompt),
+  );
+  check('and that taking it back is final', /final|no bringing it back/i.test(pubPrompt));
+
+  coolDown();
+  const unpubPrompt = (await say('Cinderella unpublish me')).replies[0] ?? '';
+  check('the unpublish prompt warns it cannot be undone', /cannot be undone/i.test(unpubPrompt));
+  check(
+    'and does NOT mention hide or restore (a later briefing owns that)',
+    !/\bhide\b|\brestore\b/i.test(unpubPrompt),
+  );
+
+  settings = normalizeInteraction({ archiveUrl: 'https://example.org/archive' });
+  coolDown();
+  const withLink = (await say('Cinderella help')).replies[0] ?? '';
+  check(
+    'a configured archive link appears in help',
+    withLink.includes('https://example.org/archive'),
+  );
+  settings = normalizeInteraction({ archiveUrl: 'http://insecure.example' });
+  check('a non-https link is rejected at normalize time', settings.archiveUrl === '');
+  settings = normalizeInteraction({});
 
   console.log(
     `\n${failures === 0 ? 'All interaction checks passed.' : `${failures} check(s) FAILED.`}`,

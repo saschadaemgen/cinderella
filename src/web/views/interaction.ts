@@ -340,6 +340,16 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
               textField('defaultLanguage', s.defaultLanguage),
               `Used when the instruction gives no clue. Available: ${Object.keys(s.persona).join(', ')}.`,
             )}
+            ${labelled(
+              'Archive link (help footer)',
+              textField('archiveUrl', s.archiveUrl, 'https://…'),
+              'Shown at the foot of the help reply. https only; blank hides it.',
+            )}
+            ${labelled(
+              'Project link (help footer)',
+              textField('projectUrl', s.projectUrl, 'https://…'),
+              'Shown beside the archive link in help. https only; blank hides it.',
+            )}
             ${saveButton()}
           `,
         ),
@@ -695,6 +705,8 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         next['slashCommands'] = 'slashCommands' in body;
         next['wakeWord'] = bodyString(body, 'wakeWord');
         next['greetings'] = bodyString(body, 'greetings');
+        next['archiveUrl'] = bodyString(body, 'archiveUrl');
+        next['projectUrl'] = bodyString(body, 'projectUrl');
         next['followUpSeconds'] = bodyString(body, 'followUpSeconds');
         next['confidenceThreshold'] = bodyString(body, 'confidenceThreshold');
         next['defaultLanguage'] = bodyString(body, 'defaultLanguage');
