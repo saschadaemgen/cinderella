@@ -156,6 +156,21 @@ log the operator out.
 > `git bundle create /tmp/x.bundle main` (locally) → `scp` → on the VPS
 > `git pull /tmp/x.bundle main`.
 
+**One command** (pull → install → build → migrate → restart → poll `/healthz`
+until it answers, then print one result line). Run as root:
+
+```bash
+cd /opt/cinderella && sudo bash deploy.sh
+```
+
+`deploy.sh` prints `DEPLOY OK — cinderella live at rev <sha>: {"ok":true}` on
+success, or `DEPLOY FAILED …` plus the last 25 log lines and a non-zero exit on
+failure. It polls health with a retry loop + deadline (`HEALTH_TIMEOUT`, default
+90s) rather than a fixed sleep. Paths/service/port are overridable via
+`CINDERELLA_DIR` / `CINDERELLA_ENV` / `CINDERELLA_SERVICE` / `ADMIN_PORT`.
+
+The manual equivalent, if you need to run a step by hand:
+
 ```bash
 cd /opt/cinderella
 git pull            # (needs a deploy key; else use the bundle above)

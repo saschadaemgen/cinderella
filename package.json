@@ -32,6 +32,7 @@
     "verify:price": "tsx scripts/verify-price.ts",
     "verify:archive": "tsx scripts/verify-archive.ts",
     "verify:support-scope": "tsx scripts/verify-support-scope.ts",
+    "deploy": "bash deploy.sh",
     "media:audit": "tsx scripts/scan-media-metadata.ts",
     "media:remediate": "tsx scripts/remediate-media.ts"
   },
