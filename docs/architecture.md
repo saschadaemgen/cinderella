@@ -1,6 +1,6 @@
 # Cinderella — Architecture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-010**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-014**._
 
 Cinderella is a consent-first archive bot for a public SimpleX group. She joins the group (`Cyb3rD3sk`), captures opted-in members' messages into PostgreSQL and an on-disk media store, and exposes a hardened admin console. Nothing a member posts is ever published unless that member sent `/publish` — publication is _derived_ from the `consent` table and the message-state views, never a stored flag (the views are created in `migrations/002_consent.sql` and refined in `004_moderation.sql` / `005_deletion_provenance.sql`).
 
@@ -568,6 +568,20 @@ later briefing that adds hide/delete will revise the finality wording.
 
 The native SimpleX command menu was investigated (see `docs/wire-format.md` §3f): present in the
 SDK, but a direct-conversation feature that does not apply to a group bot with no contact address.
+
+## 19. Video-link cards (CCB-S3-014)
+
+`src/media/video.ts` is a matcher registry: a matcher recognises a URL and yields id/start/canonical/
+embed/thumbnail. Capture (`src/capture/video.ts`) records the provider/id/start/title on the message
+and stores a thumbnail — preferring the base64 image SimpleX delivered, else a one-time server fetch
+(`src/media/thumbnail.ts`) — as the message's own media, so it inherits the whole CCB-S3-011
+strip/serve/consent machinery. Migration 016 adds the video columns and re-declares the public view.
+
+The front renders a click-to-play card; a first-party handler writes the `youtube-nocookie` iframe
+only on click, and the embed-page CSP widens `frame-src` only when a card is present
+(`src/web/front/embed.ts`). SEO emits a `VideoObject` pointing at the canonical external URL with the
+local thumbnail. Per-instance settings (`EmbedSettings.video`) toggle embedding, providers, and the
+notice; off returns the link to plain-link rendering.
 
 ## Appendix: divergences (code wins)
 

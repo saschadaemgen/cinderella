@@ -23,6 +23,7 @@ import { randomBytes } from 'node:crypto';
 import sharp from 'sharp';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getEmbedInstance, listEmbedInstances, type EmbedSettings } from '../../db/embeds.js';
+import { VIDEO_FRAME_ORIGIN } from '../../media/video.js';
 import { ensureDerivative } from '../../media/pipeline.js';
 import {
   ARCHIVE_TYPES,
@@ -124,8 +125,18 @@ interface EmbedQuery {
  * connect-src for THIS instance's page only — the CSP is never weakened silently
  * or globally (the admin form states this tradeoff).
  */
-function applyEmbedHeaders(reply: FastifyReply, nonce: string, analyticsHost: string): void {
+function applyEmbedHeaders(
+  reply: FastifyReply,
+  nonce: string,
+  analyticsHost: string,
+  hasVideoCard = false,
+): void {
   const scriptSrc = analyticsHost ? `'nonce-${nonce}' ${analyticsHost}` : `'nonce-${nonce}'`;
+  // frame-src is added ONLY on a page that actually contains a video card, and
+  // ONLY for the nocookie player origin (CCB-S3-014 §4). No script-src or img-src
+  // widening: the player brings its own context in an iframe, and thumbnails are
+  // served from 'self'. Absent this line, `default-src 'none'` blocks all frames.
+  const frameSrc = hasVideoCard ? `frame-src ${VIDEO_FRAME_ORIGIN}` : "frame-src 'none'";
   // 'self' is required for the live-update client's same-origin poll (CCB-S2-006):
   // fetch() to /embed/:id/state and /fragment. An analytics origin, if configured,
   // is added on top for this instance only.
@@ -137,6 +148,7 @@ function applyEmbedHeaders(reply: FastifyReply, nonce: string, analyticsHost: st
       "img-src 'self'",
       // Inline <video>/<audio> playback (CCB-S2-008) — own consent-gated media only.
       "media-src 'self'",
+      frameSrc,
       `style-src 'nonce-${nonce}'`,
       `script-src ${scriptSrc}`,
       'frame-ancestors *',
@@ -217,6 +229,16 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
     };
     const nonce = randomBytes(16).toString('base64');
     const analyticsHost = analyticsOrigin(s.seo.analytics.scriptUrl);
+    const videoOpts = {
+      embed: s.video.embed,
+      providers: s.video.providers,
+      showNotice: s.video.showNotice,
+    };
+    // Whether any card on THIS page will render a player, so the CSP frame-src
+    // is widened only where a video card actually exists (CCB-S3-014 §4).
+    const hasVideoCard =
+      videoOpts.embed &&
+      items.some((it) => it.video && it.type === 'link' && videoOpts.providers.includes(it.video.provider));
 
     const renderCtx: RenderContext = {
       presentation,
@@ -231,6 +253,7 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       seo,
       nonce,
       showDownload: s.player.showDownload,
+      video: videoOpts,
       streamHash,
       nextCursor: items.length > 0 ? (items[items.length - 1]?.cursor ?? '') : '',
       hasMore: (page - 1) * PAGE_SIZE + items.length < total,
@@ -239,7 +262,7 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       reported: req.query.reported === '1',
     };
 
-    applyEmbedHeaders(reply, nonce, analyticsHost);
+    applyEmbedHeaders(reply, nonce, analyticsHost, hasVideoCard);
     reply.type('text/html; charset=utf-8');
     return renderEmbedPage(renderCtx);
   });
@@ -315,6 +338,11 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
           chunk.items,
           `${origin}/embed/${instance.id}`,
           instance.settings.player.showDownload,
+          {
+            embed: instance.settings.video.embed,
+            providers: instance.settings.video.providers,
+            showNotice: instance.settings.video.showNotice,
+          },
         ).toString(),
         nextCursor: chunk.nextCursor,
         hasMore: chunk.hasMore,

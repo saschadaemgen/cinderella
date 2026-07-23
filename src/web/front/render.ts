@@ -30,6 +30,16 @@ export interface PresentationConfig {
   layout: EmbedSettings['layout'];
 }
 
+/** Per-instance video-card behaviour, threaded to the card renderer. */
+export interface VideoCardOpts {
+  /** When off, a video link renders as a plain link. */
+  embed: boolean;
+  /** Enabled provider keys; a link whose provider is not here stays a link. */
+  providers: string[];
+  /** Show the "playing loads content from …" line. */
+  showNotice: boolean;
+}
+
 export interface RenderContext {
   presentation: PresentationConfig;
   /** Enabled visitor-facing filters (from the instance). */
@@ -49,6 +59,8 @@ export interface RenderContext {
   nonce: string;
   /** Show the media download button + native download control (CCB-S2-008). */
   showDownload: boolean;
+  /** Video-card behaviour for this instance (CCB-S3-014). */
+  video: VideoCardOpts;
   /**
    * Version hash of the current view (CCB-S2-006) — the same value the
    * `/embed/:id/state` poll endpoint returns. Embedded on `#stream-list` so the
@@ -79,7 +91,7 @@ const POLL_INTERVAL_MS = 18000;
 /** The subset of the render context the reconcilable stream region needs. */
 type StreamRegionCtx = Pick<
   RenderContext,
-  'items' | 'filters' | 'basePath' | 'page' | 'pageCount' | 'showDownload'
+  'items' | 'filters' | 'basePath' | 'page' | 'pageCount' | 'showDownload' | 'video'
 >;
 
 /** Builds a query string from the active filters, with overrides (e.g. page). */
@@ -176,6 +188,19 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .item .dl-btn:hover{border-color:var(--accent);color:var(--accent-bright)}
 .item .dl-btn svg{width:16px;height:16px;flex:none}
 .item .filelink{display:inline-block;margin-top:8px;color:var(--accent);font-weight:600;text-decoration:none}
+.item .video-card{margin-top:8px}
+.item .video-play{position:relative;display:block;width:100%;padding:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#000;cursor:pointer;aspect-ratio:16/9}
+.item .video-thumb{display:block;width:100%;height:100%;object-fit:cover}
+.item .video-thumb-placeholder{display:block;width:100%;height:100%;background:linear-gradient(135deg,var(--bg-card),#000)}
+.item .video-play-icon{position:absolute;top:50%;left:50%;width:64px;height:64px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(0,0,0,.55);border:2px solid #fff;transition:var(--tr)}
+.item .video-play-icon::after{content:"";position:absolute;top:50%;left:54%;transform:translate(-50%,-50%);border-style:solid;border-width:12px 0 12px 20px;border-color:transparent transparent transparent #fff}
+.item .video-play:hover .video-play-icon,.item .video-play:focus-visible .video-play-icon{background:var(--accent);border-color:#fff}
+.item .video-frame{display:block;width:100%;aspect-ratio:16/9;border:1px solid var(--border);border-radius:8px;background:#000}
+.item .video-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-top:6px}
+.item .video-title{font-weight:600}
+.item .video-notice{color:var(--muted);font-size:.8rem}
+.item .video-open{color:var(--accent);font-weight:600;text-decoration:none;font-size:.85rem;margin-left:auto}
+.item .video-open:hover{color:var(--accent-bright)}
 .item details.report{margin-top:8px}
 .item details.report>summary{cursor:pointer;list-style:none;color:var(--muted);font-size:.85rem}
 .item details.report>summary::-webkit-details-marker{display:none}
@@ -248,7 +273,23 @@ function downloadButton(it: PublicItem, mediaUrl: string): SafeHtml {
 }
 
 /** Renders one published item's media/body into the card. */
-function itemMedia(it: PublicItem, mediaUrl: string, showDownload: boolean): SafeHtml {
+function itemMedia(
+  it: PublicItem,
+  mediaUrl: string,
+  showDownload: boolean,
+  video: VideoCardOpts,
+): SafeHtml {
+  // A recognised, enabled video link renders as a click-to-play card
+  // (CCB-S3-014). When embedding is off, or its provider is not enabled, it falls
+  // through and renders as a plain link in itemLinks().
+  if (
+    it.video &&
+    video.embed &&
+    video.providers.includes(it.video.provider) &&
+    it.type === 'link'
+  ) {
+    return videoCard(it, mediaUrl, video);
+  }
   if (it.type === 'image' && it.hasMedia) {
     return html`<img
       class="media"
@@ -278,8 +319,63 @@ function itemMedia(it: PublicItem, mediaUrl: string, showDownload: boolean): Saf
   return html``;
 }
 
-function itemLinks(it: PublicItem): SafeHtml {
-  if (it.links.length === 0) return html``;
+/**
+ * A click-to-play video card (CCB-S3-014).
+ *
+ * NOTHING third-party loads until the visitor clicks. The thumbnail is our own
+ * (`mediaUrl`, consent-gated and metadata-stripped) or a CSS placeholder; the
+ * player iframe is written by the click handler in the client script, never on
+ * load, scroll or hover. The notice names the service so the visitor knows what
+ * a click will load, and the "open on …" link lets them leave instead.
+ *
+ * `data-embed` carries the nocookie player URL; the click handler reads it. It is
+ * the only third-party URL on the page, and it is inert until clicked.
+ */
+function videoCard(it: PublicItem, mediaUrl: string, video: VideoCardOpts): SafeHtml {
+  const v = it.video;
+  if (!v) return html``;
+  const canonical = canonicalVideoUrl(v);
+  const title = v.title ?? `Video on ${v.provider}`;
+  const thumb = it.hasMedia
+    ? html`<img class="video-thumb" src="${mediaUrl}" alt="${title}" loading="lazy" />`
+    : html`<span class="video-thumb video-thumb-placeholder" aria-hidden="true"></span>`;
+  return html`<div class="video-card" data-embed="${embedUrlFor(v)}" data-title="${title}">
+    <button class="video-play" type="button" aria-label="Play video: ${title}">
+      ${thumb}<span class="video-play-icon" aria-hidden="true"></span>
+    </button>
+    <div class="video-meta">
+      <span class="video-title">${title}</span>
+      ${
+        video.showNotice
+          ? html`<span class="video-notice"
+              >▶ Playing loads content from ${v.provider === 'youtube' ? 'YouTube' : v.provider}.</span
+            >`
+          : null
+      }
+      <a class="video-open" href="${canonical}" rel="nofollow noopener" target="_blank"
+        >Open on ${v.provider === 'youtube' ? 'YouTube' : v.provider} →</a
+      >
+    </div>
+  </div>`;
+}
+
+/** The nocookie player URL for a stored video (mirrors media/video.ts). */
+function embedUrlFor(v: NonNullable<PublicItem['video']>): string {
+  const start = v.startSeconds > 0 ? `?start=${v.startSeconds}` : '';
+  return `https://www.youtube-nocookie.com/embed/${v.videoId}${start}`;
+}
+
+/** The public page URL — the "open on YouTube" link and JSON-LD contentUrl. */
+function canonicalVideoUrl(v: NonNullable<PublicItem['video']>): string {
+  const t = v.startSeconds > 0 ? `&t=${v.startSeconds}` : '';
+  return `https://www.youtube.com/watch?v=${v.videoId}${t}`;
+}
+
+function itemLinks(it: PublicItem, video: VideoCardOpts): SafeHtml {
+  // If this link rendered as a video card, do not repeat it as a plain link.
+  const asVideo =
+    it.video && video.embed && video.providers.includes(it.video.provider) && it.type === 'link';
+  if (asVideo || it.links.length === 0) return html``;
   return html`<ul class="links">
     ${it.links.map(
       (l) =>
@@ -348,6 +444,7 @@ export function renderCards(
   items: PublicItem[],
   basePath: string,
   showDownload: boolean,
+  video: VideoCardOpts,
 ): SafeHtml {
   return html`${items.map(
     (it) =>
@@ -365,7 +462,7 @@ export function renderCards(
           <time datetime="${it.sentAt}">${fmtTime(it.sentAt)}</time>
         </div>
         ${it.textBody ? html`<p class="body">${it.textBody}</p>` : html``}
-        ${itemMedia(it, `${basePath}/media/${it.id}`, showDownload)} ${itemLinks(it)}
+        ${itemMedia(it, `${basePath}/media/${it.id}`, showDownload, video)} ${itemLinks(it, video)}
         ${reportControl(it, basePath)}
       </li>`,
   )}`;
@@ -413,7 +510,7 @@ function renderStreamRegion(ctx: StreamRegionCtx): SafeHtml {
   const items =
     ctx.items.length > 0
       ? html`<ul class="items">
-          ${renderCards(ctx.items, ctx.basePath, ctx.showDownload)}
+          ${renderCards(ctx.items, ctx.basePath, ctx.showDownload, ctx.video)}
         </ul>`
       : html`<p class="empty">No published messages match this view yet.</p>`;
 
@@ -565,6 +662,9 @@ export function renderEmbedPage(ctx: RenderContext): string {
         <script nonce="${ctx.nonce}">
           ${raw(STREAM_SCRIPT)};
         </script>
+        <script nonce="${ctx.nonce}">
+          ${raw(VIDEO_SCRIPT)};
+        </script>
       </body>
     </html>`;
 
@@ -578,6 +678,14 @@ export function renderEmbedPage(ctx: RenderContext): string {
  * (the host scrolls the auto-sized frame); if a host isn't auto-sizing us (content
  * still overflows the frame viewport ~1.5s after load), restore `overflow-y:auto` so
  * content is never clipped/unreachable in a misconfigured embed. */
+/**
+ * Click-to-play (CCB-S3-014). Delegated on the document, so it covers both SSR
+ * cards and ones appended by infinite scroll. NOTHING loads until a click: only
+ * then is the nocookie iframe written, with autoplay (user-initiated) and
+ * fullscreen. It is the only place a third-party URL becomes live.
+ */
+const VIDEO_SCRIPT = `(function(){document.addEventListener('click',function(e){var t=e.target;if(!t||!t.closest)return;var btn=t.closest('.video-play');if(!btn)return;var card=btn.closest('.video-card');if(!card)return;var src=card.getAttribute('data-embed');if(!src)return;e.preventDefault();var sep=src.indexOf('?')<0?'?':'&';var f=document.createElement('iframe');f.className='video-frame';f.src=src+sep+'autoplay=1';f.title=card.getAttribute('data-title')||'Video';f.setAttribute('allow','autoplay; fullscreen; encrypted-media; picture-in-picture');f.setAttribute('allowfullscreen','');f.setAttribute('referrerpolicy','no-referrer');btn.parentNode.replaceChild(f,btn);try{f.focus();}catch(_){}});})();`;
+
 const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);document.addEventListener('loadedmetadata',h,true);document.addEventListener('fullscreenchange',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h();if(document.documentElement.classList.contains('embedded')){setTimeout(function(){if(document.documentElement.scrollHeight>window.innerHeight+4)document.documentElement.style.overflowY='auto';},1500);}})();`;
 
 /**

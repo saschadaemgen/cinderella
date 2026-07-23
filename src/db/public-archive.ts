@@ -61,6 +61,13 @@ export interface PublicItem {
   isBot: boolean;
   /** The id of the message this one answers, when it is one (CCB-S3-009). */
   replyToId: number | null;
+  /** A recognised video link (CCB-S3-014), or null. Drives the play card. */
+  video: {
+    provider: string;
+    videoId: string;
+    startSeconds: number;
+    title: string | null;
+  } | null;
 }
 
 export interface PublicPage {
@@ -80,6 +87,10 @@ interface ItemRow {
   media_mime: string | null;
   is_bot: boolean;
   reply_to_id: string | null;
+  video_provider: string | null;
+  video_id: string | null;
+  video_start: number | null;
+  video_title: string | null;
   links: unknown;
 }
 
@@ -128,6 +139,7 @@ export function decodeCursor(s: string): Cursor | null {
 const ITEM_COLUMNS = `m.id, m.sender_display_name, m.sent_at, m.sent_at::text AS sort_ts,
             m.type::text AS type, m.text_body,
             (m.media_path IS NOT NULL) AS has_media, m.media_mime, m.is_bot, m.reply_to_id,
+            m.video_provider, m.video_id, m.video_start, m.video_title,
             COALESCE(
               (SELECT json_agg(json_build_object('url', l.url, 'title', l.title) ORDER BY l.id)
                FROM links l WHERE l.message_id = m.id),
@@ -150,6 +162,14 @@ function mapItem(r: ItemRow): PublicItem {
     mediaMime: r.media_mime,
     isBot: r.is_bot === true,
     replyToId: r.reply_to_id === null ? null : Number(r.reply_to_id),
+    video: r.video_id
+      ? {
+          provider: r.video_provider ?? 'youtube',
+          videoId: r.video_id,
+          startSeconds: r.video_start ?? 0,
+          title: r.video_title,
+        }
+      : null,
   };
 }
 

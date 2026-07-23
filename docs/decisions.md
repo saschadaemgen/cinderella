@@ -56,6 +56,29 @@ import — no change to the sidebar, the resolver, or the settings framework.
 
 ---
 
+### D-056 — Video links are click-to-play, and their thumbnails are ours
+
+**Status: IMPLEMENTED (CCB-S3-014).**
+**Decision.** A recognised video link renders as a card that loads NOTHING from a third party until
+the visitor clicks. The thumbnail is obtained once at capture — the wire image SimpleX delivered,
+else a one-time server fetch — stored as the message's own media so it rides the CCB-S3-011
+strip-and-serve pipeline, and served from `/media`. On click, a first-party handler writes a
+`youtube-nocookie.com` iframe. The CSP `frame-src` is widened only on a page that has a card;
+`img-src` and `script-src` gain nothing. Providers are a matcher REGISTRY (`src/media/video.ts`):
+adding PeerTube or Vimeo is a matcher, not a rewrite.
+**Rationale.** A standard embed loads Google's player and trackers on page load — against the
+product's position and, under EU rules, the class of loading that needs prior consent. The click is
+the consent, and it keeps working with the cookie banner off. Hotlinking a remote thumbnail would
+be the same tracking one step earlier, so the thumbnail is always local; a failed fetch falls back
+to a neutral placeholder, never a remote image.
+**Evidence.** `src/media/video.ts`, `src/media/thumbnail.ts`, `src/capture/video.ts`;
+`migrations/016_video_links.sql`; `src/web/front/render.ts` (card + click handler),
+`src/web/front/embed.ts` (scoped CSP), `src/web/front/seo.ts` (VideoObject); `scripts/verify-public.ts`
+— the card, the no-iframe-before-click and no-third-party-host assertions, the CSP scoping, and the
+consent gate on the thumbnail. Browser-verified: zero third-party requests before the click.
+
+---
+
 ### D-054 — Help is generated from the active catalog; the command menu is not applicable
 
 **Status: IMPLEMENTED (CCB-S3-010 Part 2).**

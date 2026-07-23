@@ -101,6 +101,32 @@ async function main(): Promise<void> {
 
   const beforeOptInId = await seed(5, A, 'text', 'BEFORE optin content', '2026-07-05T09:00:00Z');
 
+  // CCB-S3-014: a published YouTube link (member A) and an unpublished one (member B).
+  const pubVideoLinkId = await seed(20, A, 'link', null, '2026-07-15T13:00:00Z');
+  await db.query(
+    `UPDATE messages SET video_provider='youtube', video_id='dQw4w9WgXcQ', video_start=0,
+       video_title='A published clip', media_path='2026/07/thumb-20.jpg', media_mime='image/jpeg',
+       media_derived_path='derived/2026/07/thumb-20.jpg'
+     WHERE group_msg_id=20`,
+  );
+  writeMedia('2026/07/thumb-20.jpg', Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  writeMedia('derived/2026/07/thumb-20.jpg', Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  // Real capture also records the URL in `links`, which is what the plain-link
+  // fallback renders when embedding is off.
+  await db.query(
+    `INSERT INTO links (message_id, url, title) VALUES ($1, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'A published clip')`,
+    [pubVideoLinkId],
+  );
+  const unpubVideoLinkId = await seed(21, B, 'link', null, '2026-07-16T13:00:00Z');
+  await db.query(
+    `UPDATE messages SET video_provider='youtube', video_id='SECRETvidID', video_start=0,
+       video_title='A private clip', media_path='2026/07/thumb-21.jpg', media_mime='image/jpeg',
+       media_derived_path='derived/2026/07/thumb-21.jpg'
+     WHERE group_msg_id=21`,
+  );
+  writeMedia('2026/07/thumb-21.jpg', Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  writeMedia('derived/2026/07/thumb-21.jpg', Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+
   // Video: one published (member A), one unpublished (member B) — CCB-S2-008.
   const pubVideoId = await seed(10, A, 'video', null, '2026-07-15T12:00:00Z');
   writeMedia('2026/07/10-pub.mp4', Buffer.from([0x00, 0x00, 0x00, 0x18]));
@@ -406,7 +432,7 @@ async function main(): Promise<void> {
     'video: metadata preload + playsinline, no autoplay',
     /<video[^>]*preload="metadata"/.test(vb) &&
       /<video[^>]*\bplaysinline\b/.test(vb) &&
-      !vb.includes('autoplay'),
+      !/<video[^>]*\bautoplay\b/.test(vb),
   );
   check(
     'video: rendered <video> carries the house-styled media class',
@@ -567,7 +593,7 @@ async function main(): Promise<void> {
     'seo: page 2 head has rel=prev and NOT rel=next (last page)',
     /<link rel="prev" href="[^"]+"/.test(p2.body) && !/<link rel="next"/.test(p2.body),
   );
-  check('seo: deep page 2 renders SSR cards server-side', idsInOrder(p2.body).length === 8);
+  check('seo: deep page 2 renders SSR cards server-side', idsInOrder(p2.body).length === 9);
   check(
     'scroll: data-at-top=1 on page 1, =0 on a deep page (no false auto-prepend)',
     lb.includes('data-at-top="1"') && p2.body.includes('data-at-top="0"'),
@@ -805,6 +831,60 @@ async function main(): Promise<void> {
     }
   }
   check('rate limit: /page has its OWN bucket and 429s under a burst', pageGot429);
+
+  /* ── CCB-S3-014 — video-link cards, third-party isolation, consent gate ─ */
+
+  const vidPage = await app.inject({ method: 'GET', url: base });
+  const vidBody = vidPage.body;
+  check('a published video link renders a click-to-play card', vidBody.includes('<div class="video-card"'));
+  check('the card carries the nocookie embed URL as data, not a live iframe',
+    vidBody.includes('data-embed="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"'));
+  check('the card has NO iframe on load — nothing loads before the click',
+    !/<iframe/i.test(vidBody));
+  check('the thumbnail is served from our own /media path, not a third party',
+    vidBody.includes(`/media/${pubVideoLinkId}`) && !vidBody.includes('ytimg.com') && !vidBody.includes('i.ytimg'));
+  check('the notice names the external service before the click',
+    /Playing loads content from YouTube/i.test(vidBody));
+  check('an "open on YouTube" escape link is present',
+    vidBody.includes('youtube.com/watch?v=dQw4w9WgXcQ'));
+
+  // The strongest acceptance: the WHOLE page references no third-party origin
+  // except the inert nocookie data-embed. No Google/ytimg/gstatic anywhere.
+  check('no third-party host appears anywhere on the page except the inert embed URL',
+    !/googlevideo|gstatic|google-analytics|ytimg|googleapis/i.test(vidBody));
+
+  // CSP: frame-src widened to the nocookie origin, ONLY on this page.
+  const vidCsp = (vidPage.headers['content-security-policy'] ?? '').toString();
+  check('CSP frame-src allows the nocookie player on a video page',
+    vidCsp.includes('frame-src https://www.youtube-nocookie.com'));
+  check('CSP img-src is still self only — thumbnail is local',
+    vidCsp.includes("img-src 'self'") && !/img-src[^;]*https?:/.test(vidCsp));
+  check('CSP script-src gained no third-party allowance',
+    /script-src 'nonce-[^']+'(;| $)/.test(vidCsp + ' '));
+
+  // A page with NO video card keeps frame-src 'none'.
+  const noVidPage = await app.inject({ method: 'GET', url: `${base}?type=text` });
+  check('a page without a video card keeps frame-src none',
+    (noVidPage.headers['content-security-policy'] ?? '').toString().includes("frame-src 'none'"));
+
+  // The unpublished video link and its thumbnail are unreachable.
+  check('an unpublished video link does NOT render', !vidBody.includes('SECRETvidID'));
+  const unpubThumb = await app.inject({ method: 'GET', url: `${base}/media/${unpubVideoLinkId}` });
+  check('and its thumbnail 404s publicly', unpubThumb.statusCode === 404);
+  const pubThumb = await app.inject({ method: 'GET', url: `${base}/media/${pubVideoLinkId}` });
+  check('the published thumbnail serves', pubThumb.statusCode === 200);
+
+  // Turning the setting off returns it to a plain link.
+  const noEmbedInst = await createEmbedInstance(db, 'no-embed');
+  await updateEmbedInstance(
+    db,
+    noEmbedInst.id,
+    noEmbedInst.name,
+    normalizeEmbedSettings({ ...D, video: { embed: false, providers: ['youtube'], showNotice: true } }),
+  );
+  const plainPage = await app.inject({ method: 'GET', url: `/embed/${noEmbedInst.id}` });
+  check('with embedding off, the video link is a plain link, not a card',
+    !plainPage.body.includes('<div class="video-card"') && plainPage.body.includes('youtube.com/watch?v=dQw4w9WgXcQ'));
 
   await app.close();
   console.log(failures === 0 ? '\nverify:public OK' : `\nverify:public FAILED (${failures})`);

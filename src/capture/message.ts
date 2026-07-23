@@ -28,6 +28,12 @@ export interface LinkPreview {
   url: string;
   title: string | undefined;
   description: string | undefined;
+  /**
+   * The base64 thumbnail the sender's client generated (CCB-S3-014). Kept so we
+   * can serve it locally instead of fetching from a third party — see
+   * media/thumbnail.ts. Undefined when the client sent no image.
+   */
+  image: string | undefined;
 }
 
 export interface CapturedMessage {
@@ -117,6 +123,7 @@ function buildLinkPreview(msgContent: T.MsgContent): LinkPreview | undefined {
     url: preview.uri,
     title: preview.title || undefined,
     description: preview.description || undefined,
+    image: preview.image || undefined,
   };
 }
 

@@ -54,7 +54,7 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 - `src/` — `config.ts`, `log.ts`, `bot/` (core wiring, files, connect, avatar),
   `capture/` (parse, media, links, persist, her own sends), `consent/`,
   `archive/` (whether her own messages publish, and name redaction),
-  `media/` (metadata detection and stripping),
+  `media/` (metadata detection and stripping, video matchers),
   `interaction/`
   (wake word, intent resolver, dialogue engine, persona, help), `plugins/` (plugin
   registry + the Crypto Prices plugin: providers, pinning, cache), `price/`
@@ -66,7 +66,7 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
   journal (provenance + undo) · 010 asset mappings (pinned symbol→asset) · 011
   seeded major assets (locked pins) · 012 correct pins that predate the seed · 013
   her own messages (bot rows, mentions, the second publication branch) · 014
-  stripped media derivatives · 015 member instructions + exchange pairing.
+  stripped media derivatives · 015 member instructions + exchange pairing · 016 video links.
   Runner: `node dist/db/migrate.js`.
 - `scripts/` — PGlite verification harnesses + asset/password helpers.
 - `deploy/` — `cinderella.service`, `nginx-admin.conf`, `RUNBOOK.md`, `backup.sh`.

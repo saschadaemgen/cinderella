@@ -202,6 +202,22 @@ function postingNode(c: SeoContext, it: PublicItem, type: string): Record<string
       };
     }
   }
+  // A recognised video LINK (CCB-S3-014): a VideoObject pointing at the canonical
+  // external page, so the archived video is discoverable. The thumbnail is our
+  // own locally-served copy — never a third-party URL. Reuses the same graph as
+  // uploaded video (CCB-S2-004), never a fork.
+  if (c.seo.jsonld.media && it.video) {
+    const embedUrl = `https://www.youtube.com/watch?v=${it.video.videoId}`;
+    const vo: Record<string, unknown> = {
+      '@type': 'VideoObject',
+      name: it.video.title ?? `Video from ${it.senderDisplayName}`,
+      uploadDate: it.sentAt,
+      embedUrl,
+      contentUrl: embedUrl,
+    };
+    if (it.hasMedia) vo['thumbnailUrl'] = `${c.basePath}/media/${it.id}`;
+    node['video'] = vo;
+  }
   return node;
 }
 

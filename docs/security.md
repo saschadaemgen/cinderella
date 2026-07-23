@@ -1,6 +1,6 @@
 # Cinderella — Security Posture
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-010**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-014**._
 
 _Living document. Ground truth is the code; every claim below is anchored to a
 repo-relative `file:line`. Where the project outline and the code diverge, the
@@ -600,6 +600,38 @@ undoing it REDUCES exposure. Opt-in qualifies; revocation does not.
 No path can now return revoked content to public view. Re-opting in is forward-only and restores
 nothing from before, and the refused undo leaves `revoked_at` untouched — both asserted in
 `verify:consent`.
+
+## 9g. Video-link cards — click-to-play, no third party before the click (CCB-S3-014)
+
+A YouTube link renders as a play card, but a normal embed loads Google's player and trackers on
+page load — the third-party loading the product exists not to do, and the kind that needs prior
+consent under EU rules. So the card is CLICK-TO-PLAY: the click is the consent.
+
+**Nothing third-party loads before the click.** The thumbnail is fetched once at capture (from the
+wire preview SimpleX already delivered, else a one-time server fetch) and served from our own
+`/media` path — metadata-stripped and consent-gated like any image. The player iframe is written by
+a first-party click handler, never on load, scroll or hover, and points at `youtube-nocookie.com`.
+An "open on YouTube" link lets a visitor leave instead. Verified in a browser: a fresh page load
+makes zero requests to Google/ytimg; the nocookie request appears only after the click.
+
+**The embed-page CSP, in full** (the admin console CSP is unchanged):
+
+```
+default-src 'none';
+img-src 'self';
+media-src 'self';
+frame-src https://www.youtube-nocookie.com;   ← only on a page that has a video card; 'none' otherwise
+style-src 'nonce-…';
+script-src 'nonce-…';                          ← no third-party script allowance, ever
+frame-ancestors *;
+base-uri 'none';
+form-action 'self';
+connect-src 'self'
+```
+
+`frame-src` is the ONLY widening, added only where a card exists. `img-src` stays `'self'` — if a
+thumbnail were served from a CDN it would need a third-party img-src, and that absence is the proof
+it is local. `script-src` gains nothing: the player runs in its own iframe context.
 
 ## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
 

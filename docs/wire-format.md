@@ -1,6 +1,6 @@
 # Cinderella — SimpleX Wire-Format Findings
 
-> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-010**._
+> _Living document — Cinderella, Seasons 1–3. Ground truth is the code in this repository; where an earlier briefing outline diverged from the code, the divergence is noted inline. Maintained under the CCB briefing scheme; last updated under **CCB-S3-014**._
 
 This document records the SimpleX protocol and SDK behaviours that materially affect Cinderella's implementation. Everything below is verified against the code in this repo; where the working outline and the code disagree, the code wins and the divergence is called out inline and collected at the end.
 
@@ -249,6 +249,16 @@ rules draw.
 but if Cinderella is ever given a direct-chat surface, enabling the menu is one line —
 `options.commands: buildCommandMenu(activeIntentList())` — and it already reflects exactly what is
 enabled. The text help is the surface members actually have.
+
+## 3g. SimpleX supplies link-preview title AND thumbnail (CCB-S3-014)
+
+A `link`-type message carries `msgContent.preview: LinkPreview { uri, title, description, image }`.
+The `image` is a base64 thumbnail the SENDER's client generated. Cinderella previously kept the
+title and description but dropped the image; it now keeps the image too and PREFERS it — decoding
+the base64 and serving it locally means not one byte leaves our network for a video card. A
+server-side fetch of the provider thumbnail is the fallback only when the wire carried no image
+(a URL pasted in a text message, or a sender whose client made no preview). So yes, SimpleX
+supplies the preview data, and yes, we use it.
 
 ## 4. There is no private per-member channel — consent is group-only, and confirmations are public
 

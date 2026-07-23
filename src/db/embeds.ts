@@ -8,6 +8,7 @@
 
 import { randomBytes } from 'node:crypto';
 import type { Queryable } from './pool.js';
+import { VIDEO_PROVIDERS } from '../media/video.js';
 
 /** Widget design/behaviour settings — all centralized, nothing on the host page. */
 export interface EmbedSettings {
@@ -39,6 +40,16 @@ export interface EmbedSettings {
     /** Show a download button on media (and keep the native player's download
      * control). Default ON. When off: button hidden + `controlsList=nodownload`. */
     showDownload: boolean;
+  };
+  /**
+   * Video-link cards (CCB-S3-014). When `embed` is off, a video link renders as a
+   * plain link. `providers` is the subset of known matchers that are enabled.
+   * `showNotice` toggles the "playing loads content from …" line on the card.
+   */
+  video: {
+    embed: boolean;
+    providers: string[];
+    showNotice: boolean;
   };
   /** Full SEO & marketing suite (CCB-S2-004) — all admin-configurable. */
   seo: SeoSettings;
@@ -105,6 +116,7 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   filters: { byType: true, byTime: true, search: true },
   media: { text: true, image: true, video: true, voice: true, file: true, link: true },
   player: { showDownload: true },
+  video: { embed: true, providers: ['youtube'], showNotice: true },
   seo: {
     titleTemplate: '{instance}{section}',
     description: '',
@@ -232,6 +244,27 @@ export function normalizeSeo(input: unknown): SeoSettings {
  * Normalizes untrusted input (form posts, stored JSON) into a valid
  * EmbedSettings — unknown fields dropped, invalid values replaced by defaults.
  */
+/** Normalizes the video-card group; unknown provider keys are dropped. */
+function normalizeVideo(
+  input: unknown,
+  d: EmbedSettings['video'],
+): EmbedSettings['video'] {
+  const o = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const known = new Set(VIDEO_PROVIDERS.map((p) => p.key));
+  const raw = o['providers'];
+  const list = Array.isArray(raw)
+    ? raw.map((x) => String(x))
+    : typeof raw === 'object' && raw
+      ? Object.keys(raw) // checkbox map { youtube: 'on' }
+      : [...d.providers];
+  const providers = [...new Set(list.map((x) => x.trim().toLowerCase()).filter((x) => known.has(x)))];
+  return {
+    embed: bool(o['embed'], d.embed),
+    providers: 'providers' in o ? providers : [...d.providers],
+    showNotice: bool(o['showNotice'], d.showNotice),
+  };
+}
+
 export function normalizeEmbedSettings(input: unknown): EmbedSettings {
   const d = DEFAULT_EMBED_SETTINGS;
   const o = asRecord(input);
@@ -267,6 +300,7 @@ export function normalizeEmbedSettings(input: unknown): EmbedSettings {
       link: bool(media['link'], d.media.link),
     },
     player: { showDownload: bool(player['showDownload'], d.player.showDownload) },
+    video: normalizeVideo(o['video'], d.video),
     seo: normalizeSeo(o['seo']),
   };
 }

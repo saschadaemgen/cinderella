@@ -19,6 +19,7 @@ import { status } from '../web/status.js';
 import type { CaptureHooks } from './handler.js';
 import { extractLinks, linksToSearchText } from './links.js';
 import { storeMedia } from './media.js';
+import { captureVideoLink } from './video.js';
 import { messageIdFor, stripAndRecord } from '../media/pipeline.js';
 
 /** Message types that carry a downloadable file. */
@@ -80,6 +81,20 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
           msg.groupId,
           msg.itemId,
           'no downloadable file (shared without a file transfer — e.g. group history)',
+        );
+      }
+
+      // A recognised video link becomes a click-to-play card (CCB-S3-014). Its
+      // thumbnail is fetched once here and served locally, so the visitor's
+      // browser reaches no third party before they click. Best-effort: a failure
+      // never loses the message, only the thumbnail.
+      try {
+        await captureVideoLink(getPool(), cfg.mediaRoot, messageId, msg);
+      } catch (err) {
+        log.warn(
+          `Video capture failed for message ${messageId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
         );
       }
     },
