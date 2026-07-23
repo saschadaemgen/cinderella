@@ -664,6 +664,16 @@ checks fail. `scripts/scan-support-scope.ts` inspects stored `raw_json` for the 
 find (and `--remove` to delete) any item captured before the gate existed — reporting counts and
 ids, never the private content.
 
+**An excluded item is not always silent.** Direct chats and the `memberSupport` scope are EXPECTED
+exclusions and pass without a sound. But if a group item carries a scope we do not recognise — a new
+SimpleX scope, or a malformed item — capture is stopping for a reason we cannot explain, and dropping
+it in silence is the failure mode this project keeps closing. So `unrecognisedScopeType` distinguishes
+the two: only the unrecognised case is counted (`src/capture/scope-diagnostics.ts`, in-memory, per
+process) and surfaced on the dashboard as an **amber** notice — worth understanding, not a red
+consent leak. `verify:support-scope` proves the counter moves for an unknown/malformed scope and
+stays still for the expected ones. This was CCB-S3-019's remediation finding in practice: the scan
+found **2 support-scope rows already captured, 0 ever published**, from one member; both were removed.
+
 ## 10. Public archive front — a separate, consent-gated public surface (CCB-S2-003)
 
 The `/embed/<id>` front is the one deliberately public surface. Its security rests on

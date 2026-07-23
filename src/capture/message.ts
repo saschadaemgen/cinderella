@@ -8,6 +8,7 @@
  */
 
 import type { T } from '@simplex-chat/types';
+import { recordUnknownScope } from './scope-diagnostics.js';
 
 /** The capture type taxonomy from the briefing (§5 Stage 2). */
 export type CapturedType = 'text' | 'image' | 'video' | 'voice' | 'link' | 'file';
@@ -147,8 +148,35 @@ function buildLinkPreview(msgContent: T.MsgContent): LinkPreview | undefined {
  * is not. A future message type or scope that this predicate does not recognise as
  * public is therefore excluded by construction, not by being added to a list.
  */
-export function isPublicGroupChat(chatInfo: T.ChatInfo): chatInfo is T.ChatInfo.Group {
+export function isPublicGroupChat(chatInfo: T.ChatInfo): boolean {
+  // NOT a `chatInfo is ChatInfo.Group` type guard: a SCOPED group is still a
+  // ChatInfo.Group but returns false here, so a type predicate would make the
+  // compiler wrongly narrow the false branch to "not a group" and lose groupInfo.
   return chatInfo.type === 'group' && chatInfo.groupChatScope === undefined;
+}
+
+/** Scope discriminators the gate EXPECTS to exclude (so they need no alert). */
+const KNOWN_GROUP_SCOPES = new Set(['memberSupport']);
+
+/**
+ * When an item is excluded, is its scope one we RECOGNISE — and therefore an
+ * expected, silent exclusion — or something we do not understand?
+ *
+ * Returns null for every EXPECTED exclusion: a direct/local/contact chat (not a
+ * group at all), and a group carrying a known scope (`memberSupport`, the private
+ * "Chat with admins" thread). Returns the offending discriminator (or
+ * `'(malformed)'`) only when a GROUP item carries a scope we do not recognise —
+ * which means capture is silently stopping for a reason we cannot explain, and
+ * that must be surfaced rather than dropped in silence (CCB-S3-019 follow-up).
+ */
+export function unrecognisedScopeType(chatInfo: T.ChatInfo): string | null {
+  if (chatInfo.type !== 'group') return null; // direct/local/etc — expected
+  const scope = chatInfo.groupChatScope;
+  if (scope === undefined) return null; // public — captured, not excluded at all
+  const t =
+    scope && typeof scope === 'object' ? (scope as { type?: unknown }).type : undefined;
+  if (typeof t === 'string' && KNOWN_GROUP_SCOPES.has(t)) return null; // memberSupport — expected
+  return typeof t === 'string' && t.length > 0 ? t : '(malformed)';
 }
 
 /**
@@ -167,7 +195,21 @@ export function parseGroupMessage(aChatItem: T.AChatItem): CapturedMessage | nul
   const { chatInfo, chatItem } = aChatItem;
 
   // CCB-S3-019: the private-scope gate, before persistence, consent, or anything.
-  if (!isPublicGroupChat(chatInfo)) return null;
+  if (!isPublicGroupChat(chatInfo)) {
+    // Expected exclusions (direct chats, the memberSupport scope) stay silent; an
+    // UNRECOGNISED scope is counted and surfaced — capture is stopping for a
+    // reason we do not understand, and that must never be invisible.
+    const unknown = unrecognisedScopeType(chatInfo);
+    if (unknown !== null) {
+      recordUnknownScope({
+        scopeType: unknown,
+        groupId: chatInfo.type === 'group' ? chatInfo.groupInfo.groupId : null,
+      });
+    }
+    return null;
+  }
+  // isPublicGroupChat guaranteed a scope-free group; this narrows it for the compiler.
+  if (chatInfo.type !== 'group') return null;
   const groupInfo = chatInfo.groupInfo;
 
   const dir = chatItem.chatDir;

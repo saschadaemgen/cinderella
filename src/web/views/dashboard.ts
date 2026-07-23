@@ -7,6 +7,7 @@
 import type { FastifyInstance } from 'fastify';
 import { dashboardStats } from '../../db/admin-queries.js';
 import { recentAudit } from '../../db/audit.js';
+import { recentUnknownScopes, unknownScopeCount } from '../../capture/scope-diagnostics.js';
 import { html, page, type SafeHtml } from '../html.js';
 import { icon } from '../icons.js';
 import { status } from '../status.js';
@@ -62,8 +63,40 @@ export function registerDashboard(app: FastifyInstance, ctx: ViewContext): void 
             }.
           </div>`;
 
+    // Unrecognised capture-scope exclusions (CCB-S3-019 follow-up). Expected
+    // exclusions (direct chats, the private support scope) are silent; this fires
+    // ONLY when capture dropped a group item whose scope we do not understand —
+    // amber, not red: worth understanding, not a live consent leak.
+    const unknownScopes = unknownScopeCount();
+    const scopeIndicator: SafeHtml =
+      unknownScopes > 0
+        ? html`<div
+            class="mb-6 flex flex-col gap-2 rounded-xl border border-amber-300 bg-amber-50 p-4"
+          >
+            <span class="flex items-center gap-2 font-semibold text-amber-800"
+              >${icon('fileWarning', 'h-5 w-5')} Unrecognised capture exclusions (${unknownScopes})</span
+            >
+            <span class="text-sm text-amber-700">
+              Capture dropped ${unknownScopes} item(s) whose chat scope it does not recognise —
+              neither a public message nor an expected private one. This is not a leak, but capture
+              is stopping for a reason we don't understand; a new SimpleX scope or a malformed item
+              is the likely cause.
+            </span>
+            <ul class="mt-1 flex flex-col gap-1 text-xs text-amber-700">
+              ${recentUnknownScopes(8).map(
+                (s) =>
+                  html`<li class="flex gap-2">
+                    <span class="shrink-0 text-amber-500">${fmtDate(new Date(s.at).toISOString())}</span>
+                    <span>scope <code>${s.scopeType}</code>${s.groupId !== null ? html` · group ${s.groupId}` : null}</span>
+                  </li>`,
+              )}
+            </ul>
+          </div>`
+        : html``;
+
     const body = html`
       ${pageHeader('Dashboard', 'Capture health and archive at a glance')} ${fileIndicator}
+      ${scopeIndicator}
 
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         ${stat('Messages', stats.totalMessages)}

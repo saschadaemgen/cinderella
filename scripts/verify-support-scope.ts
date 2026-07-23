@@ -27,7 +27,12 @@
 import { PGlite } from '@electric-sql/pglite';
 import { loadMigrationFiles } from '../src/db/migrate.js';
 import { registerCapture, type CaptureHooks } from '../src/capture/handler.js';
-import { isPublicGroupChat, parseGroupMessage } from '../src/capture/message.js';
+import { isPublicGroupChat, parseGroupMessage, unrecognisedScopeType } from '../src/capture/message.js';
+import {
+  clearUnknownScopes,
+  recentUnknownScopes,
+  unknownScopeCount,
+} from '../src/capture/scope-diagnostics.js';
 import { upsertMessage } from '../src/db/messages.js';
 import { recordOptIn } from '../src/db/consent.js';
 import type { Config } from '../src/config.js';
@@ -237,6 +242,46 @@ async function main(): Promise<void> {
     'a support-scope deletion leaves the public message published',
     (await inPublished('public group%')) === 1,
   );
+
+  /* ── 5. Only UNRECOGNISED scopes are counted + surfaced ──────────────────── */
+  section('5. Unrecognised-scope diagnostics (expected exclusions stay silent)');
+
+  // The classifier: expected exclusions return null; the unknown/malformed ones
+  // return a label to surface.
+  check('a public item is not an exclusion', unrecognisedScopeType(pub.chatInfo) === null);
+  check('memberSupport is an EXPECTED exclusion (silent)', unrecognisedScopeType(priv.chatInfo) === null);
+  check('a direct chat is an EXPECTED exclusion (silent)', unrecognisedScopeType(direct.chatInfo) === null);
+  check('an unknown scope IS reported', unrecognisedScopeType(weird.chatInfo) === 'somethingNewLater');
+
+  const malformed = {
+    chatInfo: {
+      type: 'group',
+      groupInfo: { groupId: GROUP, localDisplayName: 'archive' },
+      groupChatScope: {}, // present but no discriminator
+    },
+    chatItem: {
+      chatDir: { type: 'groupRcv', groupMember },
+      meta: { itemId: nextItemId++, itemTs: at(6) },
+      content: { type: 'rcvMsgContent', msgContent: { type: 'text', text: 'malformed scope' } },
+    },
+  } as unknown as T.AChatItem;
+  check('a malformed scope is reported as (malformed)', unrecognisedScopeType(malformed.chatInfo) === '(malformed)');
+
+  // The counter: drive the real gate over one of each and prove ONLY the
+  // unrecognised ones move the count.
+  clearUnknownScopes();
+  parseGroupMessage(pub); // captured — no count
+  parseGroupMessage(priv); // memberSupport — expected, no count
+  parseGroupMessage(direct); // direct — expected, no count
+  parseGroupMessage(weird); // unknown — +1
+  parseGroupMessage(malformed); // malformed — +1
+  check('exactly the two unrecognised items were counted', unknownScopeCount() === 2, `got ${unknownScopeCount()}`);
+  const recent = recentUnknownScopes(10);
+  check(
+    'the surfaced list names the offending scope types',
+    recent.length === 2 && recent.some((s) => s.scopeType === 'somethingNewLater') && recent.some((s) => s.scopeType === '(malformed)'),
+  );
+  check('the expected exclusions were NOT recorded', !recent.some((s) => s.scopeType === 'memberSupport'));
 
   console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILURE(S)`}`);
   await pg.close();

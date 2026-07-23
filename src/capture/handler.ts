@@ -254,6 +254,7 @@ export function registerCapture(
       // CCB-S3-019: same gate as capture — a private support-scope deletion must
       // not be routed into archive bookkeeping (it never had a public row anyway).
       if (!isPublicGroupChat(aci.chatInfo)) continue;
+      if (aci.chatInfo.type !== 'group') continue; // narrow (guaranteed above)
       const groupInfo = aci.chatInfo.groupInfo;
       const ids = byGroup.get(groupInfo.groupId) ?? [];
       ids.push(aci.chatItem.meta.itemId);

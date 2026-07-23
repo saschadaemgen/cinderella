@@ -29,9 +29,15 @@ exists to prevent, and unrecoverable once read. A whitelist that fails closed is
 missing archive row is a small, recoverable loss; a leaked private message is not. A blacklist of
 known-bad scopes would have to be extended for every new scope; a whitelist excludes the unknown by
 construction.
-**Evidence.** `src/capture/message.ts` (`isPublicGroupChat`, `parseGroupMessage`);
-`src/capture/handler.ts` (deletion path uses the same predicate); `scripts/verify-support-scope.ts`
-(fails if the gate is removed); `scripts/scan-support-scope.ts` (existing-data remediation);
+**Diagnostic.** Expected exclusions (direct chats, `memberSupport`) are silent; an UNRECOGNISED
+scope is counted and surfaced on the dashboard (amber), because capture stopping for a reason we do
+not understand must never be invisible (`unrecognisedScopeType`, `src/capture/scope-diagnostics.ts`).
+**Remediation outcome.** The scan found 2 support-scope rows already captured, 0 ever published, from
+one member; both removed.
+**Evidence.** `src/capture/message.ts` (`isPublicGroupChat`, `unrecognisedScopeType`,
+`parseGroupMessage`); `src/capture/handler.ts` (deletion path uses the same predicate);
+`src/web/views/dashboard.ts` (the amber diagnostic); `scripts/verify-support-scope.ts` (fails if the
+gate is removed; asserts the counter); `scripts/scan-support-scope.ts` (existing-data remediation);
 `docs/security.md` §9h.
 
 ---
