@@ -13,6 +13,29 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-061 — No em-dashes in member-facing output, enforced; help reads as blocks
+
+**Status: IMPLEMENTED (CCB-S3-021).**
+**Decision.** The em-dash (`—`), en-dash (`–`), and horizontal bar (`―`) are banned from every
+member-facing string, in every language, and the ban is enforced by `verify:no-dashes`. The harness
+guards on three fronts: locale files (blanket), the composed runtime output (persona, retorts, the
+help reply + its topics, the welcome message), and a comment-stripped source scan of the copy-bearing
+modules plus the whole `src/plugins` tree, so a new plugin's strings are caught without anyone
+remembering to. The rule is recorded in `CLAUDE.md`.
+**Also.** The help reply was regrouped into blocks separated by blank lines (who she is, how to talk
+to her, what publishing means, what you can ask), one icon per heading rather than one per line, and
+an undecorated command list. Every fact was kept, including the three publishing properties; the
+fuller detail stays in `help consent` / `help prices`. The welcome message's "three things" run-on
+became three lines. This is a formatting change, not a content cut.
+**Rationale.** The operator has a standing style rule against these characters; without an enforced
+check the fault returns the moment someone writes new copy (the same lesson as the doubled-delimiter
+guard, D-003 era). And the help is the first thing a new member sees, so vertical grouping is worth
+more than density.
+**Evidence.** `scripts/verify-no-dashes.ts`; `src/interaction/help.ts`, `src/interaction/settings.ts`,
+`src/consent/commands.ts` (WELCOME_MESSAGE), `locales/*.json`; `CLAUDE.md`.
+
+---
+
 ### D-060 — The admin console shares the website's dark-neon design system
 
 **Status: IMPLEMENTED (CCB-S3-015 Stage 3).**

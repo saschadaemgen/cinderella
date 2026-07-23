@@ -241,14 +241,14 @@ export interface InteractionSettings {
 const PERSONA_EN: PersonaStrings = {
   publishConfirm:
     '🕯️ Shall I carry your words into the light? Say *yes* and it is done. Only what you say ' +
-    'from this moment on, never anything from before. It stays public until you take it back — ' +
-    'and taking it back is final, there is no bringing it back after.',
+    'from this moment on, never anything from before. It stays public until you take it back, ' +
+    'and taking it back is final; there is no bringing it back after.',
   published:
     '✨ Done. From now on your words shine in the public archive. Say *{wake}, unpublish me* ' +
     'whenever you want to take them back.',
   unpublishConfirm:
     '🌙 This takes back everything you have published, all at once, and it cannot be undone. ' +
-    'Opting in again later starts fresh from that moment — it will not bring the old words back. ' +
+    'Opting in again later starts fresh from that moment, and it will not bring the old words back. ' +
     'Say *yes* to confirm.',
   unpublished:
     '🌙 Back into the dark they go. Your words are out of the archive, and nothing new will ' +
@@ -268,7 +268,7 @@ const PERSONA_EN: PersonaStrings = {
   undoNothing: '↩️ There is nothing recent of yours for me to undo.',
   undoNotRevocation:
     '🌙 Taking your words back is the one thing I cannot undo. What is out of the light stays ' +
-    'out of it. Say *publish* whenever you want to begin again — from that moment on, never ' +
+    'out of it. Say *publish* whenever you want to begin again, from that moment on, never ' +
     'from before.',
   cancelled: '🕯️ Then nothing is done. I shall wait until you are certain.',
   help:
@@ -295,14 +295,14 @@ const PERSONA_EN: PersonaStrings = {
 const PERSONA_DE: PersonaStrings = {
   publishConfirm:
     '🕯️ Soll ich deine Worte ans Licht tragen? Sag *ja*, und es ist getan. Nur das, was du ab ' +
-    'jetzt sagst, nie etwas von vorher. Es bleibt öffentlich, bis du es zurücknimmst — und das ' +
-    'Zurücknehmen ist endgültig, danach gibt es kein Zurückholen.',
+    'jetzt sagst, nie etwas von vorher. Es bleibt öffentlich, bis du es zurücknimmst, und das ' +
+    'Zurücknehmen ist endgültig; danach gibt es kein Zurückholen.',
   published:
     '✨ Erledigt. Von nun an leuchten deine Worte im öffentlichen Archiv. Sag *{wake}, widerrufe ' +
     'das*, wann immer du sie zurücknehmen willst.',
   unpublishConfirm:
     '🌙 Das nimmt alles zurück, was du veröffentlicht hast, auf einmal, und es lässt sich nicht ' +
-    'rückgängig machen. Ein späteres erneutes Opt-in beginnt von diesem Moment an neu — es holt ' +
+    'rückgängig machen. Ein späteres erneutes Opt-in beginnt von diesem Moment an neu, es holt ' +
     'die alten Worte nicht zurück. Sag *ja* zum Bestätigen.',
   unpublished:
     '🌙 Zurück ins Dunkel damit. Deine Worte sind aus dem Archiv, und nichts Neues folgt ihnen ' +
@@ -323,7 +323,7 @@ const PERSONA_DE: PersonaStrings = {
   undoNothing: '↩️ Da ist nichts Jüngeres von dir, was ich rückgängig machen könnte.',
   undoNotRevocation:
     '🌙 Das Zurücknehmen ist das Einzige, was ich nicht rückgängig machen kann. Was aus dem ' +
-    'Licht ist, bleibt draußen. Sag *publish*, wenn du neu beginnen willst — ab diesem Moment, ' +
+    'Licht ist, bleibt draußen. Sag *publish*, wenn du neu beginnen willst, ab diesem Moment, ' +
     'nie von vorher.',
   cancelled: '🕯️ Dann bleibt alles, wie es ist. Ich warte, bis du dir sicher bist.',
   help:

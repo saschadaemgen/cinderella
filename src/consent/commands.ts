@@ -70,7 +70,10 @@ Before you settle in, one thing you should know. By default, whatever you say he
 
 If you want your words to step into the light and join the public record, that is your call. Say so, and I will carry your messages, meaning your text, images, video and links, out to my public archive, a searchable page kept for good, with your name on it. From the moment you say yes, and only forward from there. Never behind your back.
 
-Three things worth knowing before you decide. I only ever publish what you say after you opt in, never anything from before. It stays public, and searchable, for as long as you leave it there. And taking it back is final: /unpublish removes everything at once, and opting in again later starts fresh from that moment, it does not bring the old words back.
+Three things worth knowing before you decide.
+Forward only: I only ever publish what you say after you opt in, never anything from before.
+Public until you take it back: it stays on the web, and searchable, for as long as you leave it there.
+Taking it back is final: /unpublish removes everything at once, and opting in again later starts fresh from that moment, it does not bring the old words back.
 
 To let me publish for you, send /publish
 To take it all back, send /unpublish

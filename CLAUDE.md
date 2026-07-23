@@ -28,6 +28,13 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 - **No secrets in source or logs.** Everything sensitive is env (git-ignored
   `.env` in dev; systemd `EnvironmentFile` 0600 in prod). Redact before logging.
 - **English** everywhere. Proof-of-concept before integration.
+- **No em-dashes in member-facing output** (standing rule, CCB-S3-021). The em-dash
+  (`—`), en-dash (`–`), and horizontal bar (`―`) must never appear in any string a
+  member can read, in any language: persona strings, locale files, the help and
+  welcome copy, retorts, plugin replies, and any admin copy that reaches a member.
+  Use a normal hyphen, a comma, or restructure. Enforced by `verify:no-dashes`,
+  which also scans the whole plugins tree so new copy is caught automatically.
+  (Prose comments and docs are out of scope; this is about output.)
 
 ## Architecture (decided — do not re-litigate)
 

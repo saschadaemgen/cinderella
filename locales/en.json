@@ -4,7 +4,7 @@
     "name": "English",
     "ogLocale": "en_US",
     "default": true,
-    "status": "CCB-S3-001 — copy ported from the operator's approved website template, revised per operator: no em dashes in visible copy, expanded text. Legal placeholder fields (street, dates …) remain to be filled; Privacy/Terms are drafts pending the planning chat's final texts.",
+    "status": "CCB-S3-001: copy ported from the operator's approved website template, revised per operator: no em dashes in visible copy, expanded text. Legal placeholder fields (street, dates …) remain to be filled; Privacy/Terms are drafts pending the planning chat's final texts.",
     "dir": "ltr"
   },
   "brand.name": "Cinderella",
