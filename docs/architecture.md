@@ -623,9 +623,26 @@ distinction is reusable by CCB-S3-018 for expired file receipts.
 
 **Worker (`src/queue/worker.ts`).** One worker in the shared process (bot + web + queue). In-memory
 in-flight counts enforce exact per-type and global concurrency limits, so a backlog cannot exhaust
-CPU/memory/DB connections and take the whole process down. On start it requeues anything left running
-by the previous process (crash recovery); a periodic sweep requeues stale-locked jobs, which is also
-the stuck-job signal. A job that keeps crashing re-increments attempts and so eventually dead-letters.
+CPU/memory/DB connections and take the whole process down.
+
+**Crash recovery (hardened after an adversarial review, D-062).** Four rules keep a slow or
+interrupted job from being run twice, losing attempts, or being dead-lettered while healthy:
+- *Ownership fence.* `completeJob`/`failJob` write only when the job is still `running` under the same
+  worker and the same `attempts` value (the fence token). A run that was reclaimed and superseded by a
+  fresh run finds no match, so a late "zombie" run can never flip a newer run's outcome.
+- *The live worker is never its own orphan.* The periodic sweep excludes jobs the live worker still
+  holds (`locked_by IS DISTINCT FROM $me`): if this alive process holds the lock the handler is slow,
+  not crashed, so reclaiming it would double-run it. Startup uses the new process's id and so still
+  reclaims everything the previous process left running.
+- *Per-type orphan threshold.* How long a `running` lock may age before it counts as abandoned is set
+  per type (`perTypeStuckMs`, fallback `defaultStuckMs`), because a fast image strip and a slow video
+  transcription need very different patience. Values are floored to integer ms. This is also the
+  stuck-job indicator's threshold.
+- *A deploy is not a failure.* On an orderly shutdown the worker requeues its in-flight jobs and rolls
+  back the claim's attempt increment, so a restart neither dead-letters a single-attempt job nor erodes
+  a retry budget. A genuine hard crash does consume an attempt (poison-message protection), so a job
+  that crashes the worker every time dead-letters after `max_attempts` crashes — the same total tries
+  as one whose handler throws.
 
 **Idempotency.** Enqueuing the same `(type, key)` while a live job exists returns that job rather than
 creating a second. Handlers are required to be idempotent so a repeat run (crash, restart, manual

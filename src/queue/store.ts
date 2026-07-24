@@ -111,69 +111,161 @@ export async function claimJob(
   return rows[0] ? toJob(rows[0]) : null;
 }
 
-/** Marks a job done. */
-export async function completeJob(db: Queryable, id: number): Promise<void> {
-  await db.query(
+/**
+ * THE OWNERSHIP FENCE. A run may write the job's outcome ONLY if it still owns the
+ * claim: same worker, same attempt number, still `running`. `attempts` is the fence
+ * token — every claim increments it, so a run that was reclaimed and superseded by a
+ * fresh run finds no match and its write is a no-op. Without this, a stale/zombie
+ * run finishing late could flip a newer run's row (a succeeded job back to queued,
+ * or a live job to dead). Every terminal write below carries the fence.
+ */
+const FENCE = `id = $1 AND state = 'running' AND locked_by = $2 AND attempts = $3`;
+
+/** Marks a job done, iff this run still owns it. Returns false when superseded. */
+export async function completeJob(
+  db: Queryable,
+  job: Pick<Job, 'id' | 'attempts'>,
+  workerId: string,
+): Promise<boolean> {
+  const { rowCount } = await db.query(
     `UPDATE jobs
         SET state = 'succeeded', locked_at = NULL, locked_by = NULL,
             completed_at = now(), updated_at = now(), last_error = NULL
-      WHERE id = $1`,
-    [id],
+      WHERE ${FENCE}`,
+    [job.id, workerId, job.attempts],
   );
+  return (rowCount ?? 0) > 0;
 }
 
 /**
- * Records a failed run. A PERMANENT failure, or one that has used its last attempt,
- * dead-letters immediately (state 'dead', kept for the operator, never retried nor
- * deleted). Otherwise the job is requeued with an exponential-backoff `run_at`.
- * Returns which happened.
+ * Records a failed run, iff this run still owns the claim (the fence). A PERMANENT
+ * failure, or one that has used its last attempt, dead-letters immediately (kept for
+ * the operator, never retried nor deleted); otherwise the job is requeued with an
+ * exponential-backoff `run_at`. Returns 'dead' / 'retry', or 'superseded' when the
+ * fence did not match (this run had already lost its claim, so it changed nothing).
  */
 export async function failJob(
   db: Queryable,
   job: Pick<Job, 'id' | 'attempts' | 'maxAttempts'>,
+  workerId: string,
   errorMessage: string,
   permanent: boolean,
   backoff: BackoffConfig,
-): Promise<'dead' | 'retry'> {
+): Promise<'dead' | 'retry' | 'superseded'> {
   const err = errorMessage.slice(0, 2000);
   if (permanent || job.attempts >= job.maxAttempts) {
-    await db.query(
+    const { rowCount } = await db.query(
       `UPDATE jobs
           SET state = 'dead', locked_at = NULL, locked_by = NULL,
-              completed_at = now(), updated_at = now(), last_error = $2
-        WHERE id = $1`,
-      [job.id, permanent ? `permanent: ${err}` : err],
+              completed_at = now(), updated_at = now(), last_error = $4
+        WHERE ${FENCE}`,
+      [job.id, workerId, job.attempts, permanent ? `permanent: ${err}` : err],
     );
-    return 'dead';
+    return (rowCount ?? 0) > 0 ? 'dead' : 'superseded';
   }
   const delay = backoffMs(backoff, job.attempts);
-  await db.query(
+  const { rowCount } = await db.query(
     `UPDATE jobs
         SET state = 'queued', locked_at = NULL, locked_by = NULL,
-            run_at = now() + ($3 || ' milliseconds')::interval,
-            updated_at = now(), last_error = $2
-      WHERE id = $1`,
-    [job.id, err, String(delay)],
+            run_at = now() + ($5 || ' milliseconds')::interval,
+            updated_at = now(), last_error = $4
+      WHERE ${FENCE}`,
+    [job.id, workerId, job.attempts, err, String(delay)],
   );
-  return 'retry';
+  return (rowCount ?? 0) > 0 ? 'retry' : 'superseded';
+}
+
+export interface ReclaimResult {
+  requeued: number;
+  deadLettered: number;
+}
+
+/** Per-type thresholds as a JSON map with every value floored to a non-negative
+ *  integer ms — a float would make the `::bigint` cast throw and abort the whole
+ *  reclaim/health query. Mirrors the flooring applied to the default. */
+function thresholdsJson(perTypeMs: Record<string, number>): string {
+  const clean: Record<string, number> = {};
+  for (const [k, v] of Object.entries(perTypeMs ?? {})) {
+    clean[k] = Math.max(0, Math.floor(Number(v) || 0));
+  }
+  return JSON.stringify(clean);
 }
 
 /**
- * Crash recovery. Returns 'running' jobs to 'queued' so a worker that vanished
- * mid-flight does not strand its work. `olderThanMs <= 0` requeues ALL running jobs
- * (startup recovery in a single-process deployment); a positive value requeues only
- * those whose lock is older than the threshold (a periodic sweep, and the basis for
- * the stuck-job indicator). The next claim re-increments attempts, so a job that
- * keeps crashing the worker eventually dead-letters rather than looping forever.
+ * Reclaims jobs abandoned by a crashed or stalled worker. A `running` job whose
+ * lock is older than its PER-TYPE threshold is orphaned; `perTypeMs` maps type to
+ * ms and `defaultMs` is the fallback. The threshold must exceed the slowest
+ * legitimate run of that type, or a long job is reclaimed while still working and
+ * runs twice.
+ *
+ * An orphan that has already used its whole attempt budget is DEAD-LETTERED with a
+ * distinct reason (it kept crashing or stalling the worker); one still within budget
+ * is requeued to run again. Because a claim increments `attempts`, a job that
+ * crashes the worker every time consumes a retry each time and so dead-letters after
+ * `max_attempts` crashes rather than looping forever (poison-message protection) —
+ * the same total tries as a job whose handler throws every time.
+ *
+ * `excludeWorkerId` is the CURRENTLY LIVE worker: a job it still holds is NOT
+ * reclaimed however old the lock is, because if this alive process holds the lock
+ * the handler is still running (slow), not crashed. That is what stops a legitimately
+ * long job being reclaimed and double-run. Startup recovery passes the new process's
+ * id (which holds nothing yet) with `defaultMs = 0`, so it reclaims EVERY job left
+ * running by the PREVIOUS process (different worker id) regardless of age.
  */
-export async function requeueStuck(db: Queryable, olderThanMs: number): Promise<number> {
-  const { rowCount } = await db.query(
+export async function reclaimOrphans(
+  db: Queryable,
+  perTypeMs: Record<string, number>,
+  defaultMs: number,
+  excludeWorkerId: string,
+): Promise<ReclaimResult> {
+  const thresholds = thresholdsJson(perTypeMs);
+  const def = String(Math.max(0, Math.floor(defaultMs)));
+  // Per-row orphan test: held by someone OTHER than the live worker, and its lock is
+  // older than this type's threshold (or the default).
+  // `<=` (not `<`) so that with defaultMs=0 the test reduces to `locked_at <= now()`,
+  // which every running row satisfies — startup recovery then deterministically
+  // reclaims ALL jobs left by the previous process, even one locked in the same tick.
+  const orphaned = `state = 'running'
+       AND locked_by IS DISTINCT FROM $3
+       AND locked_at <= now() - ((COALESCE(($1::jsonb ->> type)::bigint, $2::bigint)) || ' milliseconds')::interval`;
+  const dead = await db.query(
+    `UPDATE jobs
+        SET state = 'dead', locked_at = NULL, locked_by = NULL,
+            completed_at = now(), updated_at = now(),
+            last_error = 'gave up after ' || attempts
+                         || ' interrupted run(s): the worker crashed or stalled during this job'
+      WHERE ${orphaned} AND attempts >= max_attempts`,
+    [thresholds, def, excludeWorkerId],
+  );
+  const requeued = await db.query(
     `UPDATE jobs
         SET state = 'queued', locked_at = NULL, locked_by = NULL, updated_at = now(),
-            last_error = 'requeued after interruption (was running)'
-      WHERE state = 'running'
-        AND ($1 <= 0 OR locked_at < now() - ($1 || ' milliseconds')::interval)`,
-    [olderThanMs],
+            last_error = 'requeued after interruption (worker crashed or stalled)'
+      WHERE ${orphaned} AND attempts < max_attempts`,
+    [thresholds, def, excludeWorkerId],
+  );
+  return { requeued: requeued.rowCount ?? 0, deadLettered: dead.rowCount ?? 0 };
+}
+
+/**
+ * Orderly-shutdown drain: requeue the jobs this worker is running, WITHOUT counting
+ * it as an attempt (a deploy is not a failure). Rolls back the claim's attempt
+ * increment and clears the lock, so on the next start these are plain `queued` jobs,
+ * not orphans to be dead-lettered. Fenced to this worker's own locks.
+ */
+export async function drainInFlight(
+  db: Queryable,
+  ids: readonly number[],
+  workerId: string,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const { rowCount } = await db.query(
+    `UPDATE jobs
+        SET state = 'queued', locked_at = NULL, locked_by = NULL,
+            attempts = GREATEST(0, attempts - 1), run_at = now(), updated_at = now(),
+            last_error = 'requeued for an orderly shutdown (not counted as an attempt)'
+      WHERE id = ANY($1::bigint[]) AND state = 'running' AND locked_by = $2`,
+    [[...ids], workerId],
   );
   return rowCount ?? 0;
 }
@@ -209,7 +301,11 @@ export interface QueueHealth {
   oldestQueuedWaitSeconds: number | null;
 }
 
-export async function queueHealth(db: Queryable, stuckAfterMs: number): Promise<QueueHealth> {
+export async function queueHealth(
+  db: Queryable,
+  perTypeMs: Record<string, number>,
+  defaultMs: number,
+): Promise<QueueHealth> {
   const { rows } = await db.query<{
     queued: string; running: string; dead: string; stuck: string;
     succ: string; wait: string | null;
@@ -218,12 +314,14 @@ export async function queueHealth(db: Queryable, stuckAfterMs: number): Promise<
        count(*) FILTER (WHERE state='queued')                                        AS queued,
        count(*) FILTER (WHERE state='running')                                       AS running,
        count(*) FILTER (WHERE state='dead')                                          AS dead,
+       -- A running job past ITS per-type patience is stuck (a crashed/stalled worker).
        count(*) FILTER (WHERE state='running'
-                        AND locked_at < now() - ($1 || ' milliseconds')::interval)   AS stuck,
+                        AND locked_at <= now()
+                            - ((COALESCE(($1::jsonb ->> type)::bigint, $2::bigint)) || ' milliseconds')::interval) AS stuck,
        count(*) FILTER (WHERE state='succeeded' AND completed_at > now() - interval '1 hour') AS succ,
        EXTRACT(EPOCH FROM (now() - min(run_at) FILTER (WHERE state='queued' AND run_at <= now()))) AS wait
      FROM jobs`,
-    [String(stuckAfterMs)],
+    [thresholdsJson(perTypeMs), String(Math.max(0, Math.floor(defaultMs)))],
   );
   const r = rows[0];
   return {

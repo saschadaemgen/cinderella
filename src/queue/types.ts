@@ -93,8 +93,17 @@ export interface QueueConfig {
   bulkPaused: boolean;
   /** How often the worker looks for work when idle. */
   pollIntervalMs: number;
-  /** A running job older than this is "stuck" (crashed worker) — swept + surfaced. */
-  stuckAfterMs: number;
+  /**
+   * Orphan-reclaim threshold PER TYPE, in ms: a `running` job whose lock is older
+   * than this is treated as abandoned by a crashed or stalled worker and reclaimed.
+   * It MUST be comfortably longer than the SLOWEST legitimate run of that type, or a
+   * long job is reclaimed while it is still working and runs twice (idempotency
+   * limits the damage, but the work is wasted). Per type, because a fast image strip
+   * and a slow video transcription need very different patience. Falls back to
+   * {@link defaultStuckMs}. This is also the stuck-job indicator's threshold.
+   */
+  perTypeStuckMs: Record<string, number>;
+  defaultStuckMs: number;
   backoff: BackoffConfig;
 }
 
@@ -104,7 +113,10 @@ export const DEFAULT_QUEUE_CONFIG: QueueConfig = {
   defaultPerType: 2,
   bulkPaused: false,
   pollIntervalMs: 500,
-  stuckAfterMs: 5 * 60 * 1000,
+  // 5 min suits the fast types built so far (media strip, thumbnail fetch). Slow
+  // types set their own: e.g. video transcription should be tens of minutes.
+  perTypeStuckMs: {},
+  defaultStuckMs: 5 * 60 * 1000,
   backoff: { baseMs: 2000, factor: 2, capMs: 5 * 60 * 1000, jitter: 0.2 },
 };
 

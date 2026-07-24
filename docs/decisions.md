@@ -29,10 +29,19 @@ could see it: derivatives that could not be written, a remediation script run as
 that lost their evidence on restart. Categorisation and the gallery will be far heavier; building them
 on ad-hoc work would repeat every failure at scale. The queue is deliberately boring: one process,
 one database, no broker. `SKIP LOCKED` still lets a second process pull safely if it is ever needed.
+**Crash recovery, hardened by an adversarial review.** A multi-agent review of the reclaim path
+caught four real defects the first harness missed: `completeJob`/`failJob` had no ownership fence (a
+superseded "zombie" run could clobber a newer run's terminal state); the sweep reclaimed a job the
+LIVE worker still held (double-running a slow-but-alive handler and consuming an attempt on a job that
+never failed); a graceful deploy consumed an attempt and could dead-letter a single-attempt in-flight
+job; and a non-integer per-type threshold threw in the `::bigint` cast and the swallowed error
+silently disabled all reclaim. All four are fixed and locked in by `verify:queue` (attempt-fence,
+live-worker exclusion, orderly-drain vs hard-crash, float sanitisation) — see architecture §21.
 **Evidence.** `migrations/017_jobs.sql`; `src/queue/{types,store,registry,worker,index}.ts`,
-`src/queue/jobs/analysis.ts`; `scripts/verify-queue.ts` (durability, no-double-claim, backoff +
-dead-letter, permanent fail-fast, starvation with a 2000-job backlog, concurrency + pause,
-idempotency, observability); `docs/architecture.md` §21.
+`src/queue/jobs/analysis.ts`; `scripts/verify-queue.ts` (48 checks: durability, no-double-claim,
+backoff + dead-letter, permanent fail-fast, starvation with a 2000-job backlog, concurrency + pause,
+idempotency, per-type threshold, ownership fence, orderly drain, observability); `docs/architecture.md`
+§21.
 **Not built here (deliberately).** No categorisation and no AI integration; the analysis job is a
 placeholder that records "no provider configured". The analysis interface waits for the AI briefing.
 
