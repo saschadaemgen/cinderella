@@ -91,32 +91,12 @@ const CAPABILITIES: Partial<Record<Intent, Capability>> = {
 const COPY: Record<
   HelpLang,
   {
-    intro: string;
-    talk: string;
-    consent: string;
-    capsHeading: string;
     learnMore: (links: string[]) => string;
     consentTopic: string;
     pricesTopic: string;
   }
 > = {
   en: {
-    intro:
-      '🕯️ I am *Cinderella*{label}. This is a public group, and I keep a public web archive of what ' +
-      'its members choose to publish.',
-    talk:
-      '💬 *Talking to me*\n' +
-      'Say my name: "*{wake}*, ...". A greeting is optional, and once we are talking you can ' +
-      'follow up for a moment without repeating my name. Slash commands like */publish* work as ' +
-      'shorthand.',
-    consent:
-      '🔑 *Publishing, so there are no surprises*\n' +
-      '*Forward only.* Only what you say after you opt in is ever published, nothing from before.\n' +
-      '*Public until you take it back.* Published words stay on the web, searchable, for as long ' +
-      'as you leave them there.\n' +
-      '*Taking them back is final.* _unpublish_ removes everything at once, and opting in again ' +
-      'starts fresh; it does not bring the old words back.',
-    capsHeading: '✨ *What you can ask me*',
     learnMore: (links) => `🔗 More: ${links.join(' · ')}`,
     consentTopic:
       '🔑 *Publishing, in full*\n' +
@@ -135,22 +115,6 @@ const COPY: Record<
       'nothing about it is published or kept.',
   },
   de: {
-    intro:
-      '🕯️ Ich bin *Cinderella*{label}. Dies ist eine öffentliche Gruppe, und ich führe ein ' +
-      'öffentliches Web-Archiv dessen, was ihre Mitglieder veröffentlichen möchten.',
-    talk:
-      '💬 *So sprichst du mit mir*\n' +
-      'Sprich mich beim Namen an: "*{wake}*, ...". Eine Begrüßung ist freiwillig, und wenn wir ' +
-      'einmal im Gespräch sind, kannst du kurz nachfassen, ohne meinen Namen zu wiederholen. ' +
-      'Slash-Befehle wie */publish* gehen als Kurzform.',
-    consent:
-      '🔑 *Zum Veröffentlichen, damit es keine Überraschungen gibt*\n' +
-      '*Nur vorwärts.* Veröffentlicht wird nur, was du nach dem Opt-in sagst, nichts von vorher.\n' +
-      '*Öffentlich, bis du es zurücknimmst.* Veröffentlichte Worte bleiben im Netz, durchsuchbar, ' +
-      'solange du sie dort lässt.\n' +
-      '*Das Zurücknehmen ist endgültig.* _unpublish_ entfernt alles auf einmal, und ein erneutes ' +
-      'Opt-in beginnt von diesem Moment an neu; es holt die alten Worte nicht zurück.',
-    capsHeading: '✨ *Worum du mich bitten kannst*',
     learnMore: (links) => `🔗 Mehr: ${links.join(' · ')}`,
     consentTopic:
       '🔑 *Veröffentlichen, ausführlich*\n' +
@@ -170,6 +134,71 @@ const COPY: Record<
   },
 };
 
+/**
+ * The three publishing properties, injected into the help reply's `{consent}`
+ * slot. Kept in CODE, not in the operator template, so what a member is told about
+ * publishing can never drift from the actual behaviour (CCB-S3-021 §3). No heading
+ * here; the template owns the heading.
+ */
+const CONSENT_BLOCK: Record<HelpLang, string> = {
+  en:
+    '*Forward only.* Only what you say after you opt in is ever published, nothing from before.\n' +
+    '*Public until you take it back.* Published words stay on the web, searchable, for as long ' +
+    'as you leave them there.\n' +
+    '*Taking them back is final.* _unpublish_ removes everything at once, and opting in again ' +
+    'starts fresh; it does not bring the old words back.',
+  de:
+    '*Nur vorwärts.* Veröffentlicht wird nur, was du nach dem Opt-in sagst, nichts von vorher.\n' +
+    '*Öffentlich, bis du es zurücknimmst.* Veröffentlichte Worte bleiben im Netz, durchsuchbar, ' +
+    'solange du sie dort lässt.\n' +
+    '*Das Zurücknehmen ist endgültig.* _unpublish_ entfernt alles auf einmal, und ein erneutes ' +
+    'Opt-in beginnt von diesem Moment an neu; es holt die alten Worte nicht zurück.',
+};
+
+/**
+ * The DEFAULT help reply, per language, and the one editable help text (CCB-S3-021
+ * §3): the operator edits this template in the admin, blanking it restores this
+ * default, and the machine fills the slots that must stay true. `{wake}` = her
+ * name, `{label}` = what she is (CCB-S3-025), `{consent}` = the three publishing
+ * properties above, `{commands}` = the generated capability list. `{commands}` and
+ * `{consent}` are REQUIRED, so a reply can never ship without the command list or
+ * the properties. Grouped into blocks with a blank line between; one icon per
+ * heading, none per command line; no em-dashes; single-delimiter markup only.
+ */
+export const DEFAULT_HELP_TEMPLATE: Record<HelpLang, string> = {
+  en: `🕯️ I am *Cinderella*{label}. This is a public group, and I keep a public web archive of what its members choose to publish.
+
+💬 *Talking to me*
+Say my name: "*{wake}*, ...". A greeting is optional, and once we are talking you can follow up for a moment without repeating my name. Slash commands like */publish* work as shorthand.
+
+🔑 *Publishing, so there are no surprises*
+{consent}
+
+✨ *What you can ask me*
+{commands}`,
+  de: `🕯️ Ich bin *Cinderella*{label}. Dies ist eine öffentliche Gruppe, und ich führe ein öffentliches Web-Archiv dessen, was ihre Mitglieder veröffentlichen möchten.
+
+💬 *So sprichst du mit mir*
+Sprich mich beim Namen an: "*{wake}*, ...". Eine Begrüßung ist freiwillig, und wenn wir einmal im Gespräch sind, kannst du kurz nachfassen, ohne meinen Namen zu wiederholen. Slash-Befehle wie */publish* gehen als Kurzform.
+
+🔑 *Zum Veröffentlichen, damit es keine Überraschungen gibt*
+{consent}
+
+✨ *Worum du mich bitten kannst*
+{commands}`,
+};
+
+/** Placeholders the operator's help template MUST keep (CCB-S3-021 §3), so the
+ * generated command list and the publishing properties always appear. */
+export const REQUIRED_HELP_PLACEHOLDERS = ['{commands}', '{consent}'] as const;
+
+/** Which required placeholders a submitted help template is missing (empty = ok). A
+ * blank template is valid (it restores the default, which has them). */
+export function missingHelpPlaceholders(template: string): string[] {
+  if (!template.trim()) return [];
+  return REQUIRED_HELP_PLACEHOLDERS.filter((p) => !template.includes(p));
+}
+
 /** The order capabilities are listed in, so the reply reads sensibly. */
 const ORDER: Intent[] = ['PUBLISH', 'UNPUBLISH', 'STATUS', 'SEARCH', 'PRICE', 'HELP', 'UNDO'];
 
@@ -180,6 +209,8 @@ function fillWake(text: string, wake: string): string {
 }
 
 export interface HelpContext {
+  /** The operator's editable help template (persona `help`); blank → the default. */
+  template: string;
   intents: readonly Intent[];
   wake: string;
   lang: HelpLang;
@@ -190,11 +221,12 @@ export interface HelpContext {
 }
 
 /**
- * Builds the full help reply from the active catalog.
- *
- * The capability list walks {@link ORDER} filtered to what is ACTIVE, so PRICE
- * vanishes when the plugin is off and any future intent with a CAPABILITIES entry
- * appears the moment it is active.
+ * Builds the help reply by filling the operator's template (CCB-S3-021 §3). The
+ * operator owns the wording and structure; the machine fills the slots that must
+ * stay true: `{wake}`, `{label}`, `{consent}` (the publishing properties) and
+ * `{commands}` (the capability list, walked from {@link ORDER} filtered to what is
+ * ACTIVE, so a disabled plugin stops advertising itself and a new one appears).
+ * A blank template falls back to the shipped {@link DEFAULT_HELP_TEMPLATE}.
  */
 export function buildHelpReply(ctx: HelpContext): string {
   const c = COPY[ctx.lang];
@@ -203,21 +235,19 @@ export function buildHelpReply(ctx: HelpContext): string {
     const cap = CAPABILITIES[i] as Capability;
     return ctx.lang === 'en' ? cap.en : cap.de;
   });
-
-  // Blocks are separated by a BLANK LINE (`\n\n`); the command list is its heading
-  // plus one undecorated line per command. Vertical space is what makes this
-  // scannable in a chat bubble (CCB-S3-021).
+  const template = ctx.template.trim() ? ctx.template : DEFAULT_HELP_TEMPLATE[ctx.lang];
   const label = ctx.label?.trim() ? ` ${ctx.label.trim()}` : '';
-  const blocks: string[] = [
-    // Function replacer so an operator label containing `$&`/`$'` is inserted
-    // literally, not interpreted as a replacement pattern (CCB-S3-025 review).
-    fillWake(c.intro.replace(/\{label\}/g, () => label), ctx.wake),
-    fillWake(c.talk, ctx.wake),
-    fillWake(c.consent, ctx.wake),
-    [c.capsHeading, ...caps].join('\n'),
-  ];
-  if (ctx.links.length > 0) blocks.push(c.learnMore([...ctx.links]));
-  return blocks.join('\n\n');
+  // Generated slots first, then the operator-set values, all via function replacers
+  // so a value containing `$&`/`$'` is inserted literally and a wake/label value
+  // that happens to contain `{commands}` is never re-expanded (CCB-S3-025 review).
+  let out = template
+    .replace(/\{consent\}/g, () => CONSENT_BLOCK[ctx.lang])
+    .replace(/\{commands\}/g, () => caps.join('\n'))
+    .replace(/\{label\}/g, () => label)
+    .replace(/\{wake\}/g, () => ctx.wake);
+  // The "learn more" footer is generated (the links) and appended when present.
+  if (ctx.links.length > 0) out += `\n\n${c.learnMore([...ctx.links])}`;
+  return out.trim();
 }
 
 /** Detail for `help <topic>`. Null when the topic is not one she has detail for. */

@@ -23,6 +23,7 @@ import { getSetting, setSetting } from '../db/settings.js';
 import type { Queryable } from '../db/pool.js';
 import { writeAudit } from '../db/audit.js';
 import type { ReplyCategory } from '../archive/settings.js';
+import { DEFAULT_HELP_TEMPLATE, missingHelpPlaceholders } from './help.js';
 
 /** Languages shipped with preconfigured copy. More can be added as keys. */
 export const SHIPPED_LANGS = ['en', 'de'] as const;
@@ -279,10 +280,9 @@ const PERSONA_EN: PersonaStrings = {
     'out of it. Say *publish* whenever you want to begin again, from that moment on, never ' +
     'from before.',
   cancelled: '🕯️ Then nothing is done. I shall wait until you are certain.',
-  help:
-    '🕯️ Say "{wake}, publish me" and your words join the public archive. Say ' +
-    '"{wake}, unpublish me" and they leave it again. Ask "{wake}, what do you have on me" ' +
-    'for your tally, or "{wake}, search ..." to look through the archive.',
+  // The one editable help text (CCB-S3-021 §3): a template the machine fills.
+  // Blanking it in the admin restores this default.
+  help: DEFAULT_HELP_TEMPLATE.en,
   // CCB-S3-006 §6 — one fact per line, icons carrying meaning, the emphasised
   // elements being the amount, the asset and the value. Verified against the
   // real parser: single delimiters only, and no leading whitespace, because
@@ -334,10 +334,7 @@ const PERSONA_DE: PersonaStrings = {
     'Licht ist, bleibt draußen. Sag *publish*, wenn du neu beginnen willst, ab diesem Moment, ' +
     'nie von vorher.',
   cancelled: '🕯️ Dann bleibt alles, wie es ist. Ich warte, bis du dir sicher bist.',
-  help:
-    '🕯️ Sag "{wake}, veröffentliche mich", und deine Worte kommen ins öffentliche Archiv. Sag ' +
-    '"{wake}, widerrufe das", und sie verschwinden wieder. Frag "{wake}, was hast du über mich" ' +
-    'für deine Bilanz, oder "{wake}, suche ..." um das Archiv zu durchsuchen.',
+  help: DEFAULT_HELP_TEMPLATE.de,
   price: '💰 *{amount} {base}* sind etwa *{value} {quote}*\n📊 {detail}',
   conversion: '🔮 *{amount} {base}* sind etwa *{value} {quote}*\n📊 {detail}',
   priceUnknownAsset:
@@ -576,6 +573,18 @@ function isLangCode(s: string): boolean {
   return /^[a-z]{2}(-[a-z]{2})?$/.test(s);
 }
 
+/**
+ * A persona value, defaulted per key. Blank restores the default for every key;
+ * the `help` field ALSO restores the default when the stored template is missing a
+ * required placeholder (CCB-S3-021 §3), so a pre-CCB-S3-021 one-line help, or any
+ * template lacking {commands}/{consent}, never renders a help without its command
+ * list or publishing properties.
+ */
+function personaValue(key: PersonaKey, v: string, fallback: string): string {
+  if (key === 'help') return v && missingHelpPlaceholders(v).length === 0 ? v : fallback;
+  return v || fallback;
+}
+
 function normalizePersona(input: unknown): Record<string, PersonaStrings> {
   const src = rec(input);
   const out: Record<string, PersonaStrings> = {};
@@ -589,7 +598,7 @@ function normalizePersona(input: unknown): Record<string, PersonaStrings> {
     const strings = {} as PersonaStrings;
     for (const key of PERSONA_KEYS) {
       const v = str(given[key], '', 2000).trim();
-      strings[key] = v || fallback[key];
+      strings[key] = personaValue(key, v, fallback[key]);
     }
     out[lang] = strings;
   }
@@ -602,7 +611,7 @@ function normalizePersona(input: unknown): Record<string, PersonaStrings> {
     const strings = {} as PersonaStrings;
     for (const key of PERSONA_KEYS) {
       const v = str(given[key], '', 2000).trim();
-      strings[key] = v || PERSONA_EN[key];
+      strings[key] = personaValue(key, v, PERSONA_EN[key]);
     }
     out[lang] = strings;
   }

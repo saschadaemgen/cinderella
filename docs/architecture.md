@@ -555,12 +555,18 @@ the answer on the next read.
 The public front marks the pairing explicitly with an "in reply" link rather than leaving a
 reader to infer it from timestamps.
 
-## 18. Help and consent copy (CCB-S3-010)
+## 18. Help and consent copy (CCB-S3-010, CCB-S3-021)
 
-The help reply (`src/interaction/help.ts`) is generated from `activeIntentList()`, so the
-capability list reflects what is enabled, with `help <topic>` detail for consent and prices. `/help`
-is answered directly (a slash is an explicit address), and an instruction beginning with "help"
-is forced to HELP because it otherwise loses to a PRICE reading.
+The help reply (`src/interaction/help.ts`) is ONE editable template the machine fills (CCB-S3-021 §3,
+D-066), not code-only prose. The operator edits the persona `help` field (per language, in the admin);
+the code fills `{wake}`, `{label}`, `{consent}` (the three publishing properties, kept in code so they
+cannot drift) and `{commands}` (the capability list, still generated from `activeIntentList()` so a
+disabled plugin drops out and a new one appears). Blanking the field restores the shipped default
+(`DEFAULT_HELP_TEMPLATE`); a non-blank template missing `{commands}` or `{consent}` is rejected on save
+naming the missing one (`missingHelpPlaceholders`). `help <topic>` gives consent/prices detail. `/help`
+is answered directly (a slash is an explicit address), and an instruction beginning with "help" is
+forced to HELP because it otherwise loses to a PRICE reading. (Formatting: grouped blocks, one icon per
+heading, plain command list, no em-dashes, single-delimiter markup only, from CCB-S3-021 §1-2 / D-061.)
 
 The consent prompts, welcome message and help all state the three properties — forward-only,
 public-until-revoked, revocation-final — in EN and DE. They are written to today's behaviour; a

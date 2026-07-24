@@ -13,6 +13,39 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-066 — The help reply is one editable template the machine fills, not two texts where the editable one is dead
+
+**Status: IMPLEMENTED (CCB-S3-021 §3; parts 1-2 remain as D-061).**
+**The fault.** The admin's Voice section carried an editable `Help` field, but the reply a member
+actually got was generated in code (`buildHelpReply`) and never read that field. So there were two help
+texts and the editable one changed nothing: the operator could edit it, see it save, and change nothing
+that is worse than no field at all. This is the CCB-S3-023 masking pattern, in the admin rather than a
+log. An audit of the other persona fields found **`help` was the only editable-but-dead one** (every
+other key reaches `reply()`, and `redactedMember` is used by the publish view). The slash-command
+consent replies (`PUBLISH_REPLY` etc. in `consent/commands.ts`) are live but not admin-editable, a
+separate copy source from the editable natural-addressing persona replies, not a masked field.
+**The fix.** There is now exactly ONE help text: the persona `help` field IS the reply, as a template
+the machine fills. The operator edits the wording and structure; the code fills the slots that must stay
+true: `{wake}` (her name), `{label}` (what she is), `{consent}` (the three publishing properties, kept
+in code so they cannot drift from behaviour) and `{commands}` (the capability list, still walked from the
+ACTIVE catalog, so a disabled plugin drops out and a new one appears automatically). The default template
+reproduces the D-061 block layout exactly, so nothing changes visually out of the box.
+**Guarantees.** Per language (EN/DE); **blanking restores the shipped default** (the existing persona
+rule); and **saving a non-blank template without a required placeholder is rejected**, naming the missing
+one (`{commands}` or `{consent}`), rather than silently shipping a help with no command list. The admin
+shows the placeholders and what each expands to beneath the field. Validation is `missingHelpPlaceholders`
+in `help.ts`, called by the persona save; the `verify:interaction` §20 checks lock in editing-changes-the-
+reply, catalog-still-fills-`{commands}`, blank-restores-default, and the placeholder rejection.
+**Also (CCB-S3-025 follow-up).** The unbounded message-id that could overflow BIGINT into a 500 was
+bounded on the media and report routes too, matching the permalink route, so a huge id 404s / neutral-
+confirms cleanly.
+**Evidence.** `src/interaction/help.ts` (`DEFAULT_HELP_TEMPLATE`, `CONSENT_BLOCK`, `buildHelpReply`,
+`missingHelpPlaceholders`), `src/interaction/settings.ts` (`persona.help` default), `src/interaction/
+engine.ts` (passes the template), `src/web/views/interaction.ts` (placeholder hint + save validation),
+`src/web/front/embed.ts` (id bounds); `scripts/verify-interaction.ts` §20, `scripts/verify-no-dashes.ts`.
+
+---
+
 ### D-065 — Stream polish: chat formatting, a soft report control, a script-free share bar with per-item permalinks, and bot attribution
 
 **Status: IMPLEMENTED (CCB-S3-025).**

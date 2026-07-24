@@ -301,6 +301,12 @@ The history below records the pre-CCB-S2-003 state.
 - [x] **Help and consent explanation (CCB-S3-010)** — full help generated from the active catalog,
       `help <topic>` detail, extended vocabulary, `/help`; consent prompts, welcome and help state
       the three properties (forward-only, public-until-revoked, final) in EN and DE.
+- [x] **No em-dashes + readable, editable help (CCB-S3-021)** — the em-dash sweep + `verify:no-dashes`
+      guard + the standing CLAUDE.md rule and the block-structured help/welcome are D-061 (§1-2). §3
+      (D-066) made the help ONE editable template: the persona `help` field IS the reply, with the
+      machine filling `{wake}`/`{label}`/`{consent}`/`{commands}` (the last still catalog-driven); blank
+      restores the default; a save missing a required placeholder is rejected. The previously dead
+      editable Help field is gone. Audit: `help` was the only editable-but-dead persona field.
 - [ ] **Native command menu (CCB-S3-010 §2c) — investigated, not adopted.** The SDK exposes it, but
       it renders only in a 1:1 chat with the bot, and Cinderella has no contact address. A
       `buildCommandMenu` producer over the active catalog is ready if she is ever given a direct

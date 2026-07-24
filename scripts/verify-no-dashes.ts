@@ -70,7 +70,9 @@ for (const [lang, list] of Object.entries(DEFAULT_INTERACTION.retorts)) {
 }
 const ALL_INTENTS: Intent[] = ['PUBLISH', 'UNPUBLISH', 'STATUS', 'SEARCH', 'PRICE', 'HELP', 'UNDO'];
 for (const lang of ['en', 'de'] as const) {
-  check(`help.${lang}`, buildHelpReply({ intents: ALL_INTENTS, wake: 'Cinderella', lang, links: ['https://x/a', 'https://x/b'] }));
+  // template '' renders the shipped default (CCB-S3-021 §3), so the rendered help,
+  // its consent block and its command list are all scanned for stray dashes.
+  check(`help.${lang}`, buildHelpReply({ template: '', intents: ALL_INTENTS, wake: 'Cinderella', lang, links: ['https://x/a', 'https://x/b'] }));
   check(`helpTopic.consent.${lang}`, buildHelpTopic('consent', 'Cinderella', lang));
   check(`helpTopic.prices.${lang}`, buildHelpTopic('prices', 'Cinderella', lang));
 }

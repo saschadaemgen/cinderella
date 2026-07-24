@@ -25,6 +25,7 @@ import type { Config } from '../src/config.js';
 import type { BotHandle } from '../src/bot/client.js';
 import type { Queryable } from '../src/db/pool.js';
 import { InteractionEngine } from '../src/interaction/engine.js';
+import { missingHelpPlaceholders } from '../src/interaction/help.js';
 import { setActiveIntents } from '../src/interaction/intent.js';
 import { detectAddress } from '../src/interaction/addressing.js';
 import {
@@ -1591,6 +1592,46 @@ async function main(): Promise<void> {
   );
   settings = normalizeInteraction({ archiveUrl: 'http://insecure.example' });
   check('a non-https link is rejected at normalize time', settings.archiveUrl === '');
+  settings = normalizeInteraction({});
+
+  /* -- 20. CCB-S3-021 §3 -- the help reply is a genuinely editable template -- */
+  section('20. CCB-S3-021 -- help is an editable template, validated, blank restores default');
+
+  // Editing the help template changes what she actually replies.
+  settings = normalizeInteraction({
+    persona: { en: { help: 'CUSTOM HEADER for {wake}.\n\n{consent}\n\n{commands}' } },
+  });
+  coolDown();
+  const customHelp = (await say('Cinderella help')).replies[0] ?? '';
+  check('editing the help template changes the reply', /CUSTOM HEADER for Cinderella\./.test(customHelp));
+  check('the generated command list still fills the {commands} slot', /\*publish\*/i.test(customHelp));
+  check('the publishing properties still fill the {consent} slot', /forward only/i.test(customHelp));
+
+  // Blanking the field restores the shipped default.
+  settings = normalizeInteraction({ persona: { en: { help: '' } } });
+  coolDown();
+  const blankHelp = (await say('Cinderella help')).replies[0] ?? '';
+  check(
+    'blanking the help field restores the default',
+    /I am \*Cinderella\*/.test(blankHelp) && /What you can ask me/i.test(blankHelp),
+  );
+
+  // A pre-CCB-S3-021 stored one-liner (no {commands}/{consent}) must not render a
+  // help missing its command list or properties: normalize falls back to default.
+  settings = normalizeInteraction({ persona: { en: { help: '🕯️ Say "{wake}, publish me".' } } });
+  coolDown();
+  const staleHelp = (await say('Cinderella help')).replies[0] ?? '';
+  check(
+    'a stale help template without placeholders restores the default',
+    /What you can ask me/i.test(staleHelp) && /forward only/i.test(staleHelp) && /\*publish\*/i.test(staleHelp),
+  );
+
+  // Validation (the admin uses this to reject a broken save): a non-blank template
+  // must keep {commands} and {consent}; a blank one is fine (restores the default).
+  check('a template missing {commands} is rejected', missingHelpPlaceholders('only {consent}').includes('{commands}'));
+  check('a template missing {consent} is rejected', missingHelpPlaceholders('only {commands}').includes('{consent}'));
+  check('a complete template validates', missingHelpPlaceholders('{commands} {consent}').length === 0);
+  check('a blank template validates (it restores the default)', missingHelpPlaceholders('').length === 0);
   settings = normalizeInteraction({});
 
   console.log(

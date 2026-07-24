@@ -938,6 +938,9 @@ export class InteractionEngine {
     const body = topic
       ? buildHelpTopic(topic, s.wakeWord, helpLang)
       : buildHelpReply({
+          // The one editable help text (CCB-S3-021 §3): her persona `help` field,
+          // which the machine fills. Blank falls back to the shipped default.
+          template: s.persona[helpLang]?.help ?? '',
           intents: activeIntentList(),
           wake: s.wakeWord,
           lang: helpLang,

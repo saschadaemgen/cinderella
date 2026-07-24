@@ -33,6 +33,7 @@ import {
   type ArchiveSettings,
 } from '../../archive/settings.js';
 import { NEAR_MISS_REASONS, recentNearMisses } from '../../interaction/near-misses.js';
+import { missingHelpPlaceholders } from '../../interaction/help.js';
 import { activeResolverName } from '../../interaction/resolver.js';
 import { html, page, raw, type SafeHtml } from '../html.js';
 import type { ViewContext } from '../server.js';
@@ -214,7 +215,10 @@ const PERSONA_META: Record<PersonaKey, { label: string; vars: string }> = {
     vars: 'Shown when a member asks to undo taking their words back.',
   },
   cancelled: { label: 'Confirmation declined', vars: '' },
-  help: { label: 'Help', vars: '{wake}' },
+  help: {
+    label: 'Help reply (template)',
+    vars: '{wake} = her name; {commands} = the generated capability list (required); {consent} = the three publishing properties (required); {label} = what she is. Blank restores the default.',
+  },
   price: { label: 'Price answer', vars: '{amount} {base} {value} {quote}' },
   conversion: { label: 'Conversion answer', vars: '{amount} {base} {value} {quote}' },
   priceUnknownAsset: { label: 'Price — asset not in the registry', vars: '{symbol}' },
@@ -613,6 +617,17 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
         const persona = (next['persona'] ?? {}) as Record<string, Record<string, string>>;
         const strings: Record<string, string> = {};
         for (const key of PERSONA_KEYS) strings[key] = bodyString(body, key);
+        // The help field is a TEMPLATE the machine fills (CCB-S3-021 §3). A non-blank
+        // help must keep {commands} and {consent}, or the reply would ship with no
+        // command list or no publishing properties. Reject and name what is missing,
+        // rather than silently saving a broken help. Blank is fine (restores default).
+        const missing = missingHelpPlaceholders(strings['help'] ?? '');
+        if (missing.length > 0) {
+          throw new Error(
+            `The Help reply is missing a required placeholder: ${missing.join(', ')}. ` +
+              `Add it back, or clear the field to restore the default.`,
+          );
+        }
         persona[lang] = strings;
         next['persona'] = persona;
       } else if (section.startsWith('retorts:')) {
