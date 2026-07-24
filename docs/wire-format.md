@@ -130,6 +130,17 @@ recorded here so a future decision to use it starts from fact rather than a gues
 2. The parser source `Simplex.Chat.Markdown` at tag `v6.5.4` (matching the GHC symbols in the
    shipped `libsimplex.dll`) and its test suite were read.
 
+**Now consumed for the archive (CCB-S3-025).** The public stream renders this formatting rather than
+printing the delimiters. Capture stores the whole `AChatItem` in `raw_json`, so `chatItem.formattedText`
+(the runs, a sibling of `content`) is already present on every row; `published_messages` (migration 019)
+derives a compact `formatted_text` (`{f: <Format.type or null>, t: <run text>}[]`) from
+`raw_json -> 'chatItem' -> 'formattedText'` on read, and `src/web/front/render.ts` maps each run to a
+whitelisted tag (`bold`→`<strong>`, `italic`→`<em>`, `strikeThrough`→`<s>`, `snippet`→`<code>`,
+`small`→`<small>`, `secret`→a CSS spoiler), escaping every run's text. Formats that are links/mentions/
+etc. render as plain text (links are already surfaced as separate link cards). The derivation reads only
+the message's OWN runs (never the quoted item or profile) and is nulled by the view whenever a bot
+message's name-redaction applies — see security.md §9b.
+
 **The decisive observation.** `x **dbl** and *sgl* y` parses to
 `[{"text":"x **dbl** and "},{"format":{"type":"bold"},"text":"sgl"},{"text":" y"}]` — the
 single-asterisk word became bold while the double-asterisk word survived as literal text,

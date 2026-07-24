@@ -470,8 +470,8 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
               ),
             )}
           ${card(
-            'Help-footer links',
-            form('links', html`${labelled('Archive link', textField('archiveUrl', s.archiveUrl, 'https://…'), 'Shown at the foot of the help reply. https only; blank hides it.')}${labelled('Project link', textField('projectUrl', s.projectUrl, 'https://…'), 'Shown beside the archive link. https only; blank hides it.')} ${saveButton()}`),
+            'Help footer and attribution',
+            form('links', html`${labelled('Archive link', textField('archiveUrl', s.archiveUrl, 'https://…'), 'Shown at the foot of the help reply. https only; blank hides it.')}${labelled('Project link', textField('projectUrl', s.projectUrl, 'https://…'), 'Shown at the foot of the help reply, and the link her attribution points at. https only; blank hides it.')}${labelled('Attribution label', textField('botLabel', s.botLabel, '(SimpleX AI Bot)'), 'Shown after her name in the help reply, e.g. what she is. Blank hides it.')} ${saveButton()}`),
           )}`,
         archiving: () => archiveCard(ctx.archive.get(), csrf),
         diagnostics: () => {
@@ -607,6 +607,7 @@ export function registerInteraction(app: FastifyInstance, ctx: ViewContext): voi
       } else if (section === 'links') {
         next['archiveUrl'] = bodyString(body, 'archiveUrl');
         next['projectUrl'] = bodyString(body, 'projectUrl');
+        next['botLabel'] = bodyString(body, 'botLabel');
       } else if (section.startsWith('persona:')) {
         const lang = section.slice('persona:'.length);
         const persona = (next['persona'] ?? {}) as Record<string, Record<string, string>>;

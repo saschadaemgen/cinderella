@@ -51,6 +51,28 @@ export interface EmbedSettings {
     providers: string[];
     showNotice: boolean;
   };
+  /**
+   * Per-card share bar (CCB-S3-025). Script-free links (built in src/web/share.ts)
+   * plus a copy-link action; loads no third-party code. Default ON.
+   */
+  share: {
+    enabled: boolean;
+    /** Ordered network keys offered (subset of SHARE_NETWORKS). Copy-link is always shown. */
+    networks: string[];
+    /** Bar permanently visible instead of hover-revealed (mobile is always permanent). */
+    alwaysVisible: boolean;
+  };
+  /**
+   * Attribution on Cinderella's OWN stream cards (CCB-S3-025). Her name plus the
+   * label link to the identity URL. `label` blank → no label; `url` blank → not a
+   * link. Default ON, labelled "(SimpleX AI Bot)", pointing at the repo — an
+   * operator running their own instance can blank or change both.
+   */
+  attribution: {
+    enabled: boolean;
+    label: string;
+    url: string;
+  };
   /** Full SEO & marketing suite (CCB-S2-004) — all admin-configurable. */
   seo: SeoSettings;
 }
@@ -117,6 +139,16 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   media: { text: true, image: true, video: true, voice: true, file: true, link: true },
   player: { showDownload: true },
   video: { embed: true, providers: ['youtube'], showNotice: true },
+  share: {
+    enabled: true,
+    networks: ['x', 'facebook', 'reddit', 'whatsapp', 'telegram'],
+    alwaysVisible: false,
+  },
+  attribution: {
+    enabled: true,
+    label: '(SimpleX AI Bot)',
+    url: 'https://github.com/saschadaemgen/cinderella',
+  },
   seo: {
     titleTemplate: '{instance}{section}',
     description: '',
@@ -176,6 +208,53 @@ function httpsUrl(v: unknown, fallback: string): string {
   } catch {
     return fallback;
   }
+}
+
+/** Like {@link httpsUrl} but an EMPTY input stays empty (a blankable URL), while an
+ * invalid non-empty value also becomes '' — never a javascript:/http: scheme. */
+function optionalHttpsUrl(v: unknown): string {
+  if (typeof v !== 'string') return '';
+  const t = v.trim();
+  if (t === '') return '';
+  try {
+    return new URL(t).protocol === 'https:' ? t : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Recognised share network keys (kept in step with src/web/share.ts). */
+const SHARE_KEYS = ['x', 'facebook', 'reddit', 'whatsapp', 'telegram', 'linkedin', 'email'];
+
+function normalizeShare(input: unknown, d: EmbedSettings['share']): EmbedSettings['share'] {
+  const o = asRecord(input);
+  const raw = o['networks'];
+  // A present array (even empty) is honoured, so "offer none" is possible; absent
+  // (a stored settings blob predating this field) falls back to the default set.
+  const networks = Array.isArray(raw)
+    ? [...new Set(raw.map((x) => String(x).trim().toLowerCase()).filter((x) => SHARE_KEYS.includes(x)))]
+    : [...d.networks];
+  return {
+    enabled: bool(o['enabled'], d.enabled),
+    networks,
+    alwaysVisible: bool(o['alwaysVisible'], d.alwaysVisible),
+  };
+}
+
+function normalizeAttribution(
+  input: unknown,
+  d: EmbedSettings['attribution'],
+): EmbedSettings['attribution'] {
+  // A stored blob predating this field → all defaults (label + repo link on).
+  if (input == null || typeof input !== 'object') return { ...d };
+  const o = asRecord(input);
+  return {
+    enabled: bool(o['enabled'], d.enabled),
+    label: str(o['label'], d.label, 60).trim(),
+    // Present (even empty) is honoured, so the operator can blank the link; absent
+    // keeps the default repo URL.
+    url: 'url' in o ? optionalHttpsUrl(o['url']) : d.url,
+  };
 }
 
 function normalizeRobots(v: unknown, fallback: string): string {
@@ -301,6 +380,8 @@ export function normalizeEmbedSettings(input: unknown): EmbedSettings {
     },
     player: { showDownload: bool(player['showDownload'], d.player.showDownload) },
     video: normalizeVideo(o['video'], d.video),
+    share: normalizeShare(o['share'], d.share),
+    attribution: normalizeAttribution(o['attribution'], d.attribution),
     seo: normalizeSeo(o['seo']),
   };
 }

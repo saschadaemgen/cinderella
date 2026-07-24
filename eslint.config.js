@@ -15,6 +15,10 @@ export default tseslint.config(
       'scripts/**',
       'public/**',
       'assets/**',
+      // Claude Code worktree checkouts live here; they are copies of the repo and
+      // must never be linted as part of the main project (their files are not in
+      // this project's tsconfig service).
+      '.claude/**',
       '*.js',
       '*.mjs',
     ],

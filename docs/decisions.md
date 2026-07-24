@@ -13,6 +13,54 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-065 — Stream polish: chat formatting, a soft report control, a script-free share bar with per-item permalinks, and bot attribution
+
+**Status: IMPLEMENTED (CCB-S3-025).**
+**Chat formatting carried into the archive.** SimpleX delivers the parsed formatting runs
+(`ChatItem.formattedText`) on every item, already stored whole in `raw_json`. The `published_messages`
+view now DERIVES a compact `{f,t}[]` `formatted_text` from `raw_json` (migration 019) — no new column,
+no backfill, and it covers historical rows. The front renders each run into a fixed whitelist of tags
+(`bold`/`italic`/`strikeThrough`/`snippet`/`small`/`secret`), escaping every run's text through the
+existing `html` template, so member input never reaches a tag or attribute (XSS-safe by construction).
+**Redaction-safe:** the view emits `formatted_text` as NULL whenever a bot message's mention-redaction
+could alter its text, so the structured runs can never carry an unredacted mentioned name to the public;
+the renderer then falls back to the (redacted) plain `text_body`. The hot poll path selects only
+id + a text/media marker, so the planner prunes the unreferenced derivation — no cost there.
+**Soft report control.** The always-visible report pill was hardcoded signal red (`#dc2626`); it is now
+a theme-aware `--danger` token taken from the house design system (soft rose `#E5646E` → `#C2434E`),
+muted at rest and reaching full strength only on hover — findable without competing with the content.
+**Script-free share bar + permalinks.** Each card gains a share bar: X, Facebook, Reddit, WhatsApp,
+Telegram as plain links built in `src/web/share.ts`, plus a copy-link button confirmed in place. NO
+vendor widget or SDK, so nothing third-party loads (verified: zero external requests before a click),
+nothing to consent to, no cookie-banner entry. It slides out on hover on desktop (CSS only), is
+permanently visible and in-flow on touch / narrow viewports / when the operator sets always-visible,
+and appears without sliding under `prefers-reduced-motion`. Each item now has a stable, crawlable,
+canonical permalink `GET /embed/:id/m/:msgId` (consent-gated via `getPublishedItem` →
+`published_messages`; unpublished / recalled / unknown / type-disabled → 404, same gate as the media
+route), listed in the per-instance sitemap, with its own OG/canonical so a shared link resolves cleanly.
+**Bot attribution.** Her stream cards show her name plus an editable label (`(SimpleX AI Bot)`) as one
+link to the repo (new tab, `rel="noopener noreferrer"`), quiet at rest and accented on hover; per-embed
+`EmbedSettings.attribution` (label + url, blanking either removes it). **Chat-side (investigated, per
+the briefing):** the SDK send path is plain text only, but a bare URL renders clickable
+(`Format.Uri`); renaming the display name is possible but risky (the `updateProfile`-only-when-an-avatar-
+loads reconcile gate, plus unverified core handling of spaces/parens) and would be per-message noise, so
+it was NOT done. Chosen: a minimal signature in the **help reply** (the recurring, on-demand surface)
+via a new editable `botLabel` and the existing `projectUrl` (defaulted to the repo; a fork edits it),
+not the one-shot welcome and not a per-message suffix.
+**Admin.** Per-instance share bar (on/off default on, networks, always-visible) and attribution
+(label + url), each with an explanation; `botLabel` + `projectUrl` in the interaction console.
+**Evidence.** `migrations/019_formatted_text.sql`; `src/web/share.ts`; `src/web/theme.ts` (`--danger`);
+`src/web/front/render.ts` (report CSS, `renderBody`, `whoBlock`, `shareBar`, `COPY_SCRIPT`,
+`renderItemPage`, `documentHead`); `src/web/front/embed.ts` (`/m/:msgId`, share/attribution threading,
+per-item sitemap); `src/web/front/seo.ts` (`itemSeoHead`, sitemap items); `src/db/public-archive.ts`
+(`FormattedRun`, `getPublishedItem`, `listPublishedItemRefs`); `src/db/embeds.ts` (share/attribution +
+normalize); `src/web/views/embeds.ts`; `src/interaction/{settings,help,engine}.ts`,
+`src/web/views/interaction.ts`; `src/site/settings.ts` + `src/web/site/render.ts` (shared share module,
++ Telegram). Verified against the live-seeded front in a browser (formatting tags, soft-red pill, share
+bar hover/mobile, no external requests, permalink 200 + canonical/OG, 404 on unpublished, sitemap).
+
+---
+
 ### D-064 — Capture events are written ahead to a durable log before they are processed
 
 **Status: IMPLEMENTED (CCB-S3-024 Slice 1: the durable substrate). PLANNED (Slice 2: the

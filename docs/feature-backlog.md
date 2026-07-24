@@ -89,6 +89,16 @@ script, `theme-color` meta) — the first design-template switch. Instance `mode
 (auto/light/dark) sets the SSR default; operator accent/bg/text overrides still win.
 See [`src/web/front/render.ts`](../src/web/front/render.ts).
 
+**Stream polish shipped (CCB-S3-025):** the chat's own text formatting (`*bold*`, `_italic_`, `~strike~`,
+`` `code` ``, `#secret#`) is carried into the stream from SimpleX's parsed runs, redaction-safe and
+XSS-safe; the report control is a soft, tokenised destructive red (muted at rest, full on hover); each
+card has a **script-free share bar** (X/Facebook/Reddit/WhatsApp/Telegram plain links + copy-link;
+hover-revealed on desktop, permanent on touch; zero third-party load, no cookie-banner entry) pointing
+at a new **stable, crawlable, canonical per-item permalink** `GET /embed/:id/m/:msgId` (consent-gated,
+in the sitemap); and her own messages carry **attribution** linking her name + an editable
+"(SimpleX AI Bot)" label to the repo. All per-instance configurable; chat-side attribution is a minimal
+help-reply signature. See D-065, architecture §23. `src/web/share.ts`, `migrations/019_formatted_text.sql`.
+
 **Live auto-update shipped (CCB-S2-006):** an open page keeps itself current with no
 manual refresh — consent-gated polling as progressive enhancement over the unchanged
 SSR/SEO. `GET /embed/:id/state` (published ids + a version hash) and

@@ -177,6 +177,99 @@ export function resolveSeoHead(c: SeoContext): SeoHead {
   };
 }
 
+// ---------- single-item (permalink) head ----------
+
+/** A one-line snippet of an item for titles/descriptions/JSON-LD. */
+function itemText(it: PublicItem): string {
+  if (it.textBody) return it.textBody.replace(/\s+/g, ' ').trim();
+  return `${it.type} from ${it.senderDisplayName}`;
+}
+
+export interface ItemSeoContext {
+  instance: EmbedInstance;
+  seo: SeoSettings;
+  item: PublicItem;
+  origin: string;
+  /** `${origin}/embed/${id}`. */
+  basePath: string;
+  /** The item permalink `${basePath}/m/${item.id}` (before canonicalBase rebasing). */
+  canonicalUrl: string;
+  /** Fallback OG image id when the item itself is not an image (latest published image). */
+  ogFallbackImageId: number | null;
+}
+
+/**
+ * Resolved head for a single item's permalink page (CCB-S3-025). Canonical is the
+ * item's own URL (honouring the operator's canonicalBase override); the OG image is
+ * the item's own media when it is an image, else the instance's default; and the
+ * preview title/description come from the item's text so a shared link reads well.
+ */
+export function itemSeoHead(c: ItemSeoContext): SeoHead {
+  const { seo, item } = c;
+  const applyBase = (u: string): string =>
+    seo.canonicalBase ? u.replace(c.origin, seo.canonicalBase.replace(/\/+$/, '')) : u;
+  const canonicalUrl = applyBase(c.canonicalUrl);
+  const instanceName = c.instance.name || 'Community Archive';
+  const full = itemText(item);
+  const short = full.length > 70 ? `${full.slice(0, 69)}…` : full;
+  const title = short ? `${short} · ${instanceName}` : instanceName;
+  const description = (full.slice(0, 200) || DEFAULT_DESCRIPTION).trim();
+  const ogImageUrl =
+    item.type === 'image' && item.hasMedia
+      ? `${c.basePath}/media/${item.id}`
+      : seo.og.imageUrl ||
+        (seo.og.autoImage
+          ? `${c.basePath}/og.png`
+          : c.ogFallbackImageId != null
+            ? `${c.basePath}/media/${c.ogFallbackImageId}`
+            : '');
+
+  return {
+    title,
+    description,
+    keywords: seo.keywords.trim(),
+    robots: seo.robots,
+    canonicalUrl,
+    ogTitle: short || instanceName,
+    ogDescription: description,
+    ogType: 'article',
+    ogSiteName: seo.og.siteName,
+    ogLocale: seo.og.locale,
+    ogUrl: canonicalUrl,
+    ogImageUrl,
+    twitterCard: ogImageUrl ? 'summary_large_image' : 'summary',
+    twitterSite: seo.og.twitterSite,
+    twitterImageUrl: ogImageUrl,
+    feedUrl: '',
+    analyticsScriptUrl: seo.analytics.scriptUrl,
+    jsonLd: itemJsonLd(c, canonicalUrl, short || instanceName, description),
+    prevUrl: '',
+    nextUrl: '',
+  };
+}
+
+/** A single schema.org posting node for the permalink page (empty when postings off). */
+function itemJsonLd(c: ItemSeoContext, url: string, headline: string, description: string): string {
+  if (!c.seo.jsonld.postings) return '';
+  const it = c.item;
+  const node: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': c.seo.jsonld.postingType,
+    '@id': url,
+    url,
+    headline,
+    description,
+    datePublished: it.sentAt,
+    author: { '@type': 'Person', name: it.senderDisplayName },
+  };
+  if (it.textBody) node['text'] = it.textBody;
+  if (c.seo.jsonld.media && it.hasMedia && it.type === 'image') {
+    const m = `${c.basePath}/media/${it.id}`;
+    node['image'] = { '@type': 'ImageObject', url: m, contentUrl: m };
+  }
+  return ldJson(node);
+}
+
 // ---------- JSON-LD @graph ----------
 
 function postingNode(c: SeoContext, it: PublicItem, type: string): Record<string, unknown> {
@@ -306,6 +399,8 @@ export interface SitemapContext {
   enabledTypes: readonly ArchiveType[];
   enabledFilters: { byType: boolean };
   lastmod: string | null;
+  /** Per-item permalink refs (CCB-S3-025): id + lastmod, so `/m/<id>` is crawlable. */
+  items?: { id: number; lastmod: string | null }[];
 }
 
 /** Per-instance sitemap. Empty (valid) urlset when the instance is noindex. */
@@ -321,6 +416,9 @@ export function buildSitemapXml(s: SitemapContext): string {
       for (const t of s.enabledTypes)
         urls.push({ loc: `${s.canonicalBasePath}?type=${t}`, lastmod: s.lastmod });
     }
+    // Per-item permalinks (CCB-S3-025) — each published item's own crawlable URL.
+    for (const it of s.items ?? [])
+      urls.push({ loc: `${s.canonicalBasePath}/m/${it.id}`, lastmod: it.lastmod });
   }
   const body = urls
     .map(

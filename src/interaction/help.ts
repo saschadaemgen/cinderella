@@ -102,8 +102,8 @@ const COPY: Record<
 > = {
   en: {
     intro:
-      '🕯️ I am *Cinderella*. This is a public group, and I keep a public web archive of what its ' +
-      'members choose to publish.',
+      '🕯️ I am *Cinderella*{label}. This is a public group, and I keep a public web archive of what ' +
+      'its members choose to publish.',
     talk:
       '💬 *Talking to me*\n' +
       'Say my name: "*{wake}*, ...". A greeting is optional, and once we are talking you can ' +
@@ -136,8 +136,8 @@ const COPY: Record<
   },
   de: {
     intro:
-      '🕯️ Ich bin *Cinderella*. Dies ist eine öffentliche Gruppe, und ich führe ein öffentliches ' +
-      'Web-Archiv dessen, was ihre Mitglieder veröffentlichen möchten.',
+      '🕯️ Ich bin *Cinderella*{label}. Dies ist eine öffentliche Gruppe, und ich führe ein ' +
+      'öffentliches Web-Archiv dessen, was ihre Mitglieder veröffentlichen möchten.',
     talk:
       '💬 *So sprichst du mit mir*\n' +
       'Sprich mich beim Namen an: "*{wake}*, ...". Eine Begrüßung ist freiwillig, und wenn wir ' +
@@ -174,7 +174,9 @@ const COPY: Record<
 const ORDER: Intent[] = ['PUBLISH', 'UNPUBLISH', 'STATUS', 'SEARCH', 'PRICE', 'HELP', 'UNDO'];
 
 function fillWake(text: string, wake: string): string {
-  return text.replace(/\{wake\}/g, wake);
+  // Function replacer: the operator-set wake word is inserted LITERALLY, never
+  // interpreted as a `$&`/`$'`-style replacement pattern (CCB-S3-025 review).
+  return text.replace(/\{wake\}/g, () => wake);
 }
 
 export interface HelpContext {
@@ -183,6 +185,8 @@ export interface HelpContext {
   lang: HelpLang;
   /** "Learn more" links, already validated; the line is omitted when empty. */
   links: readonly string[];
+  /** Attribution label after her name (CCB-S3-025), e.g. "(SimpleX AI Bot)"; '' → omitted. */
+  label?: string;
 }
 
 /**
@@ -203,8 +207,11 @@ export function buildHelpReply(ctx: HelpContext): string {
   // Blocks are separated by a BLANK LINE (`\n\n`); the command list is its heading
   // plus one undecorated line per command. Vertical space is what makes this
   // scannable in a chat bubble (CCB-S3-021).
+  const label = ctx.label?.trim() ? ` ${ctx.label.trim()}` : '';
   const blocks: string[] = [
-    fillWake(c.intro, ctx.wake),
+    // Function replacer so an operator label containing `$&`/`$'` is inserted
+    // literally, not interpreted as a replacement pattern (CCB-S3-025 review).
+    fillWake(c.intro.replace(/\{label\}/g, () => label), ctx.wake),
     fillWake(c.talk, ctx.wake),
     fillWake(c.consent, ctx.wake),
     [c.capsHeading, ...caps].join('\n'),

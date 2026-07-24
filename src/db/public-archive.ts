@@ -38,6 +38,20 @@ export interface PublicLink {
   title: string | null;
 }
 
+/**
+ * One formatting run of a message body (CCB-S3-025). SimpleX delivers the parsed
+ * runs (`ChatItem.formattedText`); we store and render them so the archive shows
+ * the same bold/italic/etc. the chat did. `f` is the SDK `Format.type` (e.g.
+ * `bold`), or null for a plain run; `t` is that run's text. Rendered runs are
+ * ONLY ever surfaced through `published_messages`, and the view nulls the whole
+ * field when a bot message's mention-redaction could alter the text, so the
+ * structured runs can never bypass name redaction (see migration 019).
+ */
+export interface FormattedRun {
+  f: string | null;
+  t: string;
+}
+
 export interface PublicItem {
   id: number;
   senderDisplayName: string;
@@ -48,6 +62,10 @@ export interface PublicItem {
   cursor: string;
   type: ArchiveType;
   textBody: string | null;
+  /** Parsed formatting runs for the body (CCB-S3-025), or null when the message
+   * has no formatting or the view suppressed them for redaction safety. When
+   * present, the runs' concatenated text equals `textBody`. */
+  formatted: FormattedRun[] | null;
   links: PublicLink[];
   /** True when a downloadable/renderable media file is attached AND published. */
   hasMedia: boolean;
@@ -83,6 +101,7 @@ interface ItemRow {
   sort_ts: string;
   type: string;
   text_body: string | null;
+  formatted_text: unknown;
   has_media: boolean;
   media_mime: string | null;
   is_bot: boolean;
@@ -137,7 +156,7 @@ export function decodeCursor(s: string): Cursor | null {
 
 /** Shared SELECT list for a public item row (includes the full-precision sort key). */
 const ITEM_COLUMNS = `m.id, m.sender_display_name, m.sent_at, m.sent_at::text AS sort_ts,
-            m.type::text AS type, m.text_body,
+            m.type::text AS type, m.text_body, m.formatted_text,
             (m.media_path IS NOT NULL) AS has_media, m.media_mime, m.is_bot, m.reply_to_id,
             m.video_provider, m.video_id, m.video_start, m.video_title,
             COALESCE(
@@ -157,6 +176,7 @@ function mapItem(r: ItemRow): PublicItem {
     cursor: encodeCursor(r.sort_ts, Number(r.id)),
     type: r.type as ArchiveType,
     textBody: r.text_body,
+    formatted: toFormatted(r.formatted_text),
     links: toLinks(r.links),
     hasMedia: r.has_media,
     mediaMime: r.media_mime,
@@ -171,6 +191,26 @@ function mapItem(r: ItemRow): PublicItem {
         }
       : null,
   };
+}
+
+/**
+ * Parses the stored `formatted_text` JSONB into runs, defensively. Returns null
+ * for anything not a non-empty array of `{t:string}` runs — so a plain message,
+ * a redaction-suppressed field (the view emits null), or malformed data all fall
+ * back to plain `textBody` rendering. `f` is kept as the raw SDK tag string (or
+ * null); the renderer maps known tags to HTML and treats the rest as plain.
+ */
+function toFormatted(v: unknown): FormattedRun[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: FormattedRun[] = [];
+  for (const raw of v) {
+    if (raw && typeof raw === 'object') {
+      const t = (raw as { t?: unknown }).t;
+      const f = (raw as { f?: unknown }).f;
+      if (typeof t === 'string') out.push({ f: typeof f === 'string' ? f : null, t });
+    }
+  }
+  return out.length > 0 ? out : null;
 }
 
 function toLinks(v: unknown): PublicLink[] {
@@ -252,6 +292,26 @@ export async function listPublishedItems(
     total: Number(countRes.rows[0]?.n ?? 0),
     items: rows.rows.map(mapItem),
   };
+}
+
+/**
+ * Fetches a SINGLE published item by id for its permalink page (CCB-S3-025).
+ * Reads through `published_messages`, so an unpublished / recalled / deleted /
+ * no-consent / unknown id returns null — the permalink 404s exactly like the media
+ * route, with the same consent gate and no existence oracle beyond publication.
+ */
+export async function getPublishedItem(db: Queryable, messageId: number): Promise<PublicItem | null> {
+  // Upper bound too (CCB-S3-025 review): an id above the safe range cannot match a
+  // real BIGINT row and would raise a bigint out-of-range error in the query, so
+  // reject it here and let the caller 404 cleanly rather than surface a 500.
+  if (!Number.isInteger(messageId) || messageId < 1 || messageId > Number.MAX_SAFE_INTEGER) {
+    return null;
+  }
+  const { rows } = await db.query<ItemRow>(
+    `SELECT ${ITEM_COLUMNS} FROM published_messages m WHERE m.id = $1`,
+    [messageId],
+  );
+  return rows[0] ? mapItem(rows[0]) : null;
 }
 
 /** A cursor-paged slice of published items (CCB-S2-007). */
@@ -573,6 +633,29 @@ export async function countPublishedMatching(db: Queryable, q: string): Promise<
     [term],
   );
   return Number(rows[0]?.n ?? 0);
+}
+
+/**
+ * Published item refs (id + lastmod) for the per-instance sitemap (CCB-S3-025), so
+ * each item's permalink is crawlable. Newest first, capped so a large archive never
+ * produces an unbounded sitemap. Consent-gated via `published_messages`, so only
+ * currently-published items are listed.
+ */
+export async function listPublishedItemRefs(
+  db: Queryable,
+  enabledTypes: readonly ArchiveType[],
+  limit: number,
+): Promise<{ id: number; lastmod: string }[]> {
+  if (enabledTypes.length === 0) return [];
+  const list = enabledTypes.map((t) => `'${t}'`).join(', ');
+  const { rows } = await db.query<{ id: string; ts: string }>(
+    `SELECT id, sent_at::text AS ts FROM published_messages
+      WHERE type IN (${list})
+      ORDER BY sent_at DESC, id DESC
+      LIMIT $1`,
+    [Math.max(0, Math.floor(limit))],
+  );
+  return rows.map((r) => ({ id: Number(r.id), lastmod: new Date(r.ts).toISOString() }));
 }
 
 /** The most recent published image, for OG/Twitter/`ItemList` preview imagery. */

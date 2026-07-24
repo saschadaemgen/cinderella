@@ -36,7 +36,8 @@ import {
 import type { LocaleSet } from './i18n.js';
 import { NAV_PAGES, pagePath, HOME, type SitePage } from './pages.js';
 import { CONTACT_EMAIL, GITHUB_URL, type SiteSeoHead } from './seo.js';
-import { shouldLoadAnalytics, type ShareNetwork, type SiteSettings } from '../../site/settings.js';
+import { shouldLoadAnalytics, type SiteSettings } from '../../site/settings.js';
+import { shareUrl, SHARE_LABELS } from '../share.js';
 
 export interface SitePageView {
   locale: string;
@@ -121,33 +122,8 @@ const AD_MEDIA_ICON: Record<string, string> = {
   image: 'image',
 };
 
-const SHARE_LABELS: Record<ShareNetwork, string> = {
-  x: 'X',
-  facebook: 'Facebook',
-  reddit: 'Reddit',
-  whatsapp: 'WhatsApp',
-  linkedin: 'LinkedIn',
-  email: 'Email',
-};
-
-function shareUrl(net: ShareNetwork, pageUrl: string, title: string): string {
-  const u = encodeURIComponent(pageUrl);
-  const t = encodeURIComponent(title);
-  switch (net) {
-    case 'x':
-      return `https://twitter.com/intent/tweet?url=${u}&text=${t}`;
-    case 'facebook':
-      return `https://www.facebook.com/sharer/sharer.php?u=${u}`;
-    case 'reddit':
-      return `https://www.reddit.com/submit?url=${u}&title=${t}`;
-    case 'whatsapp':
-      return `https://api.whatsapp.com/send?text=${t}%20${u}`;
-    case 'linkedin':
-      return `https://www.linkedin.com/sharing/share-offsite/?url=${u}`;
-    case 'email':
-      return `mailto:?subject=${t}&body=${u}`;
-  }
-}
+// Share URLs, labels and icons come from src/web/share.ts (CCB-S3-025) — one
+// script-free source of truth shared with the archive stream's per-card share bar.
 
 // ---------- shared building blocks ----------
 

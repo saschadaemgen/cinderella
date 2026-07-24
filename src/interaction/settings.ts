@@ -201,6 +201,14 @@ export interface InteractionSettings {
    */
   archiveUrl: string;
   projectUrl: string;
+  /**
+   * Attribution label shown after her name in the help reply (CCB-S3-025): "what
+   * she is", e.g. "(SimpleX AI Bot)". Blank → omitted. The chat-side counterpart of
+   * the stream attribution; the link is {@link projectUrl} (a bare URL renders
+   * clickable in SimpleX clients). Editable, so an operator's own instance is not
+   * forced to advertise ours.
+   */
+  botLabel: string;
   /** Optional greeting prefixes stripped before the wake word. */
   greetings: string[];
   /**
@@ -407,7 +415,10 @@ export const DEFAULT_INTERACTION: InteractionSettings = {
   slashCommands: true,
   wakeWord: 'Cinderella',
   archiveUrl: '',
-  projectUrl: '',
+  // Points at the project repo by default so "learn more" and the attribution link
+  // work out of the box (CCB-S3-025); an operator running their own instance edits it.
+  projectUrl: 'https://github.com/saschadaemgen/cinderella',
+  botLabel: '(SimpleX AI Bot)',
   greetings: [
     'hi',
     'hey',
@@ -712,6 +723,7 @@ export function normalizeInteraction(input: unknown): InteractionSettings {
     wakeWord,
     archiveUrl: httpsOrEmpty(str(o['archiveUrl'], d.archiveUrl, 200)),
     projectUrl: httpsOrEmpty(str(o['projectUrl'], d.projectUrl, 200)),
+    botLabel: str(o['botLabel'], d.botLabel, 60).trim(),
     greetings:
       'greetings' in o ? parseList(o['greetings'], { max: 60, maxLen: 40 }) : [...d.greetings],
     fillerPrefixes:

@@ -696,6 +696,43 @@ apply→processed, transient retry then dead-letter, permanent fast-fail, per-co
 a stalled insert, out-of-order deletion defer, bounded defer, admin counts, retention pruning only
 processed rows, and a real queue worker draining the backlog.
 
+## 23. Stream polish: formatting, share, permalinks, attribution (CCB-S3-025)
+
+**Chat text formatting (`src/web/front/render.ts` `renderBody`).** SimpleX parses a member's `*bold*`
+etc. into `ChatItem.formattedText` runs, kept in `raw_json`. `published_messages` (migration 019)
+derives a compact `formatted_text` (`{f,t}[]`) from `raw_json` on read — no column, no backfill, covers
+history — and the front renders each run into a whitelisted tag (`strong`/`em`/`s`/`code`/`small`, plus
+a CSS spoiler for `secret`), with the run text escaped by the `html` template. Member input never
+reaches a tag/attribute. **Redaction-safe:** the view NULLs `formatted_text` whenever a bot message's
+mention-redaction could apply (`m.is_bot AND r.pattern IS NOT NULL`), so runs can't bypass name
+redaction; the renderer falls back to the redacted `text_body`. The poll hot path selects only
+`id` + a marker, so the correlated derivation is pruned (not evaluated) there.
+
+**Report control.** The pill uses a new theme-aware `--danger` token (`src/web/theme.ts`), soft at rest
+(`--danger` at low alpha) and full-strength on hover — no more hardcoded `#dc2626`.
+
+**Share bar (`src/web/share.ts`, `render.ts` `shareBar` + `COPY_SCRIPT`).** X/Facebook/Reddit/WhatsApp/
+Telegram are plain links we build and open on click — no vendor widget/SDK, nothing third-party loads,
+no cookie-banner entry (the marketing footer reuses the same module). Copy-link is a document-delegated
+button (covers appended cards; the front is HTTPS so the async Clipboard API works, with an execCommand
+fallback) that confirms in place. CSS-only reveal: hover-slide on desktop, permanent + in-flow on touch
+/ narrow / operator-set-always, no slide under reduced motion. All under the existing strict CSP.
+
+**Item permalinks (`embed.ts` `GET /embed/:id/m/:msgId`).** One published item on its own crawlable,
+canonical page so a shared link resolves with correct OG. Consent-gated via `getPublishedItem` →
+`published_messages`; an unpublished / recalled / deleted / no-consent / unknown / type-disabled id 404s
+exactly like the media route. `itemSeoHead` sets an item-scoped canonical + OG (the item's own image
+when it is one, else the instance default); per-item URLs are added to the instance sitemap
+(`listPublishedItemRefs`, capped). Reuses `renderCards` for one item, so the card is identical to the
+stream.
+
+**Bot attribution (`render.ts` `whoBlock`; `EmbedSettings.attribution`).** Her cards link her
+name + an editable label (`(SimpleX AI Bot)`) to the repo in a new tab (`rel="noopener noreferrer"`),
+quiet until hover; blanking the label or url removes them. Chat-side (help reply) uses a new editable
+`botLabel` + `projectUrl` (now defaulted to the repo); the display name is deliberately NOT renamed (the
+`updateProfile`-only-on-avatar reconcile gate + unverified core handling of parens make it risky, and a
+per-message suffix would be noise). See D-065.
+
 ## Appendix: divergences (code wins)
 
 Each divergence below is also noted inline at the relevant section. In every case the **code is treated as ground truth** and the conflicting outline/comment is flagged as stale.

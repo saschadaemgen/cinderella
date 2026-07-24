@@ -942,6 +942,7 @@ export class InteractionEngine {
           wake: s.wakeWord,
           lang: helpLang,
           links: [s.archiveUrl, s.projectUrl].filter((u) => u),
+          label: s.botLabel,
         });
     await this.replyBody(msg, s, body);
   }

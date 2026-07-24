@@ -21,7 +21,47 @@ import { html, raw, type SafeHtml } from '../html.js';
 import { THEME_TOGGLE, THEME_TOGGLE_SCRIPT, THEME_VARS_CSS, themeBootScript } from '../theme.js';
 import { DEFAULT_EMBED_SETTINGS, type EmbedSettings } from '../../db/embeds.js';
 import type { ArchiveType, PublicFilters, PublicItem } from '../../db/public-archive.js';
+import { COPY_ICON, COPY_OK_ICON, SHARE_ICONS, SHARE_LABELS, shareUrl } from '../share.js';
 import type { SeoHead } from './seo.js';
+
+/** Per-card share-bar config (CCB-S3-025), constant across an instance's cards. */
+export interface ShareCardOpts {
+  enabled: boolean;
+  /** Ordered network keys to offer; copy-link is always shown when enabled. */
+  networks: string[];
+  /** Bar permanently visible instead of hover-revealed. */
+  alwaysVisible: boolean;
+}
+
+/** Attribution shown on Cinderella's own cards (CCB-S3-025). */
+export interface AttributionOpts {
+  enabled: boolean;
+  /** Secondary label after her name; '' → omitted. */
+  label: string;
+  /** Identity/repo URL the name+label link to; '' → not a link. */
+  url: string;
+}
+
+/** Everything a card needs beyond the item + basePath. */
+export interface CardOpts {
+  showDownload: boolean;
+  video: VideoCardOpts;
+  share: ShareCardOpts;
+  attribution: AttributionOpts;
+}
+
+/** Maps a SimpleX format tag to an HTML wrapper (CCB-S3-025). Only visual text
+ * styles are mapped; links/mentions/etc. render as plain (escaped) text, since
+ * links are already surfaced as separate link cards. The set is a fixed
+ * whitelist, so no member input ever reaches a tag or attribute. */
+const FORMAT_TAG: Record<string, readonly [string, string]> = {
+  bold: ['<strong>', '</strong>'],
+  italic: ['<em>', '</em>'],
+  strikeThrough: ['<s>', '</s>'],
+  snippet: ['<code>', '</code>'],
+  small: ['<small>', '</small>'],
+  secret: ['<span class="secret">', '</span>'],
+};
 
 export interface PresentationConfig {
   /** Template id — only 'default' today; CCB-S2-005 adds more. */
@@ -61,6 +101,10 @@ export interface RenderContext {
   showDownload: boolean;
   /** Video-card behaviour for this instance (CCB-S3-014). */
   video: VideoCardOpts;
+  /** Per-card share bar (CCB-S3-025). */
+  share: ShareCardOpts;
+  /** Attribution on her own cards (CCB-S3-025). */
+  attribution: AttributionOpts;
   /**
    * Version hash of the current view (CCB-S2-006) — the same value the
    * `/embed/:id/state` poll endpoint returns. Embedded on `#stream-list` so the
@@ -91,7 +135,15 @@ const POLL_INTERVAL_MS = 18000;
 /** The subset of the render context the reconcilable stream region needs. */
 type StreamRegionCtx = Pick<
   RenderContext,
-  'items' | 'filters' | 'basePath' | 'page' | 'pageCount' | 'showDownload' | 'video'
+  | 'items'
+  | 'filters'
+  | 'basePath'
+  | 'page'
+  | 'pageCount'
+  | 'showDownload'
+  | 'video'
+  | 'share'
+  | 'attribution'
 >;
 
 /** Builds a query string from the active filters, with overrides (e.g. page). */
@@ -202,18 +254,54 @@ form.filters a.reset{align-self:center;color:var(--muted);font-size:.85rem}
 .item .video-notice{color:var(--muted);font-size:.8rem}
 .item .video-open{color:var(--accent);font-weight:600;text-decoration:none;font-size:.85rem;margin-left:auto}
 .item .video-open:hover{color:var(--accent-bright)}
-/* Always-visible red Report control, pinned top-right of every card (CCB-S3-014
-   Addendum B follow-up). The form opens as a dropdown panel beneath the pill so it
-   never pushes the card's content. No-JS <details>, so it works under the strict CSP. */
+/* Report control, pinned top-right of every card (CCB-S3-014 Addendum B). The form
+   opens as a dropdown panel beneath the pill so it never pushes the card's content.
+   No-JS <details>, so it works under the strict CSP. Low-emphasis by design
+   (CCB-S3-025): a soft, desaturated destructive red at rest (findable, not loud),
+   strengthening to a full-strength red fill on hover/open. Colour is the shared
+   --danger token, so it changes in one place. */
 .item details.report{position:absolute;top:12px;right:12px;margin:0;z-index:3}
-.item details.report>summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:4px;color:#fff;background:#dc2626;font-size:.72rem;font-weight:600;line-height:1;padding:4px 10px;border-radius:999px;opacity:.9;transition:var(--tr)}
-.item details.report>summary:hover,.item details.report[open]>summary{opacity:1;background:#b91c1c}
+.item details.report>summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:4px;color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);font-size:.72rem;font-weight:600;line-height:1;padding:3px 10px;border-radius:999px;transition:var(--tr)}
+.item details.report>summary:hover,.item details.report[open]>summary{color:#fff;background:var(--danger-strong);border-color:var(--danger-strong)}
 .item details.report>summary::-webkit-details-marker{display:none}
 .item details.report form{position:absolute;top:calc(100% + 6px);right:0;width:min(280px,78vw);display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);box-shadow:0 10px 30px rgba(0,0,0,.3)}
 .item details.report .rlabel{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted)}
 .item details.report select,.item details.report textarea{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-dark);color:var(--fg);font:inherit;font-size:.85rem}
 .item details.report button{align-self:flex-start;padding:6px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:.85rem}
 .report-ok{margin:12px 0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--fg)}
+/* Bot attribution on her cards (CCB-S3-025): the name+label link is quiet at rest
+   (no underline, inherits colour), reaching the accent only on hover/focus. */
+.item .who-attr{text-decoration:none;color:inherit;border-radius:4px}
+.item .who-attr:hover .who,.item .who-attr:hover .botlabel,.item .who-attr:focus-visible .who,.item .who-attr:focus-visible .botlabel{color:var(--accent)}
+.item .botlabel{margin-left:5px;font-weight:400;font-size:.85em;color:var(--muted)}
+/* Chat text formatting carried into the archive (CCB-S3-025). Tags come from a
+   fixed whitelist; the member text inside them is always HTML-escaped. */
+.item .body strong{font-weight:700}
+.item .body em{font-style:italic}
+.item .body s{text-decoration:line-through}
+.item .body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;background:var(--bg-dark);padding:1px 5px;border-radius:5px}
+.item .body small{font-size:.85em;color:var(--muted)}
+/* A "secret" run: hidden until hovered/focused, mirroring SimpleX's spoiler. */
+.item .body .secret{background:var(--fg);color:transparent;border-radius:3px;transition:var(--tr)}
+.item .body .secret:hover,.item .body .secret:focus{background:transparent;color:inherit}
+/* Per-card share bar (CCB-S3-025). Desktop: a slim bar pinned to the card's bottom
+   edge, revealed and gently sliding up on hover (CSS only). Touch / narrow / always-on:
+   in-flow, permanent, never covering content. Icons in the house accent blue; the
+   copy-link action confirms in place. Reduced motion: it appears without sliding. */
+.item .share-bar{position:absolute;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px;background:var(--card);border-top:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius);opacity:0;transform:translateY(8px);transition:opacity var(--tr),transform var(--tr);pointer-events:none;z-index:2}
+.item:hover .share-bar,.item:focus-within .share-bar{opacity:1;transform:translateY(0);pointer-events:auto}
+.item .share-bar.always{position:static;opacity:1;transform:none;pointer-events:auto;margin-top:10px;background:none;border-top-color:var(--border);border-radius:0}
+.item .share-link{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--accent);cursor:pointer;text-decoration:none;transition:var(--tr)}
+.item .share-link:hover,.item .share-link:focus-visible{border-color:var(--accent);color:var(--accent-bright)}
+.item .share-link svg{width:16px;height:16px;display:block}
+.item .share-copy{position:relative}
+.item .share-copy svg+svg{display:none}
+.item .share-copy.copied svg:first-of-type{display:none}
+.item .share-copy.copied svg+svg{display:block}
+.item .share-copy .share-copied{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);display:none;background:var(--fg);color:var(--bg);font-size:.7rem;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap;pointer-events:none}
+.item .share-copy.copied .share-copied{display:block}
+@media (hover:none),(max-width:520px){.item .share-bar{position:static;opacity:1;transform:none;pointer-events:auto;margin-top:10px;background:none;border-radius:0}}
+@media (prefers-reduced-motion:reduce){.item .share-bar{transform:none}.item:hover .share-bar,.item:focus-within .share-bar{transform:none}}
 .item .links{margin:8px 0 0;padding:0;list-style:none}
 .item .links a{color:var(--accent)}
 .pager{display:flex;justify-content:space-between;align-items:center;margin:20px 0;color:var(--muted);font-size:.9rem}
@@ -444,17 +532,12 @@ const ARCHIVE_TYPE_ENTRIES: [string, string][] = Object.entries(TYPE_LABELS);
  * the DOM alone. Consent-gated items only — inserted via `insertAdjacentHTML`, which
  * runs no scripts, and media stays under the page's `img-src`/`media-src 'self'`.
  */
-export function renderCards(
-  items: PublicItem[],
-  basePath: string,
-  showDownload: boolean,
-  video: VideoCardOpts,
-): SafeHtml {
+export function renderCards(items: PublicItem[], basePath: string, opts: CardOpts): SafeHtml {
   return html`${items.map(
     (it) =>
       html`<li class="item${it.isBot ? ' from-bot' : ''}" id="msg-${it.id}" data-cursor="${it.cursor}">
         <div class="meta">
-          <span class="who">${it.senderDisplayName}</span>
+          ${whoBlock(it, opts.attribution)}
           ${it.isBot ? html`<span class="badge-bot" title="Written by Cinderella">✦</span>` : html``}
           ${
             it.replyToId !== null
@@ -465,11 +548,102 @@ export function renderCards(
           }
           <time datetime="${it.sentAt}">${fmtTime(it.sentAt)}</time>
         </div>
-        ${it.textBody ? html`<p class="body">${it.textBody}</p>` : html``}
-        ${itemMedia(it, `${basePath}/media/${it.id}`, showDownload, video)} ${itemLinks(it, video)}
+        ${renderBody(it)}
+        ${itemMedia(it, `${basePath}/media/${it.id}`, opts.showDownload, opts.video)}
+        ${itemLinks(it, opts.video)}
+        ${shareBar(it, basePath, opts.share)}
         ${reportControl(it, basePath)}
       </li>`,
   )}`;
+}
+
+/**
+ * The sender name, with Cinderella's attribution when hers (CCB-S3-025). The whole
+ * name+label block links to the identity/repo URL in a new tab; it is deliberately
+ * quiet (accent on hover, no underline at rest) so it reads as interactive without
+ * shouting. Falls back to a plain name when attribution is off, unlabelled, or the
+ * message is a member's.
+ */
+function whoBlock(it: PublicItem, attribution: AttributionOpts): SafeHtml {
+  const who = html`<span class="who">${it.senderDisplayName}</span>`;
+  if (!it.isBot || !attribution.enabled || !attribution.label) return who;
+  const inner = html`${who}<span class="botlabel">${attribution.label}</span>`;
+  return attribution.url
+    ? html`<a class="who-attr" href="${attribution.url}" target="_blank" rel="noopener noreferrer"
+        >${inner}</a
+      >`
+    : html`<span class="who-attr">${inner}</span>`;
+}
+
+/**
+ * Renders a message body, carrying the chat's own text formatting into the archive
+ * (CCB-S3-025). When SimpleX-parsed runs are present (`it.formatted`), each run's
+ * TEXT is HTML-escaped by the `html` template and wrapped in a whitelisted tag
+ * (bold/italic/etc.) — member input never reaches a tag or attribute, so this is
+ * safe by construction. Otherwise the plain (already consent-gated, and for her
+ * rows already redaction-checked) text renders as before. Whitespace/newlines are
+ * preserved by `.body { white-space: pre-wrap }`.
+ */
+function renderBody(it: PublicItem): SafeHtml {
+  if (!it.textBody) return html``;
+  if (!it.formatted) return html`<p class="body">${it.textBody}</p>`;
+  const parts = it.formatted.map((run) => {
+    const tag = run.f ? FORMAT_TAG[run.f] : undefined;
+    return tag ? html`${raw(tag[0])}${run.t}${raw(tag[1])}` : html`${run.t}`;
+  });
+  return html`<p class="body">${parts}</p>`;
+}
+
+/** Short share title for a card: a snippet of the text, or a type/sender fallback. */
+function shareTitle(it: PublicItem): string {
+  const base = it.textBody
+    ? it.textBody.replace(/\s+/g, ' ').trim()
+    : `${it.type} from ${it.senderDisplayName}`;
+  return base.length > 100 ? `${base.slice(0, 99)}…` : base;
+}
+
+/**
+ * The per-card share bar (CCB-S3-025). Every target is a script-free link we build
+ * ourselves and open in a new tab; the copy-link action is a button confirmed in
+ * place by a document-delegated handler (COPY_SCRIPT). NOTHING third-party loads.
+ * The bar slides out on hover on desktop (CSS only) and is permanently visible on
+ * touch / narrow viewports and when `alwaysVisible` is set. Shares point at the
+ * item's own permalink (`/m/<id>`), whose OG data makes the link look right.
+ */
+function shareBar(it: PublicItem, basePath: string, share: ShareCardOpts): SafeHtml {
+  if (!share.enabled) return html``;
+  const permalink = `${basePath}/m/${it.id}`;
+  const title = shareTitle(it);
+  const links = share.networks
+    .filter((net) => net in SHARE_ICONS)
+    .map((net) => {
+      const label = SHARE_LABELS[net as keyof typeof SHARE_LABELS] ?? net;
+      return html`<a
+        class="share-link"
+        href="${shareUrl(net, permalink, title)}"
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        aria-label="Share on ${label}"
+        title="Share on ${label}"
+        >${raw(SHARE_ICONS[net as keyof typeof SHARE_ICONS])}</a
+      >`;
+    });
+  const copy = html`<button
+    type="button"
+    class="share-link share-copy"
+    data-url="${permalink}"
+    aria-label="Copy link"
+    title="Copy link"
+  >
+    ${raw(COPY_ICON)}${raw(COPY_OK_ICON)}<span class="share-copied" aria-hidden="true">Copied</span>
+  </button>`;
+  return html`<div
+    class="share-bar${share.alwaysVisible ? ' always' : ''}"
+    role="group"
+    aria-label="Share this message"
+  >
+    ${links}${copy}
+  </div>`;
 }
 
 const REASON_OPTIONS: [string, string][] = [
@@ -510,11 +684,23 @@ function reportControl(it: PublicItem, basePath: string): SafeHtml {
  * inside `#stream-list` on the SSR page. The pager remains for crawlers + JS-off
  * visitors; the infinite-scroll client hides it once it initializes (CCB-S2-007).
  */
+/** Assembles the card options object from a render context (CCB-S3-025). */
+export function cardOptsFrom(
+  ctx: Pick<RenderContext, 'showDownload' | 'video' | 'share' | 'attribution'>,
+): CardOpts {
+  return {
+    showDownload: ctx.showDownload,
+    video: ctx.video,
+    share: ctx.share,
+    attribution: ctx.attribution,
+  };
+}
+
 function renderStreamRegion(ctx: StreamRegionCtx): SafeHtml {
   const items =
     ctx.items.length > 0
       ? html`<ul class="items">
-          ${renderCards(ctx.items, ctx.basePath, ctx.showDownload, ctx.video)}
+          ${renderCards(ctx.items, ctx.basePath, cardOptsFrom(ctx))}
         </ul>`
       : html`<p class="empty">No published messages match this view yet.</p>`;
 
@@ -548,28 +734,27 @@ function renderStreamRegion(ctx: StreamRegionCtx): SafeHtml {
   return html`${items} ${pager}`;
 }
 
-/** The single render entry point. Returns a complete HTML document. */
-export function renderEmbedPage(ctx: RenderContext): string {
-  const css = themeCss(ctx.presentation.theme, ctx.presentation.layout);
-  const seo = ctx.seo;
-  // SSR initial theme from the instance mode; the visitor toggle (localStorage)
-  // overrides on subsequent views. `auto` renders dark and lets the no-flash
-  // script honour prefers-color-scheme.
-  const mode = ctx.presentation.theme.mode;
-  const initialTheme = mode === 'light' ? 'light' : 'dark';
-  const themeColor = initialTheme === 'light' ? '#FAFBFD' : '#050A12';
-
-  const region = renderStreamRegion(ctx);
-
-  const body = html`<!doctype html>
-    <html lang="en" data-theme="${initialTheme}">
-      <head>
+/**
+ * The document `<head>` — meta/robots/canonical/OG/Twitter/JSON-LD/feed/analytics
+ * plus the inlined theme CSS and no-flash boot. Shared by the stream page and the
+ * item permalink page (CCB-S3-025) so both emit identical, correct head markup from
+ * one SeoHead. `feedUrl`, `prevUrl`, `nextUrl` are omitted when empty, so the item
+ * page (which sets them '') simply carries none.
+ */
+function documentHead(
+  seo: SeoHead,
+  nonce: string,
+  css: string,
+  themeColor: string,
+  autoMode: boolean,
+): SafeHtml {
+  return html`<head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="${seo.robots}" />
         <meta name="theme-color" content="${themeColor}" />
-        <script nonce="${ctx.nonce}">
-          ${raw(noFlashScript(mode === 'auto'))};
+        <script nonce="${nonce}">
+          ${raw(noFlashScript(autoMode))};
         </script>
         <title>${seo.title}</title>
         <meta name="description" content="${seo.description}" />
@@ -601,20 +786,34 @@ export function renderEmbedPage(ctx: RenderContext): string {
         ${seo.twitterImageUrl ? html`<meta name="twitter:image" content="${seo.twitterImageUrl}" />` : null}
         ${
           seo.jsonLd
-            ? html`<script type="application/ld+json" nonce="${ctx.nonce}">
+            ? html`<script type="application/ld+json" nonce="${nonce}">
                 ${raw(seo.jsonLd)}
               </script>`
             : null
         }
-        <style nonce="${ctx.nonce}">
+        <style nonce="${nonce}">
           ${raw(css)}
         </style>
-        ${
-          seo.analyticsScriptUrl
-            ? html`<script src="${seo.analyticsScriptUrl}" async></script>`
-            : null
-        }
-      </head>
+        ${seo.analyticsScriptUrl ? html`<script src="${seo.analyticsScriptUrl}" async></script>` : null}
+      </head>`;
+}
+
+/** The single render entry point. Returns a complete HTML document. */
+export function renderEmbedPage(ctx: RenderContext): string {
+  const css = themeCss(ctx.presentation.theme, ctx.presentation.layout);
+  const seo = ctx.seo;
+  // SSR initial theme from the instance mode; the visitor toggle (localStorage)
+  // overrides on subsequent views. `auto` renders dark and lets the no-flash
+  // script honour prefers-color-scheme.
+  const mode = ctx.presentation.theme.mode;
+  const initialTheme = mode === 'light' ? 'light' : 'dark';
+  const themeColor = initialTheme === 'light' ? '#FAFBFD' : '#050A12';
+
+  const region = renderStreamRegion(ctx);
+
+  const body = html`<!doctype html>
+    <html lang="en" data-theme="${initialTheme}">
+      ${documentHead(seo, ctx.nonce, css, themeColor, mode === 'auto')}
       <body>
         <div class="wrap">
           <header class="arch">
@@ -669,6 +868,85 @@ export function renderEmbedPage(ctx: RenderContext): string {
         <script nonce="${ctx.nonce}">
           ${raw(VIDEO_SCRIPT)};
         </script>
+        <script nonce="${ctx.nonce}">
+          ${raw(COPY_SCRIPT)};
+        </script>
+      </body>
+    </html>`;
+
+  return body.toString();
+}
+
+/** Context for a single-item permalink page (CCB-S3-025). */
+export interface ItemPageContext {
+  item: PublicItem;
+  presentation: PresentationConfig;
+  basePath: string;
+  seo: SeoHead;
+  nonce: string;
+  showDownload: boolean;
+  video: VideoCardOpts;
+  share: ShareCardOpts;
+  attribution: AttributionOpts;
+}
+
+/**
+ * Renders a single message's permalink page (CCB-S3-025) — a stable, crawlable,
+ * canonical URL for one item, so a shared link resolves cleanly. Reuses the exact
+ * card markup (`renderCards` with one item) and the shared document head (so OG /
+ * canonical / JSON-LD are item-scoped). No stream client, filter bar, or infinite
+ * scroll: it is one card plus a link back to the full archive. Consent is enforced
+ * upstream — the route only calls this for a currently-published item.
+ */
+export function renderItemPage(ctx: ItemPageContext): string {
+  const css = themeCss(ctx.presentation.theme, ctx.presentation.layout);
+  const seo = ctx.seo;
+  const mode = ctx.presentation.theme.mode;
+  const initialTheme = mode === 'light' ? 'light' : 'dark';
+  const themeColor = initialTheme === 'light' ? '#FAFBFD' : '#050A12';
+  const opts: CardOpts = {
+    showDownload: ctx.showDownload,
+    video: ctx.video,
+    share: ctx.share,
+    attribution: ctx.attribution,
+  };
+
+  const body = html`<!doctype html>
+    <html lang="en" data-theme="${initialTheme}">
+      ${documentHead(seo, ctx.nonce, css, themeColor, mode === 'auto')}
+      <body>
+        <div class="wrap">
+          <header class="arch">
+            <div class="head-row">
+              <div>
+                <h1>${seo.title}</h1>
+                <p><a class="reply-to" href="${ctx.basePath}">← Back to the archive</a></p>
+              </div>
+              ${raw(THEME_TOGGLE)}
+            </div>
+          </header>
+          <ul class="items">
+            ${renderCards([ctx.item], ctx.basePath, opts)}
+          </ul>
+          <footer class="arch">
+            Published with consent · powered by
+            <a href="https://github.com/saschadaemgen/cinderella" target="_blank" rel="noopener"
+              >Cinderella</a
+            >
+          </footer>
+        </div>
+        <script nonce="${ctx.nonce}">
+          ${raw(HEIGHT_SCRIPT)};
+        </script>
+        <script nonce="${ctx.nonce}">
+          ${raw(THEME_TOGGLE_SCRIPT)};
+        </script>
+        <script nonce="${ctx.nonce}">
+          ${raw(VIDEO_SCRIPT)};
+        </script>
+        <script nonce="${ctx.nonce}">
+          ${raw(COPY_SCRIPT)};
+        </script>
       </body>
     </html>`;
 
@@ -689,6 +967,15 @@ export function renderEmbedPage(ctx: RenderContext): string {
  * fullscreen. It is the only place a third-party URL becomes live.
  */
 const VIDEO_SCRIPT = `(function(){document.addEventListener('click',function(e){var t=e.target;if(!t||!t.closest)return;var btn=t.closest('.video-play');if(!btn)return;var card=btn.closest('.video-card');if(!card)return;var src=card.getAttribute('data-embed');if(!src)return;e.preventDefault();var sep=src.indexOf('?')<0?'?':'&';var f=document.createElement('iframe');f.className='video-frame';f.src=src+sep+'autoplay=1';f.title=card.getAttribute('data-title')||'Video';f.setAttribute('allow','autoplay; fullscreen; encrypted-media; picture-in-picture');f.setAttribute('allowfullscreen','');f.setAttribute('referrerpolicy','strict-origin-when-cross-origin');btn.parentNode.replaceChild(f,btn);try{f.focus();}catch(_){}});})();`;
+
+/**
+ * Copy-link (CCB-S3-025). Delegated on the document so it covers SSR cards, ones
+ * appended by infinite scroll, and the item permalink page alike. Copies the card's
+ * own permalink to the clipboard and confirms in place by toggling `.copied` for
+ * ~1.6s. Uses the async Clipboard API (the front is served over HTTPS) with a
+ * hidden-textarea execCommand fallback. Loads nothing external; no share widget.
+ */
+const COPY_SCRIPT = `(function(){document.addEventListener('click',function(e){var t=e.target;if(!t||!t.closest)return;var b=t.closest('.share-copy');if(!b)return;e.preventDefault();var url=b.getAttribute('data-url');if(!url)return;function ok(){b.classList.add('copied');setTimeout(function(){b.classList.remove('copied');},1600);}function fb(){try{var a=document.createElement('textarea');a.value=url;a.setAttribute('readonly','');a.style.position='absolute';a.style.left='-9999px';document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a);ok();}catch(_){}}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(ok).catch(fb);}else{fb();}});})();`;
 
 const HEIGHT_SCRIPT = `(function(){function h(){try{parent.postMessage({cinderellaEmbedHeight:document.documentElement.scrollHeight},'*')}catch(e){}}addEventListener('load',h);addEventListener('resize',h);document.addEventListener('loadedmetadata',h,true);document.addEventListener('fullscreenchange',h);if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement)}h();if(document.documentElement.classList.contains('embedded')){setTimeout(function(){if(document.documentElement.scrollHeight>window.innerHeight+4)document.documentElement.style.overflowY='auto';},1500);}})();`;
 

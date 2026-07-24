@@ -27,6 +27,9 @@ export const THEME_VARS_CSS = `:root{
   --bg-deep:#FAFBFC;--bg-dark:#F0F3F5;--bg-card:rgba(255,255,255,0.92);
   --text:#2C3440;--text-bright:#111827;--text-dim:rgba(44,52,64,0.55);
   --border:rgba(26,125,90,0.12);color-scheme:light;
+  /* Low-emphasis destructive red (CCB-S3-025), from the house design system
+     (site --red-400/--red-600): muted at rest, full strength on hover. */
+  --danger:#E5646E;--danger-strong:#C2434E;
   --bg:var(--bg-deep);--fg:var(--text);--muted:var(--text-dim);--card:var(--bg-card);
 }
 [data-theme="dark"]{
@@ -34,6 +37,7 @@ export const THEME_VARS_CSS = `:root{
   --bg-deep:#050A12;--bg-dark:#080D18;--bg-card:rgba(10,18,32,0.7);
   --text:#CBD5E1;--text-bright:#E8EDF4;--text-dim:rgba(203,213,225,0.5);
   --border:rgba(69,189,209,0.12);color-scheme:dark;
+  --danger:#E5646E;--danger-strong:#C2434E;
 }`;
 
 /** Sun/moon toggle button (inline SVGs, currentColor). CSS lives in each surface. */

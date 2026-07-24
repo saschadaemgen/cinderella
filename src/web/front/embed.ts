@@ -30,10 +30,12 @@ import { log } from '../../log.js';
 import {
   ARCHIVE_TYPES,
   decodeCursor,
+  getPublishedItem,
   getPublishedMedia,
   isPublished,
   latestPublishedImageId,
   listPublishedIds,
+  listPublishedItemRefs,
   listPublishedItems,
   listPublishedItemsByCursor,
   listPublishedSpanState,
@@ -46,6 +48,8 @@ import { createReport, reporterHash, REPORT_REASONS, type ReportReason } from '.
 import {
   renderCards,
   renderEmbedPage,
+  renderItemPage,
+  type CardOpts,
   type PresentationConfig,
   type RenderContext,
 } from './render.js';
@@ -56,6 +60,7 @@ import {
   buildRobotsTxt,
   buildSitemapIndexXml,
   buildSitemapXml,
+  itemSeoHead,
   resolveSeoHead,
   type SeoContext,
 } from './seo.js';
@@ -63,6 +68,8 @@ import type { ViewContext } from '../server.js';
 
 const PAGE_SIZE = 30;
 const FEED_SIZE = 40;
+/** Cap on per-item permalink entries in a sitemap (CCB-S3-025) — bounds the file. */
+const SITEMAP_ITEM_CAP = 5000;
 const MAX_PAGE = 1_000_000;
 const MAX_Q = 200;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -256,6 +263,8 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       nonce,
       showDownload: s.player.showDownload,
       video: videoOpts,
+      share: s.share,
+      attribution: s.attribution,
       streamHash,
       nextCursor: items.length > 0 ? (items[items.length - 1]?.cursor ?? '') : '',
       hasMore: (page - 1) * PAGE_SIZE + items.length < total,
@@ -267,6 +276,63 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
     applyEmbedHeaders(reply, nonce, analyticsHost, hasVideoCard);
     reply.type('text/html; charset=utf-8');
     return renderEmbedPage(renderCtx);
+  });
+
+  // --- Item permalink page (CCB-S3-025): a stable, crawlable, canonical URL per item ---
+  // One published message on its own page, so a shared link resolves cleanly and gets
+  // its own OG/canonical. Consent-gated through getPublishedItem: an unpublished /
+  // recalled / deleted / no-consent / unknown id 404s exactly like the media route,
+  // and this instance's media-type visibility is honoured too.
+  app.get<{ Params: { id: string; msgId: string } }>('/embed/:id/m/:msgId', async (req, reply) => {
+    const instance = await getEmbedInstance(ctx.db, req.params.id);
+    if (!instance) return reply.code(404).type('text/plain').send('Not found');
+    const messageId = Number.parseInt(req.params.msgId, 10);
+    if (!Number.isInteger(messageId) || messageId < 1 || messageId > Number.MAX_SAFE_INTEGER) {
+      return reply.code(404).type('text/plain').send('Not found');
+    }
+    const item = await getPublishedItem(ctx.db, messageId);
+    if (!item) return reply.code(404).type('text/plain').send('Not found');
+    const s = instance.settings;
+    if (!s.media[item.type]) return reply.code(404).type('text/plain').send('Not found');
+
+    const basePath = `${origin}/embed/${instance.id}`;
+    const enabledTypes = ARCHIVE_TYPES.filter((t) => s.media[t]);
+    const ogFallbackImageId = await latestPublishedImageId(ctx.db, enabledTypes);
+    const seo = itemSeoHead({
+      instance,
+      seo: s.seo,
+      item,
+      origin,
+      basePath,
+      canonicalUrl: `${basePath}/m/${item.id}`,
+      ogFallbackImageId,
+    });
+    const nonce = randomBytes(16).toString('base64');
+    const analyticsHost = analyticsOrigin(s.seo.analytics.scriptUrl);
+    const videoOpts = {
+      embed: s.video.embed,
+      providers: s.video.providers,
+      showNotice: s.video.showNotice,
+    };
+    const hasVideoCard =
+      videoOpts.embed &&
+      !!item.video &&
+      item.type === 'link' &&
+      videoOpts.providers.includes(item.video.provider);
+
+    applyEmbedHeaders(reply, nonce, analyticsHost, hasVideoCard);
+    reply.type('text/html; charset=utf-8');
+    return renderItemPage({
+      item,
+      presentation: { template: 'default', theme: s.theme, layout: s.layout },
+      basePath,
+      seo,
+      nonce,
+      showDownload: s.player.showDownload,
+      video: videoOpts,
+      share: s.share,
+      attribution: s.attribution,
+    });
   });
 
   // --- Live-update state (CCB-S2-006/007): consent-gated ids + version hash ---
@@ -335,17 +401,18 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       reply.header('cache-control', 'no-store');
       reply.header('x-content-type-options', 'nosniff');
       reply.type('application/json; charset=utf-8');
+      const cardOpts: CardOpts = {
+        showDownload: instance.settings.player.showDownload,
+        video: {
+          embed: instance.settings.video.embed,
+          providers: instance.settings.video.providers,
+          showNotice: instance.settings.video.showNotice,
+        },
+        share: instance.settings.share,
+        attribution: instance.settings.attribution,
+      };
       return {
-        html: renderCards(
-          chunk.items,
-          `${origin}/embed/${instance.id}`,
-          instance.settings.player.showDownload,
-          {
-            embed: instance.settings.video.embed,
-            providers: instance.settings.video.providers,
-            showNotice: instance.settings.video.showNotice,
-          },
-        ).toString(),
+        html: renderCards(chunk.items, `${origin}/embed/${instance.id}`, cardOpts).toString(),
         nextCursor: chunk.nextCursor,
         hasMore: chunk.hasMore,
       };
@@ -503,6 +570,7 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       pageSize: PAGE_SIZE,
     });
     const lastmod = await publishedLastmod(ctx.db, enabledTypes);
+    const items = await listPublishedItemRefs(ctx.db, enabledTypes, SITEMAP_ITEM_CAP);
     const canonicalBase = (s.seo.canonicalBase || origin).replace(/\/+$/, '');
     const xml = buildSitemapXml({
       seo: s.seo,
@@ -513,6 +581,7 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       enabledTypes,
       enabledFilters: { byType: s.filters.byType },
       lastmod,
+      items,
     });
     reply.header('cache-control', 'no-store');
     reply.type('application/xml; charset=utf-8');

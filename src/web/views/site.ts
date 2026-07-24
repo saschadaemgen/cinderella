@@ -42,6 +42,7 @@ const NETWORK_LABELS: Record<string, string> = {
   facebook: 'Facebook',
   reddit: 'Reddit',
   whatsapp: 'WhatsApp',
+  telegram: 'Telegram',
   linkedin: 'LinkedIn',
   email: 'Email',
 };

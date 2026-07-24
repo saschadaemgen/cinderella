@@ -15,8 +15,18 @@ import { getSetting, setSetting } from '../db/settings.js';
 import type { Queryable } from '../db/pool.js';
 import { writeAudit } from '../db/audit.js';
 
-/** Share targets that are pure link builders — no third-party script, no tracking. */
-export const KNOWN_NETWORKS = ['x', 'facebook', 'reddit', 'whatsapp', 'linkedin', 'email'] as const;
+/** Share targets that are pure link builders — no third-party script, no tracking.
+ * Kept in step with {@link SHARE_NETWORKS} in src/web/share.ts (the URL/label/icon
+ * source of truth); this is the settings-layer validation vocabulary. */
+export const KNOWN_NETWORKS = [
+  'x',
+  'facebook',
+  'reddit',
+  'whatsapp',
+  'telegram',
+  'linkedin',
+  'email',
+] as const;
 export type ShareNetwork = (typeof KNOWN_NETWORKS)[number];
 
 export interface SiteSettings {

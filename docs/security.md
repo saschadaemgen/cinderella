@@ -514,6 +514,29 @@ adds and removes whole cards, it does not rewrite one in place). `withhold`
 removes the row from the feed and from the live stream, and is the stronger choice
 where that matters.
 
+**Stream formatting reads `raw_json` again — narrowly, and redaction-safe (CCB-S3-025).** To carry a
+member's `*bold*` into the archive, `published_messages` (migration 019) derives a compact
+`formatted_text` (`{f,t}[]`) from `raw_json -> 'chatItem' -> 'formattedText'`. This is deliberately the
+message's OWN parsed runs — the sender's own words, the same text as `text_body` — and NOT the quoted
+item (`chatItem.quotedItem`, a different path) or any profile, so it does not reopen the quoted-content
+route the earlier `raw_json` removal closed. Only `{format.type, text}` per run is projected; the
+`mention` format's `memberName` is never stored. **Redaction guard:** the view emits `formatted_text` as
+NULL whenever a bot message's mention-redaction can apply (`m.is_bot AND r.pattern IS NOT NULL`), so the
+structured runs can never carry a name that `text_body` would redact; the renderer then uses the redacted
+plain text. Member messages are never redacted, so their runs equal their (verbatim, consented)
+`text_body`. On the page (`src/web/front/render.ts` `renderBody`) each run's text is escaped by the `html`
+template and wrapped in a fixed whitelist of tags, so no member input reaches a tag or attribute (XSS-safe
+by construction). The hot poll path selects only `id` + a marker, so the correlated derivation is pruned
+and never evaluated there.
+
+**Item permalinks stay behind the same gate (CCB-S3-025).** `GET /embed/:id/m/:msgId`
+(`src/web/front/embed.ts`) reads one item through `getPublishedItem` → `published_messages`, so an
+unpublished / recalled / deleted / no-consent / unknown / instance-type-disabled id 404s exactly like the
+media route; its OG image is the item's own media served through the same consent-gated `/media/:id`
+route, and the per-item sitemap entries come from `published_messages` only. The share bar
+(`src/web/share.ts`) is plain links + a same-origin copy-link, so nothing third-party loads before a
+click and the strict front CSP is unchanged.
+
 ## 9c. Plugin secrets — stored once, never twice (CCB-S3-008)
 
 Provider API keys are encrypted at rest with a key derived from `SESSION_SECRET`, are never

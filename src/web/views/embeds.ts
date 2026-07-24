@@ -17,6 +17,7 @@ import {
   type EmbedSettings,
 } from '../../db/embeds.js';
 import { html, page, raw, type SafeHtml } from '../html.js';
+import { SHARE_LABELS, SHARE_NETWORKS } from '../share.js';
 import type { ViewContext } from '../server.js';
 import { badge, card, fmtDate, pageHeader } from './ui.js';
 
@@ -59,6 +60,16 @@ function settingsFromForm(body: Record<string, unknown>): EmbedSettings {
       link: s('m_link') === 'on',
     },
     player: { showDownload: s('p_showDownload') === 'on' },
+    share: {
+      enabled: s('sh_enabled') === 'on',
+      networks: SHARE_NETWORKS.filter((n) => s(`sh_net_${n}`) === 'on'),
+      alwaysVisible: s('sh_always') === 'on',
+    },
+    attribution: {
+      enabled: s('attr_enabled') === 'on',
+      label: s('attr_label'),
+      url: s('attr_url'),
+    },
     seo: {
       titleTemplate: s('seo_titleTemplate'),
       description: s('seo_description'),
@@ -304,6 +315,41 @@ export function registerEmbeds(app: FastifyInstance, ctx: ViewContext): void {
                 Adds a download button to videos (and images later). When off, the native video
                 player's download control is disabled too (<code>controlsList=nodownload</code>).
               </p>
+            </div>`,
+          )}
+          ${card(
+            'Share bar',
+            html`<div class="flex flex-col gap-3">
+              <p class="text-xs text-slate-500">
+                A per-card share bar on the public archive. Every target is a plain link built here and
+                opened on click - no third-party script, no tracking, no cookie-banner entry. It slides
+                out on hover on desktop and is permanently visible on touch devices; copy-link is always
+                offered. Default on.
+              </p>
+              ${checkbox('sh_enabled', 'Show the share bar', s.share.enabled)}
+              ${checkbox('sh_always', 'Always visible (instead of revealed on hover)', s.share.alwaysVisible)}
+              <fieldset class="flex flex-col gap-2">
+                <legend class="text-sm font-medium text-slate-600">Networks offered</legend>
+                <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  ${SHARE_NETWORKS.map((n) =>
+                    checkbox(`sh_net_${n}`, SHARE_LABELS[n], s.share.networks.includes(n)),
+                  )}
+                </div>
+              </fieldset>
+            </div>`,
+          )}
+          ${card(
+            'Bot attribution',
+            html`<div class="flex flex-col gap-3 sm:max-w-2xl">
+              <p class="text-xs text-slate-500">
+                On Cinderella's own messages in the archive, show what she is. Her name and this label
+                together link to the URL below, opening in a new tab. Blank the label to show nothing;
+                blank the URL to show the label without a link. If you run your own instance, point this
+                at your own project rather than ours.
+              </p>
+              ${checkbox('attr_enabled', 'Show attribution on her messages', s.attribution.enabled)}
+              ${textField('attr_label', 'Label (shown after her name)', s.attribution.label, '(SimpleX AI Bot)')}
+              ${textField('attr_url', 'Link URL (https)', s.attribution.url, 'https://github.com/...')}
             </div>`,
           )}
           ${card(
