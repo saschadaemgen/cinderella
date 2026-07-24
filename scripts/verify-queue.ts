@@ -35,8 +35,14 @@ import {
 } from '../src/queue/store.js';
 import { clearJobHandlers, registerJobHandler } from '../src/queue/registry.js';
 import { QueueWorker } from '../src/queue/worker.js';
-import { PermanentJobError, type QueueConfig } from '../src/queue/types.js';
+import { isPermanent, PermanentJobError, type QueueConfig } from '../src/queue/types.js';
 import { CONTENT_ANALYSIS_JOB, contentAnalysisHandler } from '../src/queue/jobs/analysis.js';
+import { enqueueDeletionRetry } from '../src/queue/index.js';
+import {
+  DELETION_APPLY_JOB,
+  deletionApplyHandler,
+  deletionApplyKey,
+} from '../src/queue/jobs/deletion.js';
 
 let failures = 0;
 function section(t: string): void {
@@ -316,6 +322,27 @@ async function main(): Promise<void> {
     threw = true;
   }
   check('a float threshold is floored, not a fatal ::bigint cast error', !threw);
+
+  /* ── 16. Durable in-group deletion retry (CCB-S3-023 follow-up) ───────────── */
+  section('16. A failed in-group deletion is enqueued durably, idempotently, validated');
+  await pg.exec(`DELETE FROM jobs`);
+  await enqueueDeletionRetry(db, 1, [11, 10]);
+  await enqueueDeletionRetry(db, 1, [10, 11]);
+  check('two enqueues of the same deletion create ONE job (order-independent key)',
+    Number(await scalar(db, `SELECT count(*) FROM jobs WHERE type=$1`, [DELETION_APPLY_JOB])) === 1);
+  check('the deletion runs on the INTERACTIVE lane (consent is not bulk work)',
+    (await scalar(db, `SELECT lane FROM jobs WHERE type=$1`, [DELETION_APPLY_JOB])) === 'interactive');
+  check('the idempotency key is order-independent', deletionApplyKey(1, [3, 1, 2]) === deletionApplyKey(1, [1, 2, 3]));
+  let permErr = false;
+  try {
+    await deletionApplyHandler(
+      { groupId: 'nope', groupMsgIds: [] },
+      { job: { id: 0, type: DELETION_APPLY_JOB, payload: {}, lane: 'interactive', attempts: 1, maxAttempts: 5 }, stopping: () => false },
+    );
+  } catch (e) {
+    permErr = isPermanent(e);
+  }
+  check('an unusable deletion payload fails fast (permanent), not retried forever', permErr);
 
   console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILURE(S)`}`);
   await pg.close();

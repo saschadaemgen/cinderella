@@ -14,6 +14,7 @@ import {
   contentAnalysisHandler,
   contentAnalysisKey,
 } from './jobs/analysis.js';
+import { DELETION_APPLY_JOB, deletionApplyHandler, deletionApplyKey } from './jobs/deletion.js';
 
 let worker: QueueWorker | undefined;
 
@@ -21,6 +22,10 @@ let worker: QueueWorker | undefined;
 export function registerBuiltinJobs(): void {
   if (!getJobHandler(CONTENT_ANALYSIS_JOB)) {
     registerJobHandler(CONTENT_ANALYSIS_JOB, contentAnalysisHandler);
+  }
+  // Durable in-group deletion retry (CCB-S3-023 follow-up).
+  if (!getJobHandler(DELETION_APPLY_JOB)) {
+    registerJobHandler(DELETION_APPLY_JOB, deletionApplyHandler);
   }
   // The media-derivative handler is registered when its migration lands (§5).
 }
@@ -70,4 +75,23 @@ export async function enqueueContentAnalysis(
   });
 }
 
+/**
+ * Enqueue a durable retry of an in-group deletion (CCB-S3-023 follow-up). Called
+ * when the immediate `markDeleted` fails, so the deletion is applied when the DB
+ * recovers instead of being lost with the un-redelivered SDK event. Interactive
+ * lane: consent is not bulk work. Idempotent per (group, message-set).
+ */
+export async function enqueueDeletionRetry(
+  db: Queryable,
+  groupId: number,
+  groupMsgIds: readonly number[],
+): Promise<void> {
+  await enqueueJob(db, DELETION_APPLY_JOB, {
+    idempotencyKey: deletionApplyKey(groupId, groupMsgIds),
+    lane: 'interactive',
+    payload: { groupId, groupMsgIds: [...groupMsgIds] },
+  });
+}
+
 export { CONTENT_ANALYSIS_JOB } from './jobs/analysis.js';
+export { DELETION_APPLY_JOB } from './jobs/deletion.js';

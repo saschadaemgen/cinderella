@@ -304,11 +304,14 @@ The history below records the pre-CCB-S2-003 state.
       + deep links) and Stage 3 (dark-neon restyle reusing the website design system, cyan accent;
       D-060) DONE. Stage 2 (two-column tile layout, per-tile save, sized inputs, collapsible help)
       still to build.
+- [x] **Queue-based retry of a failed in-group deletion (CCB-S3-023 follow-up) — DONE.** A failed
+      `markDeleted` now enqueues a durable `deletion.apply` job (interactive lane, idempotent,
+      fail-fast on a bad payload) that retries until it succeeds or dead-letters visibly; the alert is
+      actionable ("queued for automatic retry", or "remove by hand" only if even the enqueue fails).
+      Production was checked: all 6 in-group deletions were correctly applied, zero still published, so
+      the finding never actually fired. `src/queue/jobs/deletion.ts`; `verify:queue` §16.
 - [ ] **CCB-S3-023 deferred fixes (audit recorded them rather than doing them here).**
-      (a) **Queue-based retry of a failed in-group deletion** — `runDeleted` now surfaces loudly, but
-      a transient DB error still needs an operator to re-remove the content; a durable job would retry
-      it. Risk if not done: a deletion failure requires manual action. (b) **Atomic consent-command
-      categorisation** — set `member_category='consent'` in the persist transaction for command
+      (b) **Atomic consent-command categorisation** — set `member_category='consent'` in the persist transaction for command
       messages, so a classification failure cannot leak the command onto the archive (today it is only
       made visible). Risk: a rare infra error between insert and categorisation can publish a consent
       command until noticed. (c) **Generalised plugin `selfCheck()` interface** — the boot credential

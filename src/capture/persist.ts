@@ -21,6 +21,7 @@ import { extractLinks, linksToSearchText } from './links.js';
 import { storeMedia } from './media.js';
 import { captureVideoLink } from './video.js';
 import { messageIdFor, stripAndRecord } from '../media/pipeline.js';
+import { enqueueDeletionRetry } from '../queue/index.js';
 
 /** Message types that carry a downloadable file. */
 const MEDIA_TYPES = new Set(['image', 'video', 'voice', 'file']);
@@ -149,11 +150,35 @@ export function makePersistenceHooks(cfg: Config): CaptureHooks {
     },
 
     onDeleted: async (groupId, groupMsgIds) => {
-      const n = await markDeleted(getPool(), groupId, groupMsgIds);
-      if (n > 0) {
-        log.info(
-          `Marked ${n} message(s) deleted in group ${groupId} (excluded from published set).`,
-        );
+      try {
+        const n = await markDeleted(getPool(), groupId, groupMsgIds);
+        if (n > 0) {
+          log.info(
+            `Marked ${n} message(s) deleted in group ${groupId} (excluded from published set).`,
+          );
+        }
+      } catch (err) {
+        // The SDK delivers this deletion ONCE and never re-sends it, so a lost
+        // markDeleted would leave member-deleted content published forever. Do not
+        // lose it (CCB-S3-023): enqueue a DURABLE retry, applied when the DB
+        // recovers, and make the alert ACTIONABLE rather than a banner nobody can
+        // act on.
+        const emsg = err instanceof Error ? err.message : String(err);
+        const ids = groupMsgIds.join(', ');
+        log.error(`markDeleted failed for group ${groupId} (items ${ids}): ${emsg}`);
+        try {
+          await enqueueDeletionRetry(getPool(), groupId, groupMsgIds);
+          status.error(
+            `In-group deletion for group ${groupId} message(s) ${ids} failed (${emsg}); queued for ` +
+              `automatic retry. If it does not clear, it will appear in the queue dead-letters.`,
+          );
+        } catch (enqErr) {
+          const q = enqErr instanceof Error ? enqErr.message : String(enqErr);
+          status.error(
+            `In-group deletion for group ${groupId} message(s) ${ids} FAILED and could not even be ` +
+              `queued (${q}). Remove those messages by hand on the Messages page.`,
+          );
+        }
       }
     },
   };

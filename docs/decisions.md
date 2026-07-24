@@ -34,9 +34,16 @@ whose stored key will not decrypt is reported via `status.error`), generalising 
 media derivative checks; and those checks' own failures are now surfaced too.
 **Rule.** Recorded as a standing non-negotiable in `CLAUDE.md`: surface failures, distinguish
 not-configured from configured-but-failing, count masking fallbacks, and do not add noise.
-**Deliberately deferred (in the backlog, risk stated).** Queue-based retry of a failed deletion;
-atomic consent-command categorisation (so a classification failure cannot leak the command); a
-generalised plugin `selfCheck()` interface. The many safe, already-logged backstops were left as-is
+**Deletion path (follow-up, done).** Production was checked against the SimpleX core DB: all 6
+in-group deletions were correctly applied and zero are still published, so the `runDeleted` finding
+never actually fired. A failed deletion now enqueues a durable `deletion.apply` job (idempotent,
+interactive lane, fail-fast on a bad payload) that retries until it succeeds or dead-letters, and the
+alert is actionable. This is effective fail-closed: the withhold (`group_deleted=TRUE`) is a DB write,
+so it cannot literally remove the window (a failed write cannot withhold), but the leak window only
+exists while the DB is up — the archive is unreadable while it is down — and the durable retry closes
+it there in seconds, guaranteeing the deletion is applied.
+**Still deferred (in the backlog, risk stated).** Atomic consent-command categorisation (so a
+classification failure cannot leak the command); a generalised plugin `selfCheck()` interface. The many safe, already-logged backstops were left as-is
 to avoid crying wolf.
 **Evidence.** `src/capture/handler.ts`, `src/plugins/secrets.ts` + `crypto-prices/settings.ts` +
 `web/views/plugins.ts`, `src/bot/client.ts`, `src/web/front/embed.ts`, `src/web/views/dashboard.ts`,

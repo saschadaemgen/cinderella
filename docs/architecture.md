@@ -598,7 +598,9 @@ prefixes (`fillerPrefixes`/`maxPrefixWords`/`maxPrefixChars`, Guards).
 
 The foundation for categorisation and the media gallery, and the durable replacement for the ad-hoc
 background work that failed invisibly all season. **Implemented (this briefing): the queue engine,
-the worker, the placeholder analysis job, and the harness.** Planned next (same briefing, phase 2):
+the worker, the placeholder analysis job, and the harness.** Its first real user is `deletion.apply`
+(CCB-S3-023 follow-up): a failed in-group deletion enqueues a durable retry so member-deleted content
+cannot be lost when the one-shot SDK event's `markDeleted` write fails. Planned next (same briefing, phase 2):
 moving media-derivative generation and video-thumbnail fetching onto it, a backfill command, and the
 admin observability page.
 
