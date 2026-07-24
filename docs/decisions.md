@@ -13,6 +13,37 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-067 — A matched keyword set is authoritative for the reply language; the weighted contest is only for UNKNOWN
+
+**Status: IMPLEMENTED (CCB-S3-005 Addendum A). Refines D-034.**
+**The fault.** `Cinderella Hilfe` was answered in English. The weighted contest (D-034) requires a
+length-scaled margin before it commits to a language, and a two-token instruction cannot supply one, so
+detection fell through to the default `en`. The margin itself is correct and stays: it is what stopped a
+lone `hallo` in a 357-word English announcement from flipping the whole reply to German.
+**The fix.** Statistical detection was the wrong instrument where a stronger signal already exists and
+was being discarded: `Hilfe` resolved to HELP by matching the GERMAN keyword set, so the resolver knew
+the language with CERTAINTY, not probability. The rule resolver already returned that language
+(`result.lang`); the engine now USES it. When an intent resolves above threshold via a keyword set, she
+answers in that set's language, independent of message length. The weighted contest and the default are
+kept exactly as they were for the case with nothing to learn from, principally **UNKNOWN**.
+**The ambiguity guard.** A keyword identical in both languages (`status`, `undo`) is not authoritative:
+the resolver marks the match `langMatched` only when the winning language's best score STRICTLY beats
+every other language's, so a cross-language tie falls back to the contest and then the default. A model
+resolver that does not set the flag also falls back, never asserting a language it did not establish.
+**What is unchanged.** The follow-up window: a bare `ja` after a German prompt is UNKNOWN (or an
+affirmation handled before resolution) and carries no `langMatched`, so it stays German via the pending
+handshake or the remembered language. `fixed` mode still forces the default. The `hallo` announcement is
+still English (it is UNKNOWN or length-guarded, so the contest decides, and the contest says English).
+The wake word is already stripped before detection (the addressed path measures `address.instruction`,
+e.g. `Hilfe`, not `Cinderella Hilfe`; the follow-up and reply paths carry no wake word), so the
+briefing's second point needed no change, confirmed by the acceptance tests.
+**Evidence.** `src/interaction/intent.ts` (`IntentResult.langMatched`), `src/interaction/rules.ts`
+(per-language best score + the strict-beat test), `src/interaction/resolver.ts` (sanitize passthrough),
+`src/interaction/engine.ts` (the post-resolution override); `scripts/verify-interaction.ts` §21 (the four
+acceptance cases + the identical-in-both guard), §17 (the `hallo` regression, still passing).
+
+---
+
 ### D-066 — The help reply is one editable template the machine fills, not two texts where the editable one is dead
 
 **Status: IMPLEMENTED (CCB-S3-021 §3; parts 1-2 remain as D-061).**

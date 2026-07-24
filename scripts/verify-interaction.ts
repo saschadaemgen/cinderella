@@ -1634,6 +1634,35 @@ async function main(): Promise<void> {
   check('a blank template validates (it restores the default)', missingHelpPlaceholders('').length === 0);
   settings = normalizeInteraction({});
 
+  /* -- 21. CCB-S3-005 Addendum A -- a matched keyword set decides the language -- */
+  section('21. CCB-S3-005 Addendum A -- short instructions answered in the language written');
+  settings = normalizeInteraction({});
+  const isGerman = (r: string): boolean => /Ich bin \*Cinderella\*/.test(r);
+  const isEnglish = (r: string): boolean => /I am \*Cinderella\*/.test(r);
+
+  coolDown();
+  const helpDe = (await say('Cinderella Hilfe')).replies[0] ?? '';
+  check('"Cinderella Hilfe" is answered in German (the bug this fixes)', isGerman(helpDe));
+  coolDown();
+  const helpEn = (await say('Cinderella help')).replies[0] ?? '';
+  check('"Cinderella help" is answered in English', isEnglish(helpEn));
+  coolDown();
+  const wasKannst = (await say('Cinderella was kannst du')).replies[0] ?? '';
+  check('"Cinderella was kannst du" is answered in German', isGerman(wasKannst));
+  coolDown();
+  const wieFunk = (await say('Cinderella wie funktioniert das')).replies[0] ?? '';
+  check('"Cinderella wie funktioniert das" is answered in German', isGerman(wieFunk));
+
+  // A keyword identical in both languages (status, undo) is ambiguous: it must NOT
+  // be treated as authoritative, so it falls to the contest and then the default.
+  coolDown();
+  const statusAmbiguous = (await say('Cinderella status')).replies[0] ?? '';
+  check(
+    'an identical-in-both keyword (status) falls to the contest + default, not a coin-flip',
+    /I keep/i.test(statusAmbiguous),
+  );
+  settings = normalizeInteraction({});
+
   console.log(
     `\n${failures === 0 ? 'All interaction checks passed.' : `${failures} check(s) FAILED.`}`,
   );

@@ -90,6 +90,10 @@ function sanitize(raw: unknown, lang: string): IntentResult {
     confidence,
     slots,
     lang: typeof r['lang'] === 'string' && r['lang'] ? r['lang'] : lang,
+    // Authoritative only when the resolver explicitly says so (CCB-S3-005 Addendum
+    // A); a model that omits it falls back to the weighted contest, never asserts a
+    // language it did not establish.
+    langMatched: r['langMatched'] === true,
   };
 }
 

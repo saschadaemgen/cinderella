@@ -385,11 +385,19 @@ matching and the dialogue running, each switchable in the console:
 Everything the guards drop is recorded in an in-memory near-miss log and shown on the
 Interaction page, because a guard nobody can see is indistinguishable from a broken bot.
 
-**Reply language (CCB-S3-005).** Detected from the member's own message by a scored contest
-between hint sets, not from which keyword set matched. Precedence: `fixed` mode → an open
-confirmation offer (so a handshake cannot change language midway) → confident detection →
-the language remembered for this member's follow-up window → the configured default. Only
-languages with real persona copy are offered.
+**Reply language (CCB-S3-005, Addendum A / D-067).** Where an intent RESOLVES via a keyword
+set, that set's language is authoritative and decides the reply — the resolver already knows
+it with certainty (`IntentResult.langMatched`), which beats statistical detection on a short
+message that cannot supply the contest's length-scaled margin (this is why `Cinderella Hilfe`
+is answered in German). The `langMatched` flag is set only when the winning language strictly
+beats every other's best score, so a keyword identical in both (`status`, `undo`) stays
+ambiguous. Where there is no match to learn from (UNKNOWN, or an ambiguous match), the reply
+falls back to the scored contest between hint sets (D-034), then the default. Precedence:
+`fixed` mode → an open confirmation offer (so a handshake cannot change language midway) → an
+authoritative matched keyword-set language → confident contest detection → the language
+remembered for this member's follow-up window → the configured default. The wake word is
+stripped before detection (the addressed path measures `address.instruction`). Only languages
+with real persona copy are offered.
 
 **A state question is never an action request (CCB-S3-006).** The resolver re-points
 `whats my publish status?` at STATUS instead of PUBLISH. Consent prompts appear only because

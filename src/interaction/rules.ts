@@ -1167,6 +1167,11 @@ function resolveRules(text: string, ctx: IntentContext): IntentResult {
   const quoted = quotedRanges(text);
 
   let best: { pattern: Pattern; match: Match; score: number } | null = null;
+  // Best score achieved per language (CCB-S3-005 Addendum A). The reply language a
+  // match implies is authoritative only when its language strictly beats every
+  // other's here; a keyword identical in both (status, undo) ties and stays a job
+  // for the weighted contest.
+  const bestByLang = new Map<string, number>();
   for (const pattern of PATTERNS) {
     // A pattern belonging to a disabled plugin is not merely outranked, it is
     // never considered — so a price question with the plugin off is UNKNOWN and
@@ -1184,6 +1189,8 @@ function resolveRules(text: string, ctx: IntentContext): IntentResult {
 
     // A negation beside the keyword: better to ask than to act.
     if (negatedNear(instr, match)) score *= 0.3;
+
+    bestByLang.set(pattern.lang, Math.max(bestByLang.get(pattern.lang) ?? 0, score));
 
     if (
       !best ||
@@ -1248,7 +1255,14 @@ function resolveRules(text: string, ctx: IntentContext): IntentResult {
     if (target !== undefined) slots.targetName = target;
   }
 
-  return { intent: pattern.intent, confidence: score, slots, lang: pattern.lang };
+  // The match's language is authoritative (CCB-S3-005 Addendum A) only when it
+  // strictly beats every other language's best score. A tie (a keyword identical
+  // in both, e.g. `status`) is ambiguous, so the engine keeps the contest + default.
+  let otherBest = 0;
+  for (const [l, sc] of bestByLang) if (l !== pattern.lang) otherBest = Math.max(otherBest, sc);
+  const langMatched = score > otherBest;
+
+  return { intent: pattern.intent, confidence: score, slots, lang: pattern.lang, langMatched };
 }
 
 /**

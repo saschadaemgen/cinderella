@@ -102,6 +102,17 @@ export interface IntentResult {
   slots: IntentSlots;
   /** Language the instruction appeared to be in — persona replies follow it. */
   lang: string;
+  /**
+   * True when `lang` came from an UNAMBIGUOUS keyword-set match (CCB-S3-005
+   * Addendum A): the winning language's best score strictly beat every other
+   * language's. That is authoritative evidence of the member's language — stronger
+   * than statistical detection, and independent of message length — so the engine
+   * answers in `lang` rather than re-detecting. False (or absent) for UNKNOWN, for
+   * a language-ambiguous match (a keyword identical in both, e.g. `status`/`undo`),
+   * and for the conversion / carry-over paths, where the weighted contest and the
+   * default stand as before.
+   */
+  langMatched?: boolean;
 }
 
 export interface IntentContext {

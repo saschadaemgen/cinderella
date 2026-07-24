@@ -377,8 +377,9 @@ export class InteractionEngine {
   ): Promise<boolean> {
     const pending = this.state.getPending(msg.groupId, msg.senderMemberId, now);
     // The language of THIS message, decided before anything is resolved, so the
-    // not-understood reply is covered too (§6).
-    const lang = this.replyLanguage(msg, s, instruction, pending, now);
+    // not-understood reply is covered too (§6). It is refined AFTER resolution when
+    // a keyword set matched, which is authoritative (CCB-S3-005 Addendum A).
+    let lang = this.replyLanguage(msg, s, instruction, pending, now);
 
     // An outstanding offer is answered before anything else is considered.
     if (pending) {
@@ -500,6 +501,26 @@ export class InteractionEngine {
     // so a follow-up fragment is never hijacked.
     if (explicit && result.intent !== 'HELP' && /^(?:help|hilfe)\b/i.test(instruction.trim())) {
       result = { intent: 'HELP', confidence: 1, slots: {}, lang };
+    }
+
+    // CCB-S3-005 Addendum A: a resolved match knows the member's language with
+    // CERTAINTY (the keyword set that matched), which is better evidence than the
+    // weighted contest on a short message that cannot supply a margin. So answer in
+    // it. This runs only where a match exists: UNKNOWN, a language-ambiguous match
+    // (a keyword identical in both, so langMatched is false), and fixed mode all
+    // keep the contest + default already decided in replyLanguage. The follow-up
+    // window is untouched, because a bare `yes`/`ja` is UNKNOWN and carries no
+    // langMatched, and a carried-over fragment (§7c) is not a keyword match either.
+    if (
+      s.replyLanguageMode !== 'fixed' &&
+      result.intent !== 'UNKNOWN' &&
+      result.langMatched === true &&
+      s.persona[result.lang]
+    ) {
+      lang = result.lang;
+      if (s.rememberMemberLanguage) {
+        this.state.rememberLanguage(msg.groupId, msg.senderMemberId, lang);
+      }
     }
 
     // ONE place decides what kind of message this was for the archive
