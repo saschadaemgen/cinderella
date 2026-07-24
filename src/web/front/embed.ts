@@ -451,7 +451,9 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
         return reply.code(400).type('text/plain').send('Invalid reason');
       }
       const msgId = Number.parseInt(typeof body.msg === 'string' ? body.msg : '', 10);
-      if (!Number.isInteger(msgId) || msgId < 1) return confirm();
+      // Upper bound too (CCB-S3-021 follow-up): an out-of-BIGINT-range id would raise
+      // in isPublished's query; the neutral confirm keeps it from being a 500 oracle.
+      if (!Number.isInteger(msgId) || msgId < 1 || msgId > Number.MAX_SAFE_INTEGER) return confirm();
       // Consent gate: only currently-published items are reportable (D-016).
       if (!(await isPublished(ctx.db, msgId))) return confirm();
 
@@ -476,7 +478,10 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
       const instance = await getEmbedInstance(ctx.db, req.params.id);
       if (!instance) return reply.code(404).type('text/plain').send('Not found');
       const messageId = Number.parseInt(req.params.msgId, 10);
-      if (!Number.isInteger(messageId) || messageId < 1) {
+      // Upper bound too (CCB-S3-021 follow-up): an id above the safe range cannot
+      // match a real BIGINT row and would raise a bigint out-of-range error in the
+      // query, so 404 cleanly rather than surface a 500 + DB-error log noise.
+      if (!Number.isInteger(messageId) || messageId < 1 || messageId > Number.MAX_SAFE_INTEGER) {
         return reply.code(404).type('text/plain').send('Not found');
       }
       let media = await getPublishedMedia(ctx.db, messageId);
