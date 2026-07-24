@@ -15,6 +15,7 @@ import {
   contentAnalysisKey,
 } from './jobs/analysis.js';
 import { DELETION_APPLY_JOB, deletionApplyHandler, deletionApplyKey } from './jobs/deletion.js';
+import { CAPTURE_DRAIN_JOB, captureDrainHandler } from '../capture/events/replay.js';
 
 let worker: QueueWorker | undefined;
 
@@ -26,6 +27,11 @@ export function registerBuiltinJobs(): void {
   // Durable in-group deletion retry (CCB-S3-023 follow-up).
   if (!getJobHandler(DELETION_APPLY_JOB)) {
     registerJobHandler(DELETION_APPLY_JOB, deletionApplyHandler);
+  }
+  // Capture write-ahead drain: retries recorded events that did not apply on
+  // arrival (CCB-S3-024). Interactive lane — a member's own message is not bulk work.
+  if (!getJobHandler(CAPTURE_DRAIN_JOB)) {
+    registerJobHandler(CAPTURE_DRAIN_JOB, captureDrainHandler);
   }
   // The media-derivative handler is registered when its migration lands (§5).
 }
@@ -93,5 +99,20 @@ export async function enqueueDeletionRetry(
   });
 }
 
+/**
+ * Enqueue a drain of the capture write-ahead log (CCB-S3-024). Called when a
+ * real-time capture failed to apply an event (so it retries when the DB recovers)
+ * and at boot (to clear anything left pending by a crash). One constant key, so
+ * while a drain is live a second enqueue is a harmless no-op: one drain sweeps the
+ * whole backlog. Interactive lane.
+ */
+export async function enqueueCaptureDrain(db: Queryable): Promise<void> {
+  await enqueueJob(db, CAPTURE_DRAIN_JOB, {
+    idempotencyKey: 'capture.drain',
+    lane: 'interactive',
+  });
+}
+
 export { CONTENT_ANALYSIS_JOB } from './jobs/analysis.js';
 export { DELETION_APPLY_JOB } from './jobs/deletion.js';
+export { CAPTURE_DRAIN_JOB } from '../capture/events/replay.js';

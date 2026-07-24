@@ -34,6 +34,7 @@
     "verify:support-scope": "tsx scripts/verify-support-scope.ts",
     "verify:no-dashes": "tsx scripts/verify-no-dashes.ts",
     "verify:queue": "tsx scripts/verify-queue.ts",
+    "verify:capture-events": "tsx scripts/verify-capture-events.ts",
     "deploy": "bash deploy.sh",
     "media:audit": "tsx scripts/scan-media-metadata.ts",
     "media:remediate": "tsx scripts/remediate-media.ts"

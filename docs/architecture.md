@@ -650,6 +650,52 @@ interrupted job from being run twice, losing attempts, or being dead-lettered wh
 creating a second. Handlers are required to be idempotent so a repeat run (crash, restart, manual
 retry) produces the same result. Proven end to end in `verify:queue`.
 
+## 22. Capture write-ahead log (CCB-S3-024)
+
+SimpleX delivers each event ONCE and never re-sends it, so a capture handler that failed silently lost
+that event forever. §1 of the briefing established the extent, before any change: an ordinary **new
+message** and an **edit** were the two events lost on a handler failure with only a log line
+(`capture/handler.ts` `persist()`); deletions became durable in CCB-S3-023; file-download receipts are
+recorded but not retried (the 16 of CCB-S3-018); member/profile events are not subscribed by the
+running bot. A production cross-reference of the SimpleX core DB against the archive found the
+new-message/edit loss had not fired for ordinary member content (the 67 uncaptured messages were all
+intentional pre-CCB-S3-009 command/instruction drops, none since Jul 23) — latent, like the deletion
+finding before it.
+
+**Implemented (Slice 1): the durable substrate.** `migrations/018_capture_events.sql` +
+`src/capture/events/`. Wiring the dispatcher to record-then-process (Slice 2), retention pruning and
+admin counts (Slice 3) are planned next in the same briefing.
+
+**Schema (`migrations/018_capture_events.sql`).** One `capture_events` table: `kind`
+(`new_message`/`edit`/`deletion`), `conversation_key` (the group id — the ordering domain),
+`dedupe_key` (unique — the write-ahead itself is idempotent), `payload` (jsonb, enough to re-apply),
+`state` (`pending`/`processed`/`deferred`/`dead`), `attempts`/`max_attempts`, `last_error`, timestamps.
+`id` (bigserial) doubles as the replay order because rows are inserted in arrival order. A partial
+index on `(id) WHERE state IN ('pending','deferred')` keeps the drain scan cheap as processed rows
+accumulate.
+
+**Record then process (`store.ts`).** `recordEvent` writes the raw event `pending` before it is applied
+(idempotent on `dedupe_key`); `markEventProcessed` on success; `failEvent` keeps it `pending` to retry
+and dead-letters on the last attempt; `deferEvent` holds an event whose target has not arrived;
+`deadLetterEvent` fast-fails a permanently-unusable event. A dead capture event is a lost member event,
+kept for the operator and surfaced apart from an ordinary job failure.
+
+**Replay + ordering (`replay.ts`).** A per-kind reprocessor registry keeps this module free of the SDK
+and persist layer; the same `processEvent` is used by the real-time path and the drain. The
+`capture.drain` queue job (interactive lane) replays unfinished events in arrival order: a transient
+FAILURE stalls only its conversation for the pass, so an edit can never be applied ahead of the insert
+it depends on; a DEFERRED early deletion does not stall, so an out-of-order deletion waits and applies
+once its message lands. Passes repeat while progress is made; a poison event dead-letters instead of
+looping.
+
+**Scope gate first (§3).** The CCB-S3-019 `isPublicGroupChat` whitelist runs BEFORE the write, so
+support-scope and direct events never enter the store (wired in Slice 2, guarded by the harness).
+
+Proven by `scripts/verify-capture-events.ts` (30 checks) against PGlite: idempotent write-ahead,
+apply→processed, transient retry then dead-letter, permanent fast-fail, per-conversation ordering with
+a stalled insert, out-of-order deletion defer, bounded defer, admin counts, retention pruning only
+processed rows, and a real queue worker draining the backlog.
+
 ## Appendix: divergences (code wins)
 
 Each divergence below is also noted inline at the relevant section. In every case the **code is treated as ground truth** and the conflicting outline/comment is flagged as stale.

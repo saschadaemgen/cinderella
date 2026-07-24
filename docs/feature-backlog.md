@@ -324,6 +324,20 @@ The history below records the pre-CCB-S2-003 state.
       generation and video-thumbnail fetching onto it (verify the archive still renders after each),
       a resumable rate-limited backfill command, and the admin observability page (depth, throughput,
       wait, dead letters + retry/cancel, stuck-job indicator, bulk pause toggle).
+- [~] **Capture write-ahead log (CCB-S3-024).** §1 established the extent (before any change): a new
+      message and an edit were the two events lost on a handler failure with only a log line; deletions
+      are durable (S3-023); file receipts are recorded-not-retried — the 16 of CCB-S3-018 are exactly
+      this class (recorded `media_error`, never retried, past the ~48h relay window). Production
+      before-check: the loss path had not fired for ordinary member content (67 uncaptured = intentional
+      pre-S3-009 command/instruction drops, none since Jul 23). Slice 1 DONE: the durable substrate —
+      `capture_events` (migration 018), the store, the reprocessor registry + order-preserving
+      `capture.drain`, and `verify:capture-events` (30 checks) (D-064, architecture §22). Slice 2 to
+      build: wire the dispatcher to record-then-process with the scope gate FIRST (harness guard that an
+      excluded event never reaches the store), idempotent reprocessors for new_message/edit/deletion,
+      per-conversation ordering + defer on the live path, boot drain. Slice 3: retention prune of
+      processed rows (short window, member content — add the privacy-policy note then) + admin counts
+      (received/processed/retried/deferred/dead per type, a dead capture event distinct from a job
+      failure) + a crash test against the live archive.
 - [ ] **Direct contact - member binding (CCB-S3-017 Addendum A) - investigated, not built, blocked.**
       The structural link EXISTS (`Contact.contactGroupMemberId`, `apiCreateMemberContact`) so the
       pairing-code protocol is unnecessary in the normal case - but it is gated on the group's

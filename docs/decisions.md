@@ -13,6 +13,42 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-064 — Capture events are written ahead to a durable log before they are processed
+
+**Status: IMPLEMENTED (CCB-S3-024 Slice 1: the durable substrate). PLANNED (Slice 2: the
+dispatcher records-then-processes through it; Slice 3: retention prune + admin counts + crash test).**
+**Finding (§1, the extent, established before any change).** SimpleX delivers each event ONCE and
+never re-sends it. Of the events the running bot subscribes to, two were lost on any handler failure
+with only a log line: an ordinary **new message** and an **edit** (`capture/handler.ts`, `persist()`
+catches, logs, returns false, drops). Deletions became durable in CCB-S3-023 (`deletion.apply`);
+file-download receipts are recorded as `media_error` but never retried — which is exactly the 16
+unrecoverable receipts of CCB-S3-018 (recorded, not retried, past the ~48h relay window). Member and
+profile events are not subscribed by the running bot at all (only by the one-shot `connect` helper).
+**Production before-check.** The SimpleX core DB was cross-referenced against the archive: of 438
+non-deleted received member messages, 67 were not captured — **all** text, real-time, on Jul 19–22,
+and **all** in categories that were intentionally not archived at the time (consent commands like
+`/publish`, and messages addressed to the bot before CCB-S3-009 made instructions archivable). **Zero**
+gaps on Jul 23–24. So the new-message/edit loss path is real in code but has not fired for ordinary
+member content — the same latent-but-untriggered shape the deletion finding had.
+**Decision.** A write-ahead log (`migrations/018_capture_events.sql`, `src/capture/events/`): every
+in-scope capture event is recorded BEFORE it is applied, and marked processed only on success. A
+failed apply leaves a durable row the queue drains and retries (`capture.drain`, interactive lane),
+instead of a message lost to a log line. The write-ahead is idempotent (dedupe key); the drain
+preserves per-conversation order on replay and DEFERS an early deletion (a deletion whose message has
+not arrived) rather than treating it as an error; a poison event dead-letters (kept, never dropped)
+and is distinguishable from an ordinary job failure. The CCB-S3-019 scope gate runs BEFORE the write,
+so support-scope and direct events never enter the store.
+**Retention (§5).** Processed rows prune after a short, configurable window (raw events hold member
+content); pending, deferred, and dead rows are never pruned (unfinished work and lost events are
+forensic evidence).
+**Evidence.** `migrations/018_capture_events.sql`; `src/capture/events/{store,replay}.ts`;
+`src/queue/index.ts` (`capture.drain` registration + `enqueueCaptureDrain`);
+`scripts/verify-capture-events.ts` (30 checks: idempotent write-ahead, apply/processed, transient
+retry→dead-letter, permanent fail-fast, ordering with a stalled insert, out-of-order deletion defer,
+bounded defer, counts, retention pruning only processed rows, real-worker drain); `docs/architecture.md`.
+
+---
+
 ### D-063 — Swallowed-error audit: caught errors are classified, and silent failure is surfaced
 
 **Status: IMPLEMENTED (CCB-S3-023).**
