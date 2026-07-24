@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { raw, type SafeHtml } from '../html.js';
+import { log } from '../../log.js';
 
 const ICONS_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -42,8 +43,14 @@ function iconInner(name: string): string {
       const file = readFileSync(join(ICONS_DIR, `${name}.svg`), 'utf8');
       const m = /<svg[^>]*>([\s\S]*?)<\/svg>/.exec(file);
       inner = (m?.[1] ?? '').trim();
-    } catch {
+    } catch (err) {
+      // Every caller passes a fixed authoring-time icon name, so a read failure is a
+      // defect (a lucide-static bump renamed/removed the file), not an unknown name.
+      // Log it, or a known icon silently renders blank forever (CCB-S3-023).
       inner = '';
+      log.warn(
+        `Site icon "${name}" could not be read from lucide-static (${err instanceof Error ? err.message : String(err)}); rendering blank.`,
+      );
     }
   }
   cache.set(name, inner);

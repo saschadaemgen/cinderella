@@ -304,6 +304,16 @@ The history below records the pre-CCB-S2-003 state.
       + deep links) and Stage 3 (dark-neon restyle reusing the website design system, cyan accent;
       D-060) DONE. Stage 2 (two-column tile layout, per-tile save, sized inputs, collapsible help)
       still to build.
+- [ ] **CCB-S3-023 deferred fixes (audit recorded them rather than doing them here).**
+      (a) **Queue-based retry of a failed in-group deletion** — `runDeleted` now surfaces loudly, but
+      a transient DB error still needs an operator to re-remove the content; a durable job would retry
+      it. Risk if not done: a deletion failure requires manual action. (b) **Atomic consent-command
+      categorisation** — set `member_category='consent'` in the persist transaction for command
+      messages, so a classification failure cannot leak the command onto the archive (today it is only
+      made visible). Risk: a rare infra error between insert and categorisation can publish a consent
+      command until noticed. (c) **Generalised plugin `selfCheck()` interface** — the boot credential
+      check is crypto-specific; a plugin interface would auto-cover a future plugin's integrations.
+      Risk: a new plugin's unreachable credential would not be boot-checked until wired.
 - [~] **Durable job queue (CCB-S3-022).** Foundation DONE: Postgres-backed `jobs` table (migration
       017), `SKIP LOCKED` claim, backoff + dead-letter, permanent-vs-transient, priority lanes +
       concurrency limits + pausable bulk, idempotency, the worker, a placeholder analysis job, and

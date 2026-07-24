@@ -95,13 +95,23 @@ export function hasSecret(stored: string): boolean {
 }
 
 /**
- * What the admin console is allowed to see. Never the value — only whether one
- * is set and, at most, its length, which is enough for an operator to tell a
- * pasted key from a pasted newline.
+ * What the admin console is allowed to see. Never the value — only whether one is
+ * set, at most its length, and (the CCB-S3-023 distinction) whether a value IS
+ * stored but cannot be decrypted. "Nothing stored" (a choice) and "stored but
+ * unusable" (a fault, e.g. a rotated SESSION_SECRET) used to be indistinguishable
+ * here, so the console showed "no key" for a key that was actually present but
+ * dead. They are now separate states.
  */
-export function describeSecret(stored: string): { set: boolean; length: number } {
+export function describeSecret(stored: string): {
+  set: boolean;
+  length: number;
+  undecryptable: boolean;
+} {
+  if (!stored) return { set: false, length: 0, undecryptable: false };
   const v = decryptSecret(stored);
-  return { set: v !== '', length: v.length };
+  // Something IS stored, but it did not decrypt (rotated secret, or corruption).
+  if (v === '') return { set: true, length: 0, undecryptable: true };
+  return { set: true, length: v.length, undecryptable: false };
 }
 
 /**

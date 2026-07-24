@@ -258,12 +258,14 @@ export function registerPlugins(app: FastifyInstance, ctx: ViewContext): void {
                         type="password"
                         value=""
                         autocomplete="off"
-                        placeholder="${key.set ? 'A key is stored — leave blank to keep it' : 'No key stored'}"
+                        placeholder="${key.undecryptable ? 'A key is stored but cannot be decrypted' : key.set ? 'A key is stored, leave blank to keep it' : 'No key stored'}"
                         class="${INPUT}"
                       />`,
-                      key.set
-                        ? 'A key is stored and is never shown again. Leave blank to keep it.'
-                        : 'Blank means no key. Stored encrypted; never displayed or logged.',
+                      key.undecryptable
+                        ? 'A key IS stored but cannot be decrypted (was SESSION_SECRET rotated?). Re-enter it, or clear it.'
+                        : key.set
+                          ? 'A key is stored and is never shown again. Leave blank to keep it.'
+                          : 'Blank means no key. Stored encrypted; never displayed or logged.',
                     )}
                     ${field('Timeout (ms)', number(`providers.${name}.timeoutMs`, p.timeoutMs, 1000, 30000))}
                     ${field(

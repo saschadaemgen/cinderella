@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { dashboardStats } from '../../db/admin-queries.js';
 import { recentAudit } from '../../db/audit.js';
 import { recentUnknownScopes, unknownScopeCount } from '../../capture/scope-diagnostics.js';
+import { recentMediaFailures } from '../../media/failures.js';
 import { html, page, type SafeHtml } from '../html.js';
 import { icon } from '../icons.js';
 import { status } from '../status.js';
@@ -94,9 +95,37 @@ export function registerDashboard(app: FastifyInstance, ctx: ViewContext): void 
           </div>`
         : html``;
 
+    // Media that was captured but is now unserveable on disk, or would not strip
+    // (CCB-S3-023). recordMediaFailure() had producers but no admin surface, so a
+    // withheld/broken published image stayed invisible. Amber, shown only when
+    // something is actually wrong.
+    const mediaFails = recentMediaFailures(8);
+    const mediaFailIndicator: SafeHtml =
+      mediaFails.length > 0
+        ? html`<div class="mb-6 flex flex-col gap-2 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <span class="flex items-center gap-2 font-semibold text-amber-800"
+              >${icon('fileWarning', 'h-5 w-5')} Media that could not be served or stripped
+              (${mediaFails.length})</span
+            >
+            <span class="text-sm text-amber-700">
+              These published items are withheld or unserveable. A common cause is the service user
+              not being able to write to MEDIA_ROOT/derived. Records reset on restart.
+            </span>
+            <ul class="mt-1 flex flex-col gap-1 text-xs text-amber-700">
+              ${mediaFails.map(
+                (f) =>
+                  html`<li class="flex gap-2">
+                    <span class="shrink-0 text-amber-500">${fmtDate(new Date(f.at).toISOString())}</span>
+                    <span>message ${f.messageId} · <code>${f.reason}</code> · ${f.detail}</span>
+                  </li>`,
+              )}
+            </ul>
+          </div>`
+        : html``;
+
     const body = html`
       ${pageHeader('Dashboard', 'Capture health and archive at a glance')} ${fileIndicator}
-      ${scopeIndicator}
+      ${scopeIndicator} ${mediaFailIndicator}
 
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         ${stat('Messages', stats.totalMessages)}

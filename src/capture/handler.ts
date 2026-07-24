@@ -10,6 +10,7 @@
 
 import type { Config } from '../config.js';
 import { log } from '../log.js';
+import { status } from '../web/status.js';
 import type { BotHandle } from '../bot/client.js';
 import type { ReceivedFile } from '../bot/files.js';
 import { parseConsentCommand, type ConsentCommand } from '../consent/commands.js';
@@ -100,8 +101,15 @@ async function runDeleted(hooks: CaptureHooks, groupId: number, ids: number[]): 
   try {
     await hooks.onDeleted(groupId, ids);
   } catch (err) {
-    log.error(
-      `onDeleted hook failed for group ${groupId}: ${err instanceof Error ? err.message : String(err)}`,
+    // A failed in-group deletion means content the member removed may STILL be on
+    // the public archive (the row keeps group_deleted=FALSE). That is a breach of
+    // the consent-first rule, so it must be loud, not a log line nobody reads, and
+    // it must name WHICH messages so the operator can act (CCB-S3-023).
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error(`onDeleted hook failed for group ${groupId} (items ${ids.join(', ')}): ${msg}`);
+    status.error(
+      `In-group deletion NOT applied: group ${groupId}, message(s) ${ids.join(', ')} (${msg}). ` +
+        `Those messages may still be published; re-check and remove them.`,
     );
   }
 }
@@ -177,8 +185,18 @@ export function registerCapture(
         await persist(msg);
         try {
           await hooks.onInstruction?.(msg, 'consent');
-        } catch {
-          // Best-effort classification; the row is already safely stored.
+        } catch (err) {
+          // NOT best-effort-and-forget (CCB-S3-023): if this classification fails the
+          // row keeps member_category NULL, which the publish view treats as
+          // publishable — so a consent command that should ship EXCLUDED can leak
+          // onto the public archive. Make the failure visible so the operator knows
+          // to check that message.
+          const emsg = err instanceof Error ? err.message : String(err);
+          log.error(`onInstruction('consent') failed for item ${msg.itemId}: ${emsg}`);
+          status.error(
+            `Consent command ${msg.itemId} could not be categorised (${emsg}); it may not be ` +
+              `excluded from the public archive. Check message ${msg.itemId}.`,
+          );
         }
         if (hooks.onCommand) {
           try {

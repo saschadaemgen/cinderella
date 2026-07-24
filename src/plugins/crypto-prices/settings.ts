@@ -184,6 +184,8 @@ export function providerKeyStatus(
 ): {
   set: boolean;
   length: number;
+  /** A value is stored but will not decrypt (a fault, not an empty field). */
+  undecryptable: boolean;
 } {
   return describeSecret(s.providers[name]?.apiKey ?? '');
 }

@@ -65,8 +65,19 @@ export async function loadAvatarDataUri(avatarPath: string): Promise<string | un
   let source: Buffer;
   try {
     source = await readFile(avatarPath);
-  } catch {
-    log.debug(`No avatar file at ${avatarPath}; bot profile will carry no image.`);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      log.debug(`No avatar file at ${avatarPath}; bot profile will carry no image.`);
+    } else {
+      // A staged-but-unreadable avatar (e.g. root-owned after `npm run avatar`, then
+      // read as the service user gives EACCES) must not masquerade as "no avatar"
+      // (CCB-S3-023): say plainly it is present but unreadable so it is diagnosable.
+      log.warn(
+        `Avatar at ${avatarPath} could not be read (${code ?? (err instanceof Error ? err.message : String(err))}); ` +
+          `bot profile will carry no image. If a file is staged there, check its ownership/permissions.`,
+      );
+    }
     return undefined;
   }
   const dataUri = await buildAvatarDataUri(source);

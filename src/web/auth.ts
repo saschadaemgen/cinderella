@@ -118,8 +118,16 @@ export async function verifyCredentials(
   let passwordOk = false;
   try {
     passwordOk = await argon2.verify(cfg.adminPasswordHash, password);
-  } catch {
+  } catch (err) {
+    // Keep the fail-closed deny, but make a MALFORMED stored hash diagnosable: a
+    // verify throw (a corrupt ADMIN_PASSWORD_HASH) otherwise reads exactly like a
+    // wrong password, so break-glass recovery looks like a typo (CCB-S3-023).
     passwordOk = false;
+    log.error(
+      `Break-glass password verification threw (is ADMIN_PASSWORD_HASH a valid Argon2id hash?): ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
   return usernameOk && passwordOk;
 }
@@ -129,7 +137,11 @@ export function verifyTotp(secret: string, token: string): boolean {
   try {
     authenticator.options = { window: 1 };
     return authenticator.verify({ token: token.replace(/\s+/g, ''), secret });
-  } catch {
+  } catch (err) {
+    // A malformed stored secret otherwise reads as a wrong code (CCB-S3-023).
+    log.warn(
+      `TOTP verification threw (malformed secret or token): ${err instanceof Error ? err.message : String(err)}`,
+    );
     return false;
   }
 }

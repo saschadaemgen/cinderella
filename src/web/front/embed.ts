@@ -25,6 +25,8 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getEmbedInstance, listEmbedInstances, type EmbedSettings } from '../../db/embeds.js';
 import { VIDEO_FRAME_ORIGIN } from '../../media/video.js';
 import { ensureDerivative } from '../../media/pipeline.js';
+import { recordMediaFailure } from '../../media/failures.js';
+import { log } from '../../log.js';
 import {
   ARCHIVE_TYPES,
   decodeCursor,
@@ -435,7 +437,22 @@ export function registerPublicEmbed(app: FastifyInstance, ctx: ViewContext): voi
         const st = await stat(filePath);
         if (!st.isFile()) throw new Error('not a file');
         size = st.size;
-      } catch {
+      } catch (err) {
+        // The consent gate already confirmed this published item HAS a media path,
+        // so a stat failure here is a real disk/permission fault on a committed
+        // file, not an absent one. Record it (the 'derivative-unreadable' reason
+        // exists precisely for this) and log with the id, so a published-but-
+        // unserveable file is discoverable instead of a silent 404 (CCB-S3-023).
+        // The recorded detail is generic (never a member filename); the path goes
+        // only to the operator log.
+        recordMediaFailure({
+          messageId,
+          reason: 'derivative-unreadable',
+          detail: 'a published media file is not readable on disk',
+        });
+        log.warn(
+          `Media: published item ${messageId} is unserveable on disk (${err instanceof Error ? err.message : String(err)}).`,
+        );
         return reply.code(404).type('text/plain').send('Not found');
       }
       reply.header('content-type', media.mediaMime ?? 'application/octet-stream');

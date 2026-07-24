@@ -13,6 +13,38 @@ Companion documents: `seasons/SEASON-1-PROTOCOL.md` (close-out CCB-S1-017),
 
 ---
 
+### D-063 — Swallowed-error audit: caught errors are classified, and silent failure is surfaced
+
+**Status: IMPLEMENTED (CCB-S3-023).**
+**Finding.** The season's recurring fault (five incidents) is a caught error converted into an
+ordinary-looking state with nobody told. An audit classified all **114 caught errors** in the
+codebase: **85 correct, 19 silently-degrading, 10 masking**; an adversarial verify pass confirmed
+**9** of the degrading/masking cases on the critical paths.
+**Worst case (broken all along).** A failed in-group deletion (`capture/handler.ts` `runDeleted`) was
+only `log.error`'d, so member-deleted content could stay **published** with the dashboard green — a
+silent breach of the consent-first rule. Now loud (`status.error` naming the message ids).
+**Fixes (failure made visible, not necessarily thrown).** Deletion failure and consent-command
+classification failure now surface to the dashboard with ids; the `secrets.ts` decrypt path now
+distinguishes **stored-but-undecryptable** from **unset** (the not-configured-vs-failing distinction),
+shown in the Plugins page and checked at boot; the CoinGecko market-cap enrichment, the files-folder
+config, the serve-time media stat, the Argon2/TOTP verifies, the avatar read, and the site-icon read
+no longer swallow; recorded media failures now have an admin surface (dashboard).
+**Startup self-check.** Boot now verifies configured **credentials** are usable (an enabled provider
+whose stored key will not decrypt is reported via `status.error`), generalising the existing pin and
+media derivative checks; and those checks' own failures are now surfaced too.
+**Rule.** Recorded as a standing non-negotiable in `CLAUDE.md`: surface failures, distinguish
+not-configured from configured-but-failing, count masking fallbacks, and do not add noise.
+**Deliberately deferred (in the backlog, risk stated).** Queue-based retry of a failed deletion;
+atomic consent-command categorisation (so a classification failure cannot leak the command); a
+generalised plugin `selfCheck()` interface. The many safe, already-logged backstops were left as-is
+to avoid crying wolf.
+**Evidence.** `src/capture/handler.ts`, `src/plugins/secrets.ts` + `crypto-prices/settings.ts` +
+`web/views/plugins.ts`, `src/bot/client.ts`, `src/web/front/embed.ts`, `src/web/views/dashboard.ts`,
+`src/index.ts` (self-check), `src/web/auth.ts`, `src/bot/avatar.ts`, `src/web/site/icons.ts`,
+`crypto-prices/providers/adapters.ts`; `CLAUDE.md`.
+
+---
+
 ### D-062 — Background work runs on ONE durable Postgres-backed queue
 
 **Status: IMPLEMENTED (CCB-S3-022 foundation; media migration + backfill + admin page are the

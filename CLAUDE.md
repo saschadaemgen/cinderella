@@ -28,6 +28,14 @@ opt-in), `deleted`/`group_deleted`, and `moderation_state` — see the
 - **No secrets in source or logs.** Everything sensitive is env (git-ignored
   `.env` in dev; systemd `EnvironmentFile` 0600 in prod). Redact before logging.
 - **English** everywhere. Proof-of-concept before integration.
+- **Surface failures, never swallow them** (standing rule, CCB-S3-023). A caught error
+  must not be converted into a value that reads as a legitimate result (masking), and a
+  degraded/absent function must not run silently. Log with actionable context (operation,
+  input, error); for anything on the **consent, capture, publication, media or plugin
+  path** that loses a guarantee, also call `status.error` so it reaches the admin
+  dashboard, not only a log file. Distinguish **"not configured"** (a choice) from
+  **"configured but failing"** (a fault). A fallback that can mask a fault is counted and
+  the count shown in the admin. Do not add noise: alert on real faults, not normal states.
 - **No em-dashes in member-facing output** (standing rule, CCB-S3-021). The em-dash
   (`—`), en-dash (`–`), and horizontal bar (`―`) must never appear in any string a
   member can read, in any language: persona strings, locale files, the help and

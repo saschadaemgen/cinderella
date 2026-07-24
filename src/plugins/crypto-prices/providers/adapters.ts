@@ -3,6 +3,7 @@
  * API and the current published terms rather than from recollection.
  */
 
+import { log } from '../../../log.js';
 import {
   httpJson,
   ProviderError,
@@ -261,8 +262,15 @@ export class CoinGeckoProvider implements PriceProvider {
           if (cap !== undefined) c.marketCap = cap;
         }
       }
-    } catch {
-      // Ranking degrades to rank order; never fail a lookup over a nicety.
+    } catch (err) {
+      // Ranking degrades to rank order; never fail a lookup over a nicety. But not
+      // silently (CCB-S3-023): a swallowed /coins/markets failure would leave the
+      // provider looking healthy while contested tickers rank wrongly and can pin
+      // the wrong asset. Log it so a degraded ranking is distinguishable.
+      log.warn(
+        `CoinGecko: market-cap enrichment for ranking failed (${err instanceof Error ? err.message : String(err)}); ` +
+          `falling back to rank order for this disambiguation.`,
+      );
     }
     return candidates;
   }

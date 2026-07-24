@@ -11,6 +11,7 @@ import type { api } from 'simplex-chat';
 import type { T } from '@simplex-chat/types';
 import type { Config } from '../config.js';
 import { log } from '../log.js';
+import { status } from '../web/status.js';
 import { FileReceiver } from './files.js';
 import { loadAvatarDataUri } from './avatar.js';
 
@@ -54,8 +55,16 @@ async function configureFilesFolder(chat: Chat, filesFolder: string): Promise<vo
   if (r.type === 'cmdOk') {
     log.info(`SimpleX files folder set to ${filesFolder}`);
   } else {
+    // A files folder that was not configured breaks ALL media capture, silently,
+    // while the bot still reports healthy. Surface it on the dashboard, not only in
+    // journald (CCB-S3-023) — the sibling boot checks (media derivatives, price
+    // pins) set the same precedent.
     log.warn(
       `Unexpected response setting files folder (${r.type}); received files may land elsewhere.`,
+    );
+    status.error(
+      `SimpleX files folder was NOT configured (response "${r.type}"). Received media may be lost; ` +
+        `media capture is broken until this is resolved.`,
     );
   }
 }

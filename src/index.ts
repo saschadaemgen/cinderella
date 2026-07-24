@@ -34,6 +34,7 @@ import { InteractionEngine } from './interaction/engine.js';
 import { activeResolverName } from './interaction/resolver.js';
 import { PluginService } from './plugins/service.js';
 import { CryptoPriceService } from './plugins/crypto-prices/service.js';
+import { providerKeyStatus } from './plugins/crypto-prices/settings.js';
 import { CRYPTO_PRICES_ID } from './plugins/crypto-prices/plugin.js';
 import { startAdminServer } from './web/server.js';
 import { status } from './web/status.js';
@@ -225,11 +226,11 @@ async function startCaptureWorker(
         }
       }
     } catch (err) {
-      log.warn(
-        `Media: could not check published derivatives (${
-          err instanceof Error ? err.message : String(err)
-        }).`,
-      );
+      // A boot self-check that itself fails must not be silent (CCB-S3-023): the
+      // operator loses the check's protection and would never know.
+      const emsg = err instanceof Error ? err.message : String(err);
+      log.warn(`Media: could not check published derivatives (${emsg}).`);
+      status.error(`Boot self-check failed: could not verify published media derivatives (${emsg}).`);
     }
 
     // A pin that no enabled provider can serve fails SILENTLY and forever
@@ -253,10 +254,34 @@ async function startCaptureWorker(
         log.info(`Price: all ${pins.length} pinned asset(s) have an enabled provider.`);
       }
     } catch (err) {
+      const emsg = err instanceof Error ? err.message : String(err);
+      log.warn(`Price: could not check the pinned assets (${emsg}).`);
+      status.error(`Boot self-check failed: could not verify pinned assets (${emsg}).`);
+    }
+
+    // Configured-but-unreachable credentials (CCB-S3-023). A stored provider key that
+    // cannot be decrypted (e.g. after a SESSION_SECRET rotation) is worse than no key:
+    // the provider silently self-disables, and the only symptom a member sees is "the
+    // markets are out of earshot". Distinguish it from an EMPTY key (a choice) and
+    // discover it HERE, at boot, not from a member. This generalises the pin self-check
+    // to credentials; a future plugin with its own credentials should add the same.
+    try {
+      if (plugins.isEnabled(CRYPTO_PRICES_ID)) {
+        const cp = plugins.getCryptoPrices();
+        const dead = cp.chain.filter(
+          (n) => cp.providers[n]?.enabled && providerKeyStatus(cp, n).undecryptable,
+        );
+        if (dead.length > 0) {
+          log.warn(`Plugins: ${dead.length} stored provider key(s) cannot be decrypted: ${dead.join(', ')}.`);
+          status.error(
+            `Provider API key(s) stored but UNDECRYPTABLE: ${dead.join(', ')} (was SESSION_SECRET rotated?). ` +
+              `They cannot authenticate; re-enter or clear them on the Plugins page.`,
+          );
+        }
+      }
+    } catch (err) {
       log.warn(
-        `Price: could not check the pinned assets (${
-          err instanceof Error ? err.message : String(err)
-        }).`,
+        `Plugins: could not check provider key usability (${err instanceof Error ? err.message : String(err)}).`,
       );
     }
 
